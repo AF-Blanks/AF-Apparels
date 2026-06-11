@@ -326,38 +326,6 @@ export default function AdminOrderDetailPage() {
       });
   }, [id]);
 
-  // Auto-fetch Shippo rates when a Standard Ground order loads (no manual click needed)
-  useEffect(() => {
-    if (!order?.id) return;
-    const isWillCall = !!(
-      order.shipping_method?.toLowerCase().includes("will_call") ||
-      order.shipping_method?.toLowerCase().includes("pickup")
-    );
-    const hasLiveRate = !!order.shipping_rate_id;
-    const hasExistingLabel = !!(order.tracking_number && order.label_url);
-    if (hasLiveRate || isWillCall || hasExistingLabel) return;  // only Standard Ground without a label
-
-    // Standard Ground: reset state and auto-fetch rates immediately on load
-    const weight = order.calculated_weight_lbs ?? 1.0;
-    adminRatesRef.current = [];
-    setAdminRates([]);
-    setAdminSelectedRateId(null);
-    setAdminRatesLoading(true);
-    apiClient.post<{ rates: AdminRate[]; error?: string }>(
-      `/api/v1/admin/orders/${order.id}/fetch-rates`,
-      { weight_lbs: weight }
-    ).then(result => {
-      const rates = result.rates ?? [];
-      adminRatesRef.current = rates;
-      setAdminRates(rates);
-      if (rates.length > 0) setAdminSelectedRateId(rates[0]!.rate_id);
-    }).catch(() => {
-      adminRatesRef.current = [];
-    }).finally(() => {
-      setAdminRatesLoading(false);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order?.id]);
 
   // Safeguard: restore rates from ref if React wipes state unexpectedly
   useEffect(() => {

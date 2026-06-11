@@ -218,6 +218,10 @@ export const adminService = {
     return apiClient.post(`/api/v1/admin/companies/${id}/reactivate`, {});
   },
 
+  async deleteCompany(id: string) {
+    return apiClient.delete(`/api/v1/admin/companies/${id}`);
+  },
+
   // Wholesale applications
   async listApplications(status?: string) {
     const qs = status ? `?status=${status}` : "";

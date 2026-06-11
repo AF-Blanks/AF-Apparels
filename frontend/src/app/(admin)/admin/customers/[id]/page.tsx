@@ -152,6 +152,10 @@ export default function CustomerDetailPage() {
   const [suspendReason, setSuspendReason] = useState("");
   const [suspending, setSuspending] = useState(false);
 
+  // delete
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   // tax exempt
   const [taxExempt, setTaxExempt] = useState(false);
   const [savingTaxExempt, setSavingTaxExempt] = useState(false);
@@ -285,6 +289,18 @@ export default function CustomerDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await adminService.deleteCompany(id);
+      router.push("/admin/customers");
+    } catch {
+      showToast("Failed to delete customer", false);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
+
   async function handleToggleTaxExempt() {
     const newValue = !taxExempt;
     setSavingTaxExempt(true);
@@ -407,8 +423,36 @@ export default function CustomerDetailPage() {
                 Reactivate
               </button>
             )}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              style={{ padding: "9px 16px", border: "1px solid rgba(107,114,128,.3)", borderRadius: "8px", background: "rgba(107,114,128,.05)", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#6B7280" }}>
+              Delete
+            </button>
           </div>
         </div>
+
+        {/* Delete confirmation */}
+        {showDeleteConfirm && (
+          <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #F4F3EF" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#E8242A", marginBottom: "6px" }}>Delete Customer</div>
+            <p style={{ fontSize: "13px", color: "#7A7880", marginBottom: "12px" }}>
+              This will permanently delete <strong>{customer.name}</strong> and all their memberships. Orders will remain but the customer record will be gone. This cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ padding: "8px 18px", background: "#E8242A", color: "#fff", border: "none", borderRadius: "7px", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? "Deleting…" : "Yes, Delete Permanently"}
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ padding: "8px 14px", border: "1px solid #E2E0DA", borderRadius: "7px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Suspend form */}
         {showSuspend && (
