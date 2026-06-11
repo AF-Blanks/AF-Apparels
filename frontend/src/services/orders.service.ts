@@ -34,6 +34,10 @@ export interface ConfirmOrderPayload {
   tax_rate?: number;
   tax_region?: string;
   shipping_cost?: number;
+  // Live Shippo rate selected at checkout
+  shipping_rate_id?: string;
+  shipping_carrier?: string;
+  shipping_service?: string;
   // ACH payment
   payment_method?: string;
   ach_bank_name?: string;
