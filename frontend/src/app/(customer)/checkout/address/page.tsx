@@ -95,6 +95,9 @@ export default function CheckoutAddressPage() {
   const [cartItemsForShipping, setCartItemsForShipping] = useState<Array<{ variant_id: string; quantity: number }>>([]);
   const [cartDisplayItems, setCartDisplayItems] = useState<Array<{ name: string; color: string | null; size: string | null; qty: number; lineTotal: number; imageUrl?: string | null }>>([]);
   const ratesDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep cart items in a ref so the rate-fetch effect doesn't re-run (and reset the debounce)
+  // every time the cart array reference changes from a re-fetch.
+  const cartItemsRef = useRef<Array<{ variant_id: string; quantity: number }>>([]);
 
   const [form, setForm] = useState({
     company: companyName || "",
@@ -251,7 +254,7 @@ export default function CheckoutAddressPage() {
       to_zip: zip,
       to_state: state,
       to_city: activeCity || undefined,
-      cart_items: cartItemsForShipping.length > 0 ? cartItemsForShipping : undefined,
+      cart_items: cartItemsRef.current.length > 0 ? cartItemsRef.current : undefined,
     })
       .then(r => {
         const rates = r.rates || [];
@@ -266,7 +269,12 @@ export default function CheckoutAddressPage() {
       .finally(() => setLiveRatesLoading(false));
   }
 
-  // Trigger live rates fetch — debounced 800ms, only fires on exactly 5-digit ZIP
+  // Keep cartItemsRef current without triggering rate re-fetches on cart array reference changes
+  useEffect(() => {
+    cartItemsRef.current = cartItemsForShipping;
+  }, [cartItemsForShipping]);
+
+  // Trigger live rates fetch when address or shipping type changes
   useEffect(() => {
     if (shippingTypeForUser !== "live_shippo") return;
 
@@ -274,13 +282,13 @@ export default function CheckoutAddressPage() {
 
     ratesDebounceRef.current = setTimeout(() => {
       fetchLiveRates(activeZip.trim(), activeState.trim());
-    }, 800);
+    }, 400);
 
     return () => {
       if (ratesDebounceRef.current) clearTimeout(ratesDebounceRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shippingTypeForUser, activeZip, activeState, activeCity, cartItemsForShipping]);
+  }, [shippingTypeForUser, activeZip, activeState, activeCity]);
 
   useEffect(() => {
     if (!activeState) {
