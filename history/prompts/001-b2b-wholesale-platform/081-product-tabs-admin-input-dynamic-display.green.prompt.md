@@ -38,7 +38,7 @@ Task 2: Product page tabs (Description, Specifications, Print Guide, Size Chart,
 **Admin Edit Page — new "PRODUCT TABS CONTENT" section:**
 - Care Instructions: textarea, saves to care_instructions text field
 - Print Guide: checkbox grid of 8 print methods (DTF, Screen Printing, Embroidery, DTG, Heat Transfer, Sublimation, Vinyl, Laser Engraving) — saves as print_guide JSONB { methods: string[] }
-- Size Chart: dynamic table editor with Add Row / delete row — columns: Size, Chest (in), Length (in), Sleeve (in) — saves as size_chart_data JSONB array
+- Size Chart: dynamic table editor with Add Row / delete row — columns: Size, Chest (in), Length (in), Box Size — saves as size_chart_data JSONB array
 - All 3 fields included in handleSave payload
 
 **ProductDetailClient — dynamic tabs:**

@@ -76,6 +76,7 @@ export default function AboutPage() {
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.12em", color: "#6B6B6B", marginBottom: 0 }}>History</p>
           <div style={{ maxWidth: "680px", margin: "32px auto 0" }}>
             {[
+              { year: "2000", title: "Started Manufacturing", body: "Established our manufacturing operations with a commitment to quality craftsmanship and reliable apparel production." },
               { year: "2015", title: "ISO 9000 Certified", body: "Quality standards locked in. GOTS and Oeko-Tex certifications followed." },
               { year: "2019", title: "500+ Active Accounts", body: "Expanded to hoodies, sweatshirts, and polos. Started shipping nationwide." },
               { year: "2020", title: "Founded in Dallas", body: "First warehouse opened. Started with cotton tees for the Texas print market." },

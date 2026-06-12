@@ -1101,7 +1101,7 @@ export default function AdminProductEditPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                     <thead>
                       <tr style={{ background: "#F4F3EF" }}>
-                        {["Size", "Chest (in)", "Length (in)", "Sleeve (in)", ""].map(h => (
+                        {["Size", "Chest (in)", "Length (in)", "Box Size", ""].map(h => (
                           <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".06em", color: "#7A7880", fontWeight: 700, whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>

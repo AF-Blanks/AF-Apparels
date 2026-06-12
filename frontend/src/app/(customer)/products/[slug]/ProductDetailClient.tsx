@@ -1053,7 +1053,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                     <table style={{ borderCollapse: "collapse", fontSize: "13px", minWidth: "500px" }}>
                       <thead>
                         <tr style={{ background: "#1B3A5C" }}>
-                          {["Size", "Chest (in)", "Length (in)", "Sleeve (in)"].map(h => (
+                          {["Size", "Chest (in)", "Length (in)", "Box Size"].map(h => (
                             <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#fff", fontFamily: "var(--font-bebas)", letterSpacing: ".06em", fontSize: "13px" }}>{h}</th>
                           ))}
                         </tr>
@@ -1160,10 +1160,10 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                   Image Library — {product.name}
                 </h3>
                 <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", color: "#6B6B6B", margin: 0 }}>
-                  All colorway images available for download.
+                  All color images available for download.
                 </p>
                 <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", color: "#1C3557", fontStyle: "italic", margin: "4px 0 0" }}>
-                  Color may vary due to digital picture.
+                  Product colors may vary slightly from the images shown due to differences in digital displays, lighting conditions, and photography.
                 </p>
               </div>
               <button
