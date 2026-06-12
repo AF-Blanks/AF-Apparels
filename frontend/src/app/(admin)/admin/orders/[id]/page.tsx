@@ -431,15 +431,21 @@ export default function AdminOrderDetailPage() {
 
   async function handleGenerateLabel() {
     if (!selectedCarrier) return;
-    setLabelLoading(true); setMsg(null); setLabelResult(null);
+    setLabelLoading(true); setMsg(null); setLabelResult(null); setAllLabels([]);
     try {
       const result = await apiClient.post<{
         success?: boolean; tracking_number?: string; tracking_url?: string;
         label_url?: string; carrier?: string; service?: string; rate?: number; error?: string;
+        num_boxes?: number; labels?: BoxLabel[];
       }>(`/api/v1/admin/orders/${order?.id ?? id}/labels`, { carrier: selectedCarrier });
-      setLabelResult(result);
       if (result.success) {
-        setMsg({ text: `Label generated — ${result.carrier?.toUpperCase()} ${result.service}`, ok: true });
+        const boxes = result.num_boxes ?? 1;
+        setMsg({ text: `${boxes > 1 ? `${boxes} labels` : "Label"} generated — ${result.carrier?.toUpperCase()} ${result.service}`, ok: true });
+        if (result.labels && result.labels.length > 1) {
+          setAllLabels(result.labels);
+        } else {
+          setLabelResult(result);
+        }
         setOrder(prev => prev ? {
           ...prev,
           status: "shipped",
@@ -453,6 +459,7 @@ export default function AdminOrderDetailPage() {
         setStatus("shipped");
         if (result.tracking_number) setTracking(result.tracking_number);
       } else {
+        setLabelResult(result);
         setMsg({ text: result.error ?? "Label generation failed.", ok: false });
       }
     } catch (err: unknown) {
@@ -969,10 +976,43 @@ export default function AdminOrderDetailPage() {
                 ) : (
                   /* CASE 1 (Live Rate): customer's rate already known — generate label directly */
                   <>
-                    <button onClick={handleGenerateLabel} disabled={!selectedCarrier || labelLoading}
-                      style={{ background: selectedCarrier ? "#1A5CFF" : "#E2E0DA", color: "#fff", border: "none", padding: "12px 24px", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: selectedCarrier ? "pointer" : "not-allowed", opacity: labelLoading ? .65 : 1, marginBottom: "14px" }}>
-                      {labelLoading ? "Generating label…" : `Generate ${(order.carrier ?? selectedCarrier ?? "").toUpperCase()} Label`}
-                    </button>
+                    {!labelResult?.success && allLabels.length === 0 && (
+                      <button onClick={handleGenerateLabel} disabled={!selectedCarrier || labelLoading}
+                        style={{ background: selectedCarrier ? "#1A5CFF" : "#E2E0DA", color: "#fff", border: "none", padding: "12px 24px", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: selectedCarrier ? "pointer" : "not-allowed", opacity: labelLoading ? .65 : 1, marginBottom: "14px" }}>
+                        {labelLoading ? "Generating labels…" : `Generate ${(order.carrier ?? selectedCarrier ?? "").toUpperCase()} Label`}
+                      </button>
+                    )}
+                    {/* Multi-box labels display for live-rate orders */}
+                    {allLabels.length > 1 && (
+                      <div style={{ display: "flex", flexDirection: "column" as const, gap: "10px", marginBottom: "14px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#059669", marginBottom: "4px" }}>
+                          ✓ {allLabels.length} labels generated
+                        </div>
+                        {allLabels.map(lbl => (
+                          <div key={lbl.box_number} style={{ background: "rgba(5,150,105,.05)", border: "1px solid rgba(5,150,105,.18)", borderRadius: "8px", padding: "12px 14px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                              <div style={{ fontSize: "12px", fontWeight: 700, color: "#059669" }}>Box {lbl.box_number}</div>
+                              <div style={{ fontSize: "11px", color: "#7A7880" }}>{lbl.carrier} · {lbl.service}</div>
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#2A2830", marginBottom: "8px" }}>
+                              <span style={{ color: "#7A7880" }}>Tracking: </span>{lbl.tracking_number}
+                            </div>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+                              <a href={lbl.label_url} target="_blank" rel="noreferrer"
+                                style={{ background: "#1A5CFF", color: "#fff", padding: "6px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}>
+                                ↓ Label PDF
+                              </a>
+                              {lbl.tracking_url && (
+                                <a href={lbl.tracking_url} target="_blank" rel="noreferrer"
+                                  style={{ background: "#fff", color: "#1A5CFF", padding: "6px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 700, textDecoration: "none", border: "1.5px solid #1A5CFF" }}>
+                                  Track →
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
 
