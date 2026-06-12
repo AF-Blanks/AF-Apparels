@@ -81,6 +81,24 @@ interface AdminOrder {
   // Admin edits
   items_edited?: boolean;
   convenience_fee?: string | null;
+  // Multi-box labels JSON string
+  all_labels?: string | null;
+}
+
+interface BoxSummary {
+  num_boxes: number;
+  total_weight_lbs: number;
+  weight_per_box_lbs: number;
+  boxes: { box_number: number; weight_lbs: number }[];
+}
+
+interface BoxLabel {
+  box_number: number;
+  tracking_number: string;
+  tracking_url?: string;
+  label_url: string;
+  carrier: string;
+  service: string;
 }
 
 interface CustomerStats {
@@ -255,6 +273,9 @@ export default function AdminOrderDetailPage() {
   const [adminSelectedRateId, setAdminSelectedRateId] = useState<string | null>(null);
   const adminRatesRef = useRef<AdminRate[]>([]);
 
+  const [boxSummary, setBoxSummary] = useState<BoxSummary | null>(null);
+  const [allLabels, setAllLabels] = useState<BoxLabel[]>([]);
+
   const [isVerifyingAch, setIsVerifyingAch] = useState(false);
   const [isResendingInvoice, setIsResendingInvoice] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
@@ -304,6 +325,27 @@ export default function AdminOrderDetailPage() {
         } else if (o.carrier) {
           // Pre-select the carrier the customer chose at checkout
           setSelectedCarrier(_cMap[o.carrier] ?? o.carrier.toLowerCase());
+        }
+
+        // Parse previously-generated multi-box labels from order.all_labels
+        if (o.all_labels) {
+          try {
+            const parsed = JSON.parse(o.all_labels) as BoxLabel[];
+            if (Array.isArray(parsed) && parsed.length > 0) setAllLabels(parsed);
+          } catch { /* ignore */ }
+        }
+
+        // Fetch box summary for Standard Ground orders (no live Shippo rate)
+        const _hasLiveRateOnLoad = !!o.shipping_rate_id;
+        const _isWillCallOnLoad = !!(
+          o.shipping_method?.toLowerCase().includes("will_call") ||
+          o.shipping_method?.toLowerCase().includes("pickup")
+        );
+        if (!_hasLiveRateOnLoad && !_isWillCallOnLoad) {
+          try {
+            const bs = await apiClient.get<BoxSummary>(`/api/v1/admin/orders/${o.id}/box-summary`);
+            if (bs && bs.num_boxes) setBoxSummary(bs);
+          } catch { /* box summary is optional */ }
         }
 
         // Fetch customer stats and company registration info (best-effort)
@@ -447,11 +489,12 @@ export default function AdminOrderDetailPage() {
   async function handleGenerateManualLabel() {
     const selectedRate = adminRates.find(r => r.rate_id === adminSelectedRateId);
     if (!selectedRate) return;
-    setManualLabelLoading(true); setMsg(null); setLabelResult(null);
+    setManualLabelLoading(true); setMsg(null); setLabelResult(null); setAllLabels([]);
     try {
       const result = await apiClient.post<{
-        success?: boolean; tracking_number?: string; tracking_url?: string;
+        success?: boolean; num_boxes?: number; tracking_number?: string; tracking_url?: string;
         label_url?: string; carrier?: string; service?: string; rate?: number; error?: string;
+        labels?: BoxLabel[];
       }>(`/api/v1/admin/orders/${order?.id ?? id}/generate-label-manual`, {
         rate_id: selectedRate.rate_id,
         carrier: selectedRate.carrier,
@@ -459,7 +502,12 @@ export default function AdminOrderDetailPage() {
       });
       setLabelResult(result);
       if (result.success) {
-        setMsg({ text: `Label generated — ${result.carrier?.toUpperCase()} ${result.service}`, ok: true });
+        const numBoxes = result.num_boxes ?? 1;
+        const boxText = numBoxes > 1 ? ` (${numBoxes} boxes)` : "";
+        setMsg({ text: `Label generated${boxText} — ${result.carrier?.toUpperCase()} ${result.service}`, ok: true });
+        if (result.labels && result.labels.length > 0) {
+          setAllLabels(result.labels);
+        }
         setOrder(prev => prev ? {
           ...prev,
           status: "shipped",
@@ -782,11 +830,26 @@ export default function AdminOrderDetailPage() {
                 {/* CASE 2 (Standard Ground): live rates fetch UI */}
                 {isStandardGround ? (
                   <>
-                    {!labelResult?.success && (
+                    {!labelResult?.success && allLabels.length === 0 && (
                       <>
+                        {/* Box summary banner */}
+                        {boxSummary && (
+                          <div style={{ background: "rgba(99,102,241,.06)", border: "1px solid rgba(99,102,241,.2)", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span style={{ fontSize: "18px" }}>📦</span>
+                            <div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "#6366F1" }}>
+                                {boxSummary.num_boxes} box{boxSummary.num_boxes !== 1 ? "es" : ""} required
+                              </div>
+                              <div style={{ fontSize: "12px", color: "#7A7880" }}>
+                                {boxSummary.weight_per_box_lbs} lbs per box · {boxSummary.total_weight_lbs} lbs total
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Weight input + Fetch Rates button */}
                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" as const }}>
-                          <label style={{ ...LabelStyle, marginBottom: 0, whiteSpace: "nowrap" as const }}>Package Weight (lbs)</label>
+                          <label style={{ ...LabelStyle, marginBottom: 0, whiteSpace: "nowrap" as const }}>Per-Box Weight (lbs)</label>
                           <input
                             type="number" min="0.1" step="0.1" value={manualWeight}
                             onChange={e => setManualWeight(parseFloat(e.target.value) || 0.5)}
@@ -838,7 +901,14 @@ export default function AdminOrderDetailPage() {
                                       {rate.days != null && <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "1px" }}>{rate.days} business day{rate.days !== 1 ? "s" : ""}</div>}
                                     </div>
                                   </div>
-                                  <span style={{ fontSize: "13px", fontWeight: 800, color: "#2A2830" }}>${Number(rate.cost).toFixed(2)}</span>
+                                  <div style={{ textAlign: "right" as const }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 800, color: "#2A2830" }}>${Number(rate.cost).toFixed(2)}</span>
+                                    {boxSummary && boxSummary.num_boxes > 1 && (
+                                      <div style={{ fontSize: "11px", color: "#6366F1", marginTop: "1px" }}>
+                                        × {boxSummary.num_boxes} = ${(rate.cost * boxSummary.num_boxes).toFixed(2)} total
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -848,16 +918,52 @@ export default function AdminOrderDetailPage() {
                         {/* No rates yet */}
                         {!adminRatesLoading && adminRates.length === 0 && (
                           <div style={{ fontSize: "12px", color: "#7A7880", marginBottom: "14px" }}>
-                            Enter a package weight and click "Refresh Rates" to load available carrier options.
+                            Enter a per-box weight and click "Refresh Rates" to load available carrier options.
                           </div>
                         )}
 
                         {/* Generate Label button */}
                         <button onClick={handleGenerateManualLabel} disabled={!adminSelectedRateId || manualLabelLoading}
                           style={{ background: adminSelectedRateId ? "#1A5CFF" : "#E2E0DA", color: "#fff", border: "none", padding: "12px 24px", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: adminSelectedRateId ? "pointer" : "not-allowed", opacity: manualLabelLoading ? .65 : 1, marginBottom: "14px" }}>
-                          {manualLabelLoading ? "Generating label…" : adminSelectedRateId ? "Generate Label" : "Select a rate first"}
+                          {manualLabelLoading
+                            ? "Generating labels…"
+                            : adminSelectedRateId
+                              ? `Generate ${boxSummary && boxSummary.num_boxes > 1 ? `${boxSummary.num_boxes} Labels` : "Label"}`
+                              : "Select a rate first"}
                         </button>
                       </>
+                    )}
+
+                    {/* Multi-box labels display */}
+                    {allLabels.length > 1 && (
+                      <div style={{ display: "flex", flexDirection: "column" as const, gap: "10px", marginBottom: "14px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "#059669", marginBottom: "4px" }}>
+                          ✓ {allLabels.length} labels generated
+                        </div>
+                        {allLabels.map(lbl => (
+                          <div key={lbl.box_number} style={{ background: "rgba(5,150,105,.05)", border: "1px solid rgba(5,150,105,.18)", borderRadius: "8px", padding: "12px 14px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                              <div style={{ fontSize: "12px", fontWeight: 700, color: "#059669" }}>Box {lbl.box_number}</div>
+                              <div style={{ fontSize: "11px", color: "#7A7880" }}>{lbl.carrier} · {lbl.service}</div>
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#2A2830", marginBottom: "8px" }}>
+                              <span style={{ color: "#7A7880" }}>Tracking: </span>{lbl.tracking_number}
+                            </div>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const }}>
+                              <a href={lbl.label_url} target="_blank" rel="noreferrer"
+                                style={{ background: "#1A5CFF", color: "#fff", padding: "6px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 700, textDecoration: "none" }}>
+                                ↓ Label PDF
+                              </a>
+                              {lbl.tracking_url && (
+                                <a href={lbl.tracking_url} target="_blank" rel="noreferrer"
+                                  style={{ background: "#fff", color: "#1A5CFF", padding: "6px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 700, textDecoration: "none", border: "1.5px solid #1A5CFF" }}>
+                                  Track →
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </>
                 ) : (
