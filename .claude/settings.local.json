@@ -160,7 +160,8 @@
       "Bash(git revert *)",
       "Bash(psql \"postgresql://postgres:RjWWJKKVFUOUgFsznMYvZYTnlFuaymtR@switchyard.proxy.rlwy.net:33288/railway\" -c \"SELECT COUNT\\(*\\) FROM orders; SELECT MIN\\(order_number\\), MAX\\(order_number\\) FROM orders;\")",
       "Bash(psql \"postgresql://postgres:RjWWJKKVFUOUgFsznMYvZYTnlFuaymtR@switchyard.proxy.rlwy.net:33288/railway\" -c \"SELECT id, order_number, total, tax_amount, shipping_cost, qb_invoice_id, created_at FROM orders ORDER BY created_at DESC LIMIT 8;\")",
-      "Bash(psql \"postgresql://postgres:FYOvksNIWltBuheYadPZlLOtilzZrUTu@zephyr.proxy.rlwy.net:35726/railway\" -c \"SELECT id, order_number, total FROM orders ORDER BY created_at DESC LIMIT 3;\")"
+      "Bash(psql \"postgresql://postgres:FYOvksNIWltBuheYadPZlLOtilzZrUTu@zephyr.proxy.rlwy.net:35726/railway\" -c \"SELECT id, order_number, total FROM orders ORDER BY created_at DESC LIMIT 3;\")",
+      "Bash(psql \"postgresql://postgres:FYOvksNIWltBuheYadPZlLOtilzZrUTu@zephyr.proxy.rlwy.net:35726/railway\" -c \"SELECT entity_type, entity_id, status, attempt_count, error_message, created_at FROM qb_sync_log ORDER BY created_at DESC LIMIT 10;\")"
     ]
   }
 }
