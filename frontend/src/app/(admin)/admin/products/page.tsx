@@ -139,6 +139,30 @@ export default function AdminProductsPage() {
   const totalInventory = (p: ProductDetail) =>
     p.variants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
 
+  async function handleMoveUp(product: ProductDetail, index: number) {
+    if (index === 0) return;
+    const above = products[index - 1];
+    const currentOrder = product.sort_order ?? (index + 1);
+    const aboveOrder = above.sort_order ?? index;
+    await Promise.all([
+      adminService.updateProductSortOrder(product.id, aboveOrder),
+      adminService.updateProductSortOrder(above.id, currentOrder),
+    ]);
+    load();
+  }
+
+  async function handleMoveDown(product: ProductDetail, index: number) {
+    if (index === products.length - 1) return;
+    const below = products[index + 1];
+    const currentOrder = product.sort_order ?? (index + 1);
+    const belowOrder = below.sort_order ?? (index + 2);
+    await Promise.all([
+      adminService.updateProductSortOrder(product.id, belowOrder),
+      adminService.updateProductSortOrder(below.id, currentOrder),
+    ]);
+    load();
+  }
+
   return (
     <div style={{ fontFamily: "var(--font-jakarta)" }}>
       {/* Header */}
@@ -237,6 +261,7 @@ export default function AdminProductsPage() {
                 />
               </th>
               <th style={{ width: "60px", ...thStyle }} />
+              <th style={{ width: "90px", ...thStyle }}>Sort</th>
               {["Product", "Status", "Inventory", "Category", "Type", "Vendor"].map(col => (
                 <th key={col} style={thStyle}>{col}</th>
               ))}
@@ -244,10 +269,10 @@ export default function AdminProductsPage() {
           </thead>
           <tbody>
             {isLoading && products.length === 0 ? (
-              <tr><td colSpan={9} style={{ padding: "48px", textAlign: "center", color: "#aaa", fontSize: "14px" }}>Loading…</td></tr>
+              <tr><td colSpan={10} style={{ padding: "48px", textAlign: "center", color: "#aaa", fontSize: "14px" }}>Loading…</td></tr>
             ) : loadError ? (
               <tr>
-                <td colSpan={9} style={{ padding: "48px", textAlign: "center" }}>
+                <td colSpan={10} style={{ padding: "48px", textAlign: "center" }}>
                   <div style={{ fontSize: "14px", color: "#E8242A", fontWeight: 600, marginBottom: "8px" }}>Failed to load products</div>
                   <div style={{ fontSize: "12px", color: "#aaa", marginBottom: "16px", maxWidth: "480px", margin: "0 auto 16px" }}>{loadError}</div>
                   <button onClick={() => load()} style={{ padding: "8px 20px", background: "#1A5CFF", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>Retry</button>
@@ -255,7 +280,7 @@ export default function AdminProductsPage() {
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: "56px", textAlign: "center" }}>
+                <td colSpan={10} style={{ padding: "56px", textAlign: "center" }}>
                   <div style={{ fontSize: "32px", marginBottom: "10px" }}>👕</div>
                   <div style={{ fontSize: "14px", color: "#aaa", fontWeight: 600 }}>No products found</div>
                 </td>
@@ -287,6 +312,27 @@ export default function AdminProductsPage() {
                     ) : (
                       <span style={{ fontSize: "20px", opacity: 0.4 }}>👕</span>
                     )}
+                  </div>
+                </td>
+
+                {/* Sort order */}
+                <td style={{ padding: "10px 16px" }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                    <button
+                      title="Move up"
+                      disabled={index === 0}
+                      onClick={() => handleMoveUp(product, index)}
+                      style={{ background: "none", border: "1px solid #E2E0DA", borderRadius: "4px", width: "24px", height: "22px", cursor: index === 0 ? "default" : "pointer", fontSize: "11px", lineHeight: 1, opacity: index === 0 ? 0.3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >↑</button>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: "#7A7880", minWidth: "28px", textAlign: "center" }}>
+                      {product.sort_order ?? 0}
+                    </span>
+                    <button
+                      title="Move down"
+                      disabled={index === products.length - 1}
+                      onClick={() => handleMoveDown(product, index)}
+                      style={{ background: "none", border: "1px solid #E2E0DA", borderRadius: "4px", width: "24px", height: "22px", cursor: index === products.length - 1 ? "default" : "pointer", fontSize: "11px", lineHeight: 1, opacity: index === products.length - 1 ? 0.3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >↓</button>
                   </div>
                 </td>
 

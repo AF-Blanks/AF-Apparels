@@ -63,6 +63,13 @@ export const adminService = {
     return apiClient.patch<ProductDetail>(`/api/v1/admin/products/${id}`, data);
   },
 
+  async updateProductSortOrder(id: string, sort_order: number) {
+    return apiClient.patch<{ id: string; sort_order: number }>(
+      `/api/v1/admin/products/${id}/sort-order`,
+      { sort_order }
+    );
+  },
+
   async deleteProduct(id: string) {
     return apiClient.delete(`/api/v1/admin/products/${id}`);
   },
