@@ -98,7 +98,7 @@ export default function AboutPage() {
 
       {/* CERTIFICATIONS */}
       <div style={{ background: "#FFFFFF", padding: "56px 24px", borderTop: "1px solid #E2E2DE" }}>
-        <div style={{ maxWidth: "1500px", margin: "0 auto" }}>
+        <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.12em", color: "#6B6B6B", marginBottom: "8px" }}>Certifications &amp; Compliance</p>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "15px", color: "#6B6B6B", marginBottom: "32px" }}>Every AF product is tested and certified.</p>
           <div className="about-cert-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "24px" }}>

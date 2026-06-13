@@ -8,7 +8,7 @@ export default function Certifications() {
 
   return (
     <section style={{ padding: "56px 24px", background: "#FFFFFF", borderTop: "1px solid #E2E2DE" }}>
-      <div style={{ maxWidth: "1500px", margin: "0 auto" }}>
+      <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
         <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", textTransform: "uppercase", letterSpacing: "0.12em", color: "#6B6B6B", marginBottom: "24px", textAlign: "center" }}>
           Certifications &amp; Compliance
         </p>
