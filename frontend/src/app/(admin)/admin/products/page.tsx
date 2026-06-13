@@ -145,11 +145,16 @@ export default function AdminProductsPage() {
     const above = products[index - 1];
     if (!current || !above) return;
     try {
-      await Promise.all([
-        adminService.updateProductSortOrder(current.id, above.sort_order ?? index),
-        adminService.updateProductSortOrder(above.id, current.sort_order ?? (index + 1)),
-      ]);
-      load();
+      if ((current.sort_order ?? 0) === (above.sort_order ?? 0)) {
+        await adminService.updateProductSortOrder(above.id, index);
+        await adminService.updateProductSortOrder(current.id, index + 1);
+      } else {
+        await Promise.all([
+          adminService.updateProductSortOrder(current.id, above.sort_order ?? index),
+          adminService.updateProductSortOrder(above.id, current.sort_order ?? (index + 1)),
+        ]);
+      }
+      await load();
     } catch (err) {
       console.error("Sort failed:", err);
     }
@@ -161,11 +166,16 @@ export default function AdminProductsPage() {
     const below = products[index + 1];
     if (!current || !below) return;
     try {
-      await Promise.all([
-        adminService.updateProductSortOrder(current.id, below.sort_order ?? (index + 2)),
-        adminService.updateProductSortOrder(below.id, current.sort_order ?? (index + 1)),
-      ]);
-      load();
+      if ((current.sort_order ?? 0) === (below.sort_order ?? 0)) {
+        await adminService.updateProductSortOrder(current.id, index + 1);
+        await adminService.updateProductSortOrder(below.id, index + 2);
+      } else {
+        await Promise.all([
+          adminService.updateProductSortOrder(current.id, below.sort_order ?? (index + 2)),
+          adminService.updateProductSortOrder(below.id, current.sort_order ?? (index + 1)),
+        ]);
+      }
+      await load();
     } catch (err) {
       console.error("Sort failed:", err);
     }
@@ -333,7 +343,7 @@ export default function AdminProductsPage() {
                       style={{ background: "none", border: "1px solid #E2E0DA", borderRadius: "4px", width: "24px", height: "22px", cursor: index === 0 ? "default" : "pointer", fontSize: "11px", lineHeight: 1, opacity: index === 0 ? 0.3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                     >↑</button>
                     <span style={{ fontSize: "11px", fontWeight: 600, color: "#7A7880", minWidth: "28px", textAlign: "center" }}>
-                      {product.sort_order ?? 0}
+                      {product.sort_order || '-'}
                     </span>
                     <button
                       title="Move down"
