@@ -139,30 +139,36 @@ export default function AdminProductsPage() {
   const totalInventory = (p: ProductDetail) =>
     p.variants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0);
 
-  async function handleMoveUp(product: ProductDetail, index: number) {
+  async function handleMoveUp(index: number) {
     if (index === 0) return;
+    const current = products[index];
     const above = products[index - 1];
-    if (!above) return;
-    const currentOrder = product.sort_order ?? (index + 1);
-    const aboveOrder = above.sort_order ?? index;
-    await Promise.all([
-      adminService.updateProductSortOrder(product.id, aboveOrder),
-      adminService.updateProductSortOrder(above.id, currentOrder),
-    ]);
-    load();
+    if (!current || !above) return;
+    try {
+      await Promise.all([
+        adminService.updateProductSortOrder(current.id, above.sort_order ?? index),
+        adminService.updateProductSortOrder(above.id, current.sort_order ?? (index + 1)),
+      ]);
+      load();
+    } catch (err) {
+      console.error("Sort failed:", err);
+    }
   }
 
-  async function handleMoveDown(product: ProductDetail, index: number) {
+  async function handleMoveDown(index: number) {
     if (index === products.length - 1) return;
+    const current = products[index];
     const below = products[index + 1];
-    if (!below) return;
-    const currentOrder = product.sort_order ?? (index + 1);
-    const belowOrder = below.sort_order ?? (index + 2);
-    await Promise.all([
-      adminService.updateProductSortOrder(product.id, belowOrder),
-      adminService.updateProductSortOrder(below.id, currentOrder),
-    ]);
-    load();
+    if (!current || !below) return;
+    try {
+      await Promise.all([
+        adminService.updateProductSortOrder(current.id, below.sort_order ?? (index + 2)),
+        adminService.updateProductSortOrder(below.id, current.sort_order ?? (index + 1)),
+      ]);
+      load();
+    } catch (err) {
+      console.error("Sort failed:", err);
+    }
   }
 
   return (
@@ -323,7 +329,7 @@ export default function AdminProductsPage() {
                     <button
                       title="Move up"
                       disabled={index === 0}
-                      onClick={() => handleMoveUp(product, index)}
+                      onClick={() => handleMoveUp(index)}
                       style={{ background: "none", border: "1px solid #E2E0DA", borderRadius: "4px", width: "24px", height: "22px", cursor: index === 0 ? "default" : "pointer", fontSize: "11px", lineHeight: 1, opacity: index === 0 ? 0.3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                     >↑</button>
                     <span style={{ fontSize: "11px", fontWeight: 600, color: "#7A7880", minWidth: "28px", textAlign: "center" }}>
@@ -332,7 +338,7 @@ export default function AdminProductsPage() {
                     <button
                       title="Move down"
                       disabled={index === products.length - 1}
-                      onClick={() => handleMoveDown(product, index)}
+                      onClick={() => handleMoveDown(index)}
                       style={{ background: "none", border: "1px solid #E2E0DA", borderRadius: "4px", width: "24px", height: "22px", cursor: index === products.length - 1 ? "default" : "pointer", fontSize: "11px", lineHeight: 1, opacity: index === products.length - 1 ? 0.3 : 1, display: "flex", alignItems: "center", justifyContent: "center" }}
                     >↓</button>
                   </div>
