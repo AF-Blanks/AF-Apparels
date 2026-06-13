@@ -157,7 +157,9 @@
       "Bash(git add *)",
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/services/email_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('email_service.py: OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('app/tasks/email_tasks.py', encoding='utf-8'\\).read\\(\\)\\); print\\('email_tasks.py: OK'\\)\")",
-      "Bash(git revert *)"
+      "Bash(git revert *)",
+      "Bash(psql \"postgresql://postgres:RjWWJKKVFUOUgFsznMYvZYTnlFuaymtR@switchyard.proxy.rlwy.net:33288/railway\" -c \"SELECT COUNT\\(*\\) FROM orders; SELECT MIN\\(order_number\\), MAX\\(order_number\\) FROM orders;\")",
+      "Bash(psql \"postgresql://postgres:RjWWJKKVFUOUgFsznMYvZYTnlFuaymtR@switchyard.proxy.rlwy.net:33288/railway\" -c \"SELECT id, order_number, total, tax_amount, shipping_cost, qb_invoice_id, created_at FROM orders ORDER BY created_at DESC LIMIT 8;\")"
     ]
   }
 }
