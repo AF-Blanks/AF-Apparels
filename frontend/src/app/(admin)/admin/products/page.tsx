@@ -142,6 +142,7 @@ export default function AdminProductsPage() {
   async function handleMoveUp(product: ProductDetail, index: number) {
     if (index === 0) return;
     const above = products[index - 1];
+    if (!above) return;
     const currentOrder = product.sort_order ?? (index + 1);
     const aboveOrder = above.sort_order ?? index;
     await Promise.all([
@@ -154,6 +155,7 @@ export default function AdminProductsPage() {
   async function handleMoveDown(product: ProductDetail, index: number) {
     if (index === products.length - 1) return;
     const below = products[index + 1];
+    if (!below) return;
     const currentOrder = product.sort_order ?? (index + 1);
     const belowOrder = below.sort_order ?? (index + 2);
     await Promise.all([
