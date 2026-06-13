@@ -287,7 +287,7 @@ export default function AdminProductsPage() {
                   <div style={{ fontSize: "14px", color: "#aaa", fontWeight: 600 }}>No products found</div>
                 </td>
               </tr>
-            ) : products.map(product => (
+            ) : products.map((product, index) => (
               <tr
                 key={product.id}
                 style={{ borderBottom: "1px solid #F4F3EF", cursor: "pointer", transition: "background .15s" }}
