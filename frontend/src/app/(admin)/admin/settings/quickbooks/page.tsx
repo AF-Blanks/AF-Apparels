@@ -64,10 +64,10 @@ export default function QuickBooksPage() {
     setMessage(null);
     try {
       const r: any = await apiClient.post("/api/v1/admin/quickbooks/purge-queue", {});
-      const d = r.data;
+      const d = r?.data ?? r ?? {};
       setMessage({
         type: "success",
-        text: `Queue purged — ${d.total_deleted} tasks deleted. Now safe to connect a new Intuit app.`,
+        text: `Queue purged — ${d.total_deleted ?? 0} tasks deleted. Now safe to connect a new Intuit app.`,
       });
     } catch (e: any) {
       setMessage({ type: "error", text: `Purge failed: ${e?.response?.data?.detail ?? e?.message}` });
