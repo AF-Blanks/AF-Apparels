@@ -258,6 +258,7 @@ export function AdminSidebar() {
           <SubLink href="/admin/settings/taxes" label="Taxes & Duties" />
           <SubLink href="/admin/analytics" label="Analytics" />
           <SubLink href="/admin/users" label="Users" />
+          <SubLink href="/admin/settings/quickbooks" label="QuickBooks" />
           <SubLink href="/admin/settings/audit-log" label="Audit Log" />
         </div>
       )}
