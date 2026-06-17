@@ -364,6 +364,13 @@ function groupVariantsByColor(variants: ProductVariant[]) {
       groups.push({ color, variants: colorVariants });
     }
   }
+  // Black first, White second, all others keep original order
+  const COLOR_PRIORITY: Record<string, number> = { "Black": 0, "White": 1 };
+  groups.sort((a, b) => {
+    const pa = COLOR_PRIORITY[a.color] ?? 2;
+    const pb = COLOR_PRIORITY[b.color] ?? 2;
+    return pa - pb;
+  });
   return groups;
 }
 
@@ -731,7 +738,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
           {/* ── LEFT: Image Gallery ─────────────────────────────────────── */}
           <div className="pdp-gallery-col" style={{ position: "sticky", top: "24px", alignSelf: "start" }}>
             {/* Main image */}
-            <div className="pdp-main-img" style={{ width: "100%", height: "480px", border: "1px solid #E2E2DE", display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", overflow: "hidden" }}>
+            <div className="pdp-main-img" style={{ width: "100%", height: "480px", border: "1px solid #E2E2DE", display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", overflow: "hidden", position: "relative" }}>
               {displayImages[activeImageIdx] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -741,6 +748,15 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                 />
               ) : (
                 <span style={{ fontSize: "80px", opacity: 0.1 }}>👕</span>
+              )}
+              {/* Logo overlay — top left */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/Af-apparel logo.png" alt="AF Blanks" style={{ position: "absolute", top: "10px", left: "10px", height: "38px", width: "auto", objectFit: "contain", pointerEvents: "none" }} />
+              {/* Product code overlay — top right */}
+              {((product as any).product_code || (product as any).code) && (
+                <div style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(255,255,255,0.88)", border: "1px solid #E2E2DE", borderRadius: "4px", padding: "3px 9px", fontSize: "11px", fontFamily: "'IBM Plex Mono', monospace", color: "#1B3A5C", fontWeight: 600, letterSpacing: "0.05em", pointerEvents: "none" }}>
+                  {(product as any).product_code || (product as any).code}
+                </div>
               )}
             </div>
 
@@ -823,7 +839,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
             {colorGroups.length > 0 && (
               <>
                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B6B6B", fontWeight: 600, marginBottom: "10px" }}>
-                  Color
+                  {selectedColor ? `Color: ${selectedColor}` : "Color"}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "28px" }}>
                   {colorGroups.map(group => {

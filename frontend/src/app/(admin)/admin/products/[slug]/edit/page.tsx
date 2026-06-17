@@ -938,17 +938,26 @@ export default function AdminProductEditPage() {
             </div>
             <div style={{ marginBottom: "14px" }}>
               <label style={labelStyle}>Gender</label>
-              <select
-                value={(product as any).gender ?? ""}
-                onChange={e => setProduct(p => p ? { ...p, gender: e.target.value } as any : p)}
-                style={{ ...inputStyle, background: "#fff" }}
-              >
-                <option value="">Select gender…</option>
-                <option value="mens">Men's</option>
-                <option value="womens">Women's</option>
-                <option value="youth">Youth</option>
-                <option value="unisex">Unisex</option>
-              </select>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
+                {[{ value: "unisex", label: "Unisex" }, { value: "mens", label: "Men's" }, { value: "womens", label: "Women's" }, { value: "youth", label: "Youth" }].map(opt => {
+                  const current = ((product as any).gender ?? "").split(",").filter(Boolean) as string[];
+                  const checked = current.includes(opt.value);
+                  return (
+                    <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "#2A2830", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked ? current.filter(g => g !== opt.value) : [...current, opt.value];
+                          setProduct(p => p ? { ...p, gender: next.join(",") } as any : p);
+                        }}
+                        style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
+                      />
+                      {opt.label}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
             <div style={{ marginBottom: "14px" }}>
@@ -983,19 +992,29 @@ export default function AdminProductEditPage() {
 
             <div style={{ marginBottom: "14px" }}>
               <label style={labelStyle}>Category</label>
-              <select
-                value={product.categories?.[0]?.id ?? ""}
-                onChange={e => {
-                  const cat = categories.find(c => c.id === e.target.value);
-                  setProduct(p => p ? { ...p, categories: cat ? [cat] : [] } : p);
-                }}
-                style={{ ...inputStyle, background: "#fff" }}
-              >
-                <option value="">Select category…</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
+                {categories.map(cat => {
+                  const checked = (product.categories ?? []).some(c => c.id === cat.id);
+                  return (
+                    <label key={cat.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "#2A2830", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setProduct(p => {
+                            if (!p) return p;
+                            const current = p.categories ?? [];
+                            const next = checked ? current.filter(c => c.id !== cat.id) : [...current, cat];
+                            return { ...p, categories: next };
+                          });
+                        }}
+                        style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
+                      />
+                      {cat.name}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
             <div>

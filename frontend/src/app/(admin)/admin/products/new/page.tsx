@@ -138,7 +138,7 @@ export default function NewProductPage() {
     fabric: "",
     product_code: "",
     weight: "",
-    category_id: "",
+    category_ids: [] as string[],
     tags: [] as string[],
     meta_title: "",
     meta_description: "",
@@ -271,7 +271,7 @@ export default function NewProductPage() {
         product_code: form.product_code || null,
         weight: form.weight || null,
         tags: form.tags.length ? form.tags : null,
-        category_ids: form.category_id ? [form.category_id] : [],
+        category_ids: form.category_ids,
         meta_title: form.meta_title || null,
         meta_description: form.meta_description || null,
         care_instructions: form.care_instructions || null,
@@ -547,13 +547,26 @@ export default function NewProductPage() {
               </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Gender</label>
-                <select name="gender" value={form.gender} onChange={handleChange} style={{ ...inputStyle, background: "#fff" }}>
-                  <option value="">Select gender…</option>
-                  <option value="mens">Men's</option>
-                  <option value="womens">Women's</option>
-                  <option value="youth">Youth</option>
-                  <option value="unisex">Unisex</option>
-                </select>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
+                  {[{ value: "unisex", label: "Unisex" }, { value: "mens", label: "Men's" }, { value: "womens", label: "Women's" }, { value: "youth", label: "Youth" }].map(opt => {
+                    const current = (form.gender ?? "").split(",").filter(Boolean);
+                    const checked = current.includes(opt.value);
+                    return (
+                      <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "#2A2830", userSelect: "none" }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const next = checked ? current.filter(g => g !== opt.value) : [...current, opt.value];
+                            setField("gender", next.join(","));
+                          }}
+                          style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
+                        />
+                        {opt.label}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Fabric</label>
@@ -569,12 +582,25 @@ export default function NewProductPage() {
               </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Category</label>
-                <select name="category_id" value={form.category_id} onChange={handleChange} style={{ ...inputStyle, background: "#fff" }}>
-                  <option value="">Select category…</option>
-                  {categories.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
+                  {categories.map(cat => {
+                    const checked = form.category_ids.includes(cat.id);
+                    return (
+                      <label key={cat.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "#2A2830", userSelect: "none" }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            const next = checked ? form.category_ids.filter(id => id !== cat.id) : [...form.category_ids, cat.id];
+                            setField("category_ids", next);
+                          }}
+                          style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
+                        />
+                        {cat.name}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div>
                 <label style={labelStyle}>Tags</label>
