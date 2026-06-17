@@ -548,3 +548,12 @@
   .register-sub { font-size: 14px !important; }
   .register-content-wrap { padding: 24px 16px 48px !important; }
 }
+
+
+/* ── Product image overlays ──────────────────────────────────────────── */
+.pdp-overlay-logo { height: 75px; }
+.pdp-overlay-code { font-size: 15px; }
+@media (max-width: 768px) {
+  .pdp-overlay-logo { height: 50px; }
+  .pdp-overlay-code { font-size: 13px; }
+}
