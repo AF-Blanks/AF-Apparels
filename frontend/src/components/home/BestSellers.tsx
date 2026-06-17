@@ -49,7 +49,7 @@ const COLOR_MAP: Record<string, string> = {
   "Dark Navy": "#0f1f3d", Indigo: "#3730a3", Cardinal: "#7b1520", Crimson: "#9f0712",
   "Carolina Blue": "#56a0d3", "Columbia Blue": "#9bc4e2", Silver: "#c0c0c0",
   "Ash Grey": "#b2b2b2", Ash: "#b2b2b2", Stone: "#a8a29e", Mocha: "#7c5c48",
-  Chocolate: "#5c3d2e", Caramel: "#b5651d", Camo: "#78866b", "Oatmeal Heather": "#D6CFC7",
+  Chocolate: "#5c3d2e", Caramel: "#b5651d", Camo: "#d5b695", "Oatmeal Heather": "#D6CFC7",
   "Sports Grey": "#C4C4C4",
   "Charcoal Heather": "#4A4A4A",
   "Texas Orange": "#BF5700",
