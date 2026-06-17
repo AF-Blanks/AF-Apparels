@@ -108,20 +108,26 @@ class ProductService:
             query = query.where(exists().where(*variant_conds))
         if params.gender:
             g = params.gender.lower().replace("'", "").replace(" ", "")
+
+            def _gender_has(val: str):
+                # Match val as an exact entry in comma-separated gender column
+                return or_(
+                    Product.gender.ilike(val),
+                    Product.gender.ilike(f"{val},%"),
+                    Product.gender.ilike(f"%,{val}"),
+                    Product.gender.ilike(f"%,{val},%"),
+                )
+
             if g in ("mens", "men", "male"):
-                query = query.where(
-                    or_(Product.gender == "mens", Product.gender == "unisex")
-                )
+                query = query.where(or_(_gender_has("mens"), _gender_has("unisex")))
             elif g in ("womens", "women", "female"):
-                query = query.where(
-                    or_(Product.gender == "womens", Product.gender == "unisex")
-                )
+                query = query.where(or_(_gender_has("womens"), _gender_has("unisex")))
             elif g == "unisex":
-                query = query.where(Product.gender == "unisex")
+                query = query.where(_gender_has("unisex"))
             elif g in ("youth", "kids", "children"):
-                query = query.where(Product.gender == "youth")
+                query = query.where(_gender_has("youth"))
             else:
-                query = query.where(func.lower(Product.gender) == g)
+                query = query.where(_gender_has(g))
 
         if params.fabric:
             query = query.where(Product.fabric.ilike(f"%{params.fabric}%"))
