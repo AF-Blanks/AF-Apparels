@@ -35,7 +35,7 @@ export default function InventoryListingPage() {
   const hasLoaded = useRef(false);
 
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
-  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; product_code: string | null }[]>([]);
   const [colors, setColors] = useState<string[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("all");
   const [selectedProduct, setSelectedProduct] = useState("all");
