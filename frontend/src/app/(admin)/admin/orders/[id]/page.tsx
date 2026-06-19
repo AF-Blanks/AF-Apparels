@@ -8,7 +8,7 @@ import { apiClient } from "@/lib/api-client";
 interface OrderItem {
   id: string;
   sku: string;
-  product_code: string | null;
+  product_code?: string | null;
   product_name: string;
   color: string | null;
   size: string | null;
