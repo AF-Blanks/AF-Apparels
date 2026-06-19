@@ -615,8 +615,9 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   }
 
   function handleDownload(imageId: string, filename: string) {
+    const base = process.env.NEXT_PUBLIC_API_URL || "";
     const a = document.createElement("a");
-    a.href = `/api/v1/products/${product?.id}/images/${imageId}/download?filename=${encodeURIComponent(filename)}`;
+    a.href = `${base}/api/v1/products/${product?.id}/images/${imageId}/download?filename=${encodeURIComponent(filename)}`;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
