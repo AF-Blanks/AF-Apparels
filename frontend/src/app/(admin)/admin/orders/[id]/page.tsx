@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api-client";
 interface OrderItem {
   id: string;
   sku: string;
+  product_code: string | null;
   product_name: string;
   color: string | null;
   size: string | null;
@@ -1155,7 +1156,7 @@ export default function AdminOrderDetailPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #E2E0DA" }}>
-                  {["Product", "SKU", "Color / Size", "Qty", "Unit Price", "Total", ""].map(h => (
+                  {["Product", "Product Code", "Color / Size", "Qty", "Unit Price", "Total", ""].map(h => (
                     <th key={h} style={{ textAlign: (h === "Qty" || h === "Unit Price" || h === "Total") ? "right" as const : "left" as const, padding: "10px 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: ".06em", color: "#7A7880" }}>{h}</th>
                   ))}
                 </tr>
@@ -1164,7 +1165,7 @@ export default function AdminOrderDetailPage() {
                 {order.items.map((item, i) => (
                   <tr key={item.id} style={{ borderBottom: i < order.items.length - 1 ? "1px solid #F4F3EF" : "none" }}>
                     <td style={{ padding: "14px 12px", fontWeight: 700, fontSize: "14px", color: "#2A2830" }}>{item.product_name}</td>
-                    <td style={{ padding: "14px 12px", fontSize: "12px", color: "#7A7880", fontFamily: "monospace" }}>{item.sku}</td>
+                    <td style={{ padding: "14px 12px", fontSize: "12px", color: "#7A7880", fontFamily: "monospace" }}>{item.product_code ?? "—"}</td>
                     <td style={{ padding: "14px 12px" }}>
                       {item.color && <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "6px" }}>{item.color}</span>}
                       {item.size && <span style={{ background: "#F4F3EF", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, color: "#2A2830" }}>{item.size}</span>}
