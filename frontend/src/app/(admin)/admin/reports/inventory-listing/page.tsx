@@ -1,9 +1,7 @@
-// frontend/src/app/(customer)/account/inventory/page.tsx
 "use client";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { useAuthStore } from "@/stores/auth.store";
 import { PackageIcon } from "@/components/ui/icons";
 
 interface InventoryItem {
@@ -30,12 +28,11 @@ function productLabel(name: string, code: string | null) {
   return code ? `${name} (${code})` : name;
 }
 
-export default function InventoryListingPage() {
-  const { isAuthenticated, isLoading } = useAuthStore();
+export default function AdminInventoryListingPage() {
   const hasLoaded = useRef(false);
 
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([]);
-  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; product_code: string | null }[]>([]);
   const [colors, setColors] = useState<string[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("all");
   const [selectedProduct, setSelectedProduct] = useState("all");
@@ -46,28 +43,20 @@ export default function InventoryListingPage() {
   const [generated, setGenerated] = useState(false);
   const [initLoading, setInitLoading] = useState(true);
 
-  // Load filter options on mount — do NOT load items
   useEffect(() => {
-    if (isLoading) return;
-    if (!isAuthenticated()) return;
     if (hasLoaded.current) return;
     hasLoaded.current = true;
-
     apiClient
-      .get<InventoryResponse>("/api/v1/account/inventory-report")
+      .get<InventoryResponse>("/api/v1/admin/inventory-report")
       .then((data) => {
         setWarehouses(data.warehouses);
         setProducts(data.products);
         setColors(data.colors);
-        // Do NOT setItems here — wait for Generate Report
       })
       .finally(() => setInitLoading(false));
-  }, [isLoading]);
+  }, []);
 
-  // Reset color when product changes
-  useEffect(() => {
-    setSelectedColor("all");
-  }, [selectedProduct]);
+  useEffect(() => { setSelectedColor("all"); }, [selectedProduct]);
 
   async function handleGenerateReport() {
     setLoading(true);
@@ -78,9 +67,8 @@ export default function InventoryListingPage() {
       if (selectedProduct !== "all") params.set("product_id", selectedProduct);
       if (selectedColor !== "all") params.set("color", selectedColor);
       const qs = params.toString();
-
       const data = await apiClient.get<InventoryResponse>(
-        `/api/v1/account/inventory-report${qs ? `?${qs}` : ""}`
+        `/api/v1/admin/inventory-report${qs ? `?${qs}` : ""}`
       );
       setItems(data.items);
       setColors(data.colors);
@@ -105,10 +93,9 @@ export default function InventoryListingPage() {
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    // importProductsModal - downloadTemplate  
     const a = document.createElement("a");
     a.href = url;
-    a.download = "af-apparel-import-template.csv";
+    a.download = "inventory-listing-report.csv";
     a.style.display = "none";
     document.body.appendChild(a);
     a.click();
@@ -116,11 +103,14 @@ export default function InventoryListingPage() {
     URL.revokeObjectURL(url);
   }
 
-  // Group items by product_id
   const grouped = items.reduce(
     (acc, item) => {
       if (!acc[item.product_id]) {
-        acc[item.product_id] = { product_name: item.product_name, product_code: item.product_code, variants: [] };
+        acc[item.product_id] = {
+          product_name: item.product_name,
+          product_code: item.product_code,
+          variants: [],
+        };
       }
       acc[item.product_id]!.variants.push(item);
       return acc;
@@ -132,7 +122,7 @@ export default function InventoryListingPage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
-      <h1 className="text-2xl font-bold text-gray-900">Inventory Listing</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Inventory Listing Report</h1>
 
       {/* 3-step filter card */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -151,9 +141,7 @@ export default function InventoryListingPage() {
               >
                 <option value="all">All Warehouses</option>
                 {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
+                  <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
               </select>
             </div>
@@ -189,9 +177,7 @@ export default function InventoryListingPage() {
                 >
                   <option value="all">All Colors</option>
                   {colors.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
@@ -210,7 +196,6 @@ export default function InventoryListingPage() {
             >
               {loading ? "Generating…" : "Generate Report"}
             </button>
-
             {generated && items.length > 0 && (
               <div className="flex gap-2">
                 <button
@@ -231,7 +216,7 @@ export default function InventoryListingPage() {
         </div>
       </div>
 
-      {/* Empty state — before generate */}
+      {/* Empty state */}
       {!generated && (
         <div className="text-center py-12 bg-white border border-gray-200 rounded-lg text-gray-400">
           <div className="mb-2 flex justify-center"><PackageIcon size={32} color="#9CA3AF" /></div>
@@ -239,7 +224,6 @@ export default function InventoryListingPage() {
         </div>
       )}
 
-      {/* Empty state — after generate, no results */}
       {generated && items.length === 0 && (
         <div className="text-center py-12 bg-white border border-gray-200 rounded-lg">
           <p className="text-gray-400">No inventory found for selected filters.</p>
@@ -248,86 +232,66 @@ export default function InventoryListingPage() {
 
       {/* Results table */}
       {generated && items.length > 0 && (
-        <div
-          className="bg-white border border-gray-200 rounded-lg overflow-hidden"
-          id="print-area"
-        >
-          {/* Print-only header */}
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden" id="print-area">
           <div className="hidden print:block px-5 py-4 border-b">
             <h2 className="text-lg font-bold">AF Apparels — Inventory Listing Report</h2>
-            <p className="text-sm text-gray-500">
-              Generated: {new Date().toLocaleDateString()}
-            </p>
+            <p className="text-sm text-gray-500">Generated: {new Date().toLocaleDateString()}</p>
           </div>
-
           <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: "480px" }}>
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Style</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Color</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Size</th>
-                <th className="text-right px-4 py-3 text-gray-600 font-medium text-xs uppercase">Available</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Warehouse</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(grouped).map(([productId, group]) => (
-                <React.Fragment key={productId}>
-                  {/* Product header row */}
-                  <tr className="bg-blue-50 border-b border-blue-100">
-                    <td colSpan={5} className="px-4 py-2">
-                      <span className="font-semibold text-blue-800 text-sm">
-                        {productLabel(group.product_name, group.product_code)}
-                      </span>
-                    </td>
-                  </tr>
-
-                  {/* Variant rows */}
-                  {group.variants.map((item, idx) => (
-                    <tr
-                      key={`${item.variant_id}-${item.warehouse_id}-${idx}`}
-                      className={`border-b border-gray-100 hover:bg-blue-50 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                        }`}
-                    >
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.color}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.size}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${item.available === 0
-                        ? "text-red-500"
-                        : item.available < 10
-                          ? "text-orange-500"
-                          : "text-gray-900"
-                        }`}>
-                        {item.available.toLocaleString()}
+            <table className="w-full text-sm" style={{ minWidth: "480px" }}>
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Style</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Color</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Size</th>
+                  <th className="text-right px-4 py-3 text-gray-600 font-medium text-xs uppercase">Available</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Warehouse</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(grouped).map(([productId, group]) => (
+                  <React.Fragment key={productId}>
+                    <tr className="bg-blue-50 border-b border-blue-100">
+                      <td colSpan={5} className="px-4 py-2">
+                        <span className="font-semibold text-blue-800 text-sm">
+                          {productLabel(group.product_name, group.product_code)}
+                        </span>
                       </td>
-                      <td className="px-4 py-2.5 text-gray-500 text-xs">{item.warehouse_name}</td>
                     </tr>
-                  ))}
-
-                  {/* Product subtotal */}
-                  <tr className="bg-gray-100 border-b border-gray-200">
-                    <td colSpan={3} className="px-4 py-2 text-xs text-gray-500 font-medium">
-                      Subtotal — {group.product_name}
-                    </td>
-                    <td className="px-4 py-2 text-right text-xs font-bold text-gray-700">
-                      {group.variants.reduce((sum, v) => sum + v.available, 0).toLocaleString()}
-                    </td>
-                    <td />
-                  </tr>
-                </React.Fragment>
-              ))}
-
-              {/* Grand total */}
-              <tr className="bg-gray-800">
-                <td colSpan={3} className="px-4 py-3 text-white font-bold text-sm">TOTAL</td>
-                <td className="px-4 py-3 text-right text-white font-bold text-sm">
-                  {items.reduce((sum, i) => sum + i.available, 0).toLocaleString()}
-                </td>
-                <td />
-              </tr>
-            </tbody>
-          </table>
+                    {group.variants.map((item, idx) => (
+                      <tr
+                        key={`${item.variant_id}-${item.warehouse_id}-${idx}`}
+                        className={`border-b border-gray-100 hover:bg-blue-50 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                      >
+                        <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
+                        <td className="px-4 py-2.5 text-gray-700">{item.color}</td>
+                        <td className="px-4 py-2.5 text-gray-700">{item.size}</td>
+                        <td className={`px-4 py-2.5 text-right font-semibold ${item.available === 0 ? "text-red-500" : item.available < 10 ? "text-orange-500" : "text-gray-900"}`}>
+                          {item.available.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-500 text-xs">{item.warehouse_name}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-100 border-b border-gray-200">
+                      <td colSpan={3} className="px-4 py-2 text-xs text-gray-500 font-medium">
+                        Subtotal — {productLabel(group.product_name, group.product_code)}
+                      </td>
+                      <td className="px-4 py-2 text-right text-xs font-bold text-gray-700">
+                        {group.variants.reduce((sum, v) => sum + v.available, 0).toLocaleString()}
+                      </td>
+                      <td />
+                    </tr>
+                  </React.Fragment>
+                ))}
+                <tr className="bg-gray-800">
+                  <td colSpan={3} className="px-4 py-3 text-white font-bold text-sm">TOTAL</td>
+                  <td className="px-4 py-3 text-right text-white font-bold text-sm">
+                    {items.reduce((sum, i) => sum + i.available, 0).toLocaleString()}
+                  </td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       )}

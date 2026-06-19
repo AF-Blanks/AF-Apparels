@@ -34,11 +34,13 @@ export function AdminSidebar() {
   const isCustomersActive = pathname.startsWith("/admin/customers");
   const isSettingsActive = pathname.startsWith("/admin/settings") || pathname.startsWith("/admin/users") || pathname === "/admin/analytics";
   const isContentActive = pathname.startsWith("/admin/style-sheets") || pathname.startsWith("/admin/product-specs") || pathname.startsWith("/admin/pages") || pathname.startsWith("/admin/blogs");
+  const isReportsActive = pathname.startsWith("/admin/reports");
   const [ordersOpen, setOrdersOpen] = useState(isOrdersActive);
   const [productsOpen, setProductsOpen] = useState(isProductsActive);
   const [customersOpen, setCustomersOpen] = useState(isCustomersActive);
   const [settingsOpen, setSettingsOpen] = useState(isSettingsActive);
   const [contentOpen, setContentOpen] = useState(isContentActive);
+  const [reportsOpen, setReportsOpen] = useState(isReportsActive);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close mobile drawer on route change
@@ -49,6 +51,7 @@ export function AdminSidebar() {
   useEffect(() => { if (isCustomersActive) setCustomersOpen(true); }, [isCustomersActive]);
   useEffect(() => { if (isSettingsActive) setSettingsOpen(true); }, [isSettingsActive]);
   useEffect(() => { if (isContentActive) setContentOpen(true); }, [isContentActive]);
+  useEffect(() => { if (isReportsActive) setReportsOpen(true); }, [isReportsActive]);
 
   function NavLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
     const active = pathname === href || (href !== "/admin" && pathname.startsWith(href + "/"));
@@ -227,6 +230,32 @@ export function AdminSidebar() {
           <SubLink href="/admin/blogs" label="Blogs" />
           <SubLink href="/admin/style-sheets" label="Style Sheets" />
           <SubLink href="/admin/product-specs" label="Product Specs" />
+        </div>
+      )}
+
+      {/* ── REPORTS ── */}
+      <div style={SECTION_HEAD}>Reports</div>
+      <div
+        onClick={() => setReportsOpen(!reportsOpen)}
+        style={{
+          ...NAV_LINK_BASE,
+          justifyContent: "space-between",
+          background: isReportsActive ? "rgba(26,92,255,.08)" : "transparent",
+          color: isReportsActive ? "#1A5CFF" : "#555",
+          userSelect: "none",
+        }}
+        onMouseEnter={e => { if (!isReportsActive) (e.currentTarget as HTMLElement).style.background = "#F4F3EF"; }}
+        onMouseLeave={e => { if (!isReportsActive) (e.currentTarget as HTMLElement).style.background = isReportsActive ? "rgba(26,92,255,.08)" : "transparent"; }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <TrendingUpIcon size={15} color="currentColor" />
+          <span>Reports</span>
+        </span>
+        <span style={{ fontSize: "10px", color: "#aaa", transition: "transform .2s", transform: reportsOpen ? "rotate(180deg)" : "rotate(0deg)", display: "inline-block" }}>▼</span>
+      </div>
+      {reportsOpen && (
+        <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
+          <SubLink href="/admin/reports/inventory-listing" label="Inventory Listing Report" />
         </div>
       )}
 
