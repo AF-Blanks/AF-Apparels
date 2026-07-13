@@ -9,7 +9,7 @@ import type ReCAPTCHAType from "react-google-recaptcha";
 import { useAuthStore } from "@/stores/auth.store";
 import { authService } from "@/services/auth.service";
 import { ApiClientError, setAccessToken } from "@/lib/api-client";
-import { FactoryIcon, ZapIcon, CreditCardIcon } from "@/components/ui/icons";
+import { FactoryIcon, ZapIcon, CreditCardIcon, EyeIcon, EyeOffIcon } from "@/components/ui/icons";
 
 const ReCAPTCHA = dynamic(() => import("react-google-recaptcha"), {
   ssr: false,
@@ -47,6 +47,7 @@ export default function LoginPage() {
   const [showResendActivation, setShowResendActivation] = useState(false);
   const [resendSent, setResendSent] = useState(false);
   const [showPendingApproval, setShowPendingApproval] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -209,27 +210,49 @@ export default function LoginPage() {
                 >
                   Password *
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Your password"
-                  style={{
-                    width: "100%",
-                    background: "#fff",
-                    border: "1px solid #E2E2DE",
-                    padding: "11px 14px",
-                    fontSize: "14px",
-                    color: "#1A1A1A",
-                    outline: "none",
-                    boxSizing: "border-box",
-                    transition: "border-color .2s",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Your password"
+                    style={{
+                      width: "100%",
+                      background: "#fff",
+                      border: "1px solid #E2E2DE",
+                      padding: "11px 42px 11px 14px",
+                      fontSize: "14px",
+                      color: "#1A1A1A",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      transition: "border-color .2s",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    style={{
+                      position: "absolute",
+                      right: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      color: "#6B6B6B",
+                    }}
+                  >
+                    {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                  </button>
+                </div>
                 <Link
                   href="/forgot-password"
                   style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", color: "#1C3557", textDecoration: "none", display: "inline-block", marginTop: "6px" }}
