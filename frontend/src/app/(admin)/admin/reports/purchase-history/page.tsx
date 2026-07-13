@@ -58,10 +58,11 @@ export default function AdminCustomerPurchaseHistoryPage() {
   const [productExpanded, setProductExpanded] = useState<Set<number>>(new Set());
 
   async function searchCompanies(q: string) {
-    if (!q.trim()) { setCompanies([]); return; }
     setCompanyLoading(true);
     try {
-      const data = await adminService.listCompanies({ q, page_size: 20 }) as any;
+      const data = await adminService.listCompanies(
+        q.trim() ? { q, page_size: 20 } : { page_size: 20 }
+      ) as any;
       const list: Company[] = (data?.items ?? data ?? []).map((c: any) => ({ id: c.id, name: c.name }));
       setCompanies(list);
       setShowDropdown(true);
@@ -177,7 +178,7 @@ export default function AdminCustomerPurchaseHistoryPage() {
               type="text"
               value={companySearch}
               onChange={(e) => handleCompanyInput(e.target.value)}
-              onFocus={() => companySearch && setShowDropdown(true)}
+              onFocus={() => (companies.length > 0 ? setShowDropdown(true) : searchCompanies(companySearch))}
               onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
               placeholder="Search company name…"
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
