@@ -34,6 +34,7 @@ interface Order {
   tracking_url?: string | null;
   carrier: string | null;
   courier_service?: string | null;
+  qb_invoice_id?: string | null;
   created_at: string;
   updated_at: string;
   items: OrderItem[];
@@ -355,6 +356,16 @@ export default function OrderDetailPage() {
       {/* PDF downloads */}
       <div className="bg-white rounded-lg border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Documents</h2>
+        {order.qb_invoice_id && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-50 border border-green-200 text-xs font-semibold text-green-700">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              QB Invoice #{order.qb_invoice_id}
+            </span>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => downloadPdf("confirmation")}

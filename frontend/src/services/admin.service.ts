@@ -149,6 +149,10 @@ export const adminService = {
     return apiClient.post("/api/v1/admin/inventory/adjust", data);
   },
 
+  async updateStockThreshold(data: { variant_id: string; warehouse_id: string; threshold: number }) {
+    return apiClient.patch("/api/v1/admin/inventory/threshold", data);
+  },
+
   async listWarehouses() {
     return apiClient.get("/api/v1/admin/warehouses");
   },
@@ -354,6 +358,20 @@ export const adminService = {
   async getCustomerReport(params?: { from?: string; to?: string }) {
     const query = new URLSearchParams(params as Record<string, string>);
     return apiClient.get(`/api/v1/admin/reports/customers?${query.toString()}`);
+  },
+
+  // Variant Sales Report
+  async getVariantSalesReport(period: string) {
+    return apiClient.get(`/api/v1/admin/reports/variant-sales?period=${period}`);
+  },
+
+  // Customer Purchase History
+  async getCustomerPurchaseHistory(params: { company_id: string; year?: number; display?: string }) {
+    const query = new URLSearchParams();
+    query.set("company_id", params.company_id);
+    if (params.year) query.set("year", String(params.year));
+    if (params.display) query.set("display", params.display);
+    return apiClient.get(`/api/v1/admin/reports/customer-purchase-history?${query.toString()}`);
   },
 
   // QB

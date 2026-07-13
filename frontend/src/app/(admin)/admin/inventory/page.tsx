@@ -15,6 +15,43 @@ interface InventoryRow {
   low_stock_threshold: number;
 }
 
+function ThresholdInput({ row, onSaved }: { row: InventoryRow; onSaved: (val: number) => void }) {
+  const [val, setVal] = useState(String(row.low_stock_threshold));
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const num = parseInt(val, 10);
+    if (isNaN(num) || num < 0 || num === row.low_stock_threshold) return;
+    setSaving(true);
+    try {
+      await adminService.updateStockThreshold({
+        variant_id: row.variant_id,
+        warehouse_id: row.warehouse_id,
+        threshold: num,
+      });
+      onSaved(num);
+    } catch {
+      setVal(String(row.low_stock_threshold));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <input
+      type="number"
+      min={0}
+      value={val}
+      onChange={e => setVal(e.target.value)}
+      onBlur={save}
+      onKeyDown={e => e.key === "Enter" && save()}
+      disabled={saving}
+      className="w-16 text-center border border-gray-300 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+      title="Alert when stock drops below this number"
+    />
+  );
+}
+
 function exportInventoryToCsv(rows: InventoryRow[]) {
   const header = ["SKU", "Color", "Size", "Warehouse", "Quantity", "Low Stock Threshold"];
   const lines = rows.map(r => [
@@ -30,6 +67,10 @@ function exportInventoryToCsv(rows: InventoryRow[]) {
 
 export default function AdminInventoryPage() {
   const [rows, setRows] = useState<InventoryRow[]>([]);
+
+  function updateThreshold(index: number, val: number) {
+    setRows(prev => prev.map((r, i) => i === index ? { ...r, low_stock_threshold: val } : r));
+  }
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<InventoryRow | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -130,14 +171,15 @@ export default function AdminInventoryPage() {
               <th className="text-left px-4 py-3 text-gray-600 font-medium">Size</th>
               <th className="text-left px-4 py-3 text-gray-600 font-medium">Warehouse</th>
               <th className="text-right px-4 py-3 text-gray-600 font-medium">Qty</th>
+              <th className="text-center px-4 py-3 text-gray-600 font-medium">Alert Below</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {isLoading && filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "#bbb", fontSize: "14px" }}>Loading…</td></tr>
+              <tr><td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "#bbb", fontSize: "14px" }}>Loading…</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="py-8 text-center text-gray-400">No inventory records</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-gray-400">No inventory records</td></tr>
             ) : (
               filtered.map((row, i) => (
                 <tr key={i} className={`border-b border-gray-100 last:border-0 ${row.quantity <= row.low_stock_threshold ? "bg-red-50" : ""}`}>
@@ -150,6 +192,12 @@ export default function AdminInventoryPage() {
                     {row.quantity <= row.low_stock_threshold && (
                       <span className="ml-1 text-xs font-normal text-red-400">(low)</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <ThresholdInput
+                      row={row}
+                      onSaved={(val) => updateThreshold(rows.indexOf(row), val)}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <button

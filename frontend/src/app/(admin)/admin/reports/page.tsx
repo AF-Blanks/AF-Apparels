@@ -17,10 +17,22 @@ const REPORT_CARDS = [
     icon: <PackageIcon size={36} color="#1A5CFF" />,
   },
   {
+    href: "/reports/variant-sales",
+    title: "Variant Sales",
+    description: "Color & size breakdown of sold variants by period",
+    icon: <TrendingUpIcon size={36} color="#16a34a" />,
+  },
+  {
     href: "/reports/customers",
     title: "Customer Report",
     description: "New registrations, approval rate, AOV by tier",
     icon: <UsersIcon size={36} color="#1A5CFF" />,
+  },
+  {
+    href: "/reports/purchase-history",
+    title: "Customer Purchase History",
+    description: "Per-customer order history by product or line-item price",
+    icon: <UsersIcon size={36} color="#0e7490" />,
   },
 ];
 
@@ -34,7 +46,7 @@ export default function ReportsDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {REPORT_CARDS.map((card) => (
           <Link
             key={card.href}
