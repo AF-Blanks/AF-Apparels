@@ -49,11 +49,14 @@ export default function RmaPage() {
   const [loadingRmas, setLoadingRmas] = useState(true);
 
   useEffect(() => {
+    // apiClient returns the parsed response body directly (not axios-style
+    // {data: ...}) — /orders returns {items: [...]}, /account/rma returns
+    // a plain array.
     accountService.getOrders({ status: "delivered" }).then((r: any) => {
-      setOrders(r.data?.items ?? r.data ?? []);
+      setOrders(r?.items ?? []);
     });
     accountService.getRmas().then((r: any) => {
-      setRmaList(r.data ?? []);
+      setRmaList(Array.isArray(r) ? r : []);
       setLoadingRmas(false);
     }).catch(() => setLoadingRmas(false));
   }, []);
@@ -112,15 +115,15 @@ export default function RmaPage() {
           reason: f.reason,
         })),
       });
-      const rmaNumber = res.data?.rma_number ?? res.data?.id ?? "submitted";
+      const rmaNumber = res?.rma_number ?? res?.id ?? "submitted";
       setSuccess(`RMA ${rmaNumber} submitted successfully. We'll review your request and be in touch.`);
       setSelectedOrderId("");
       setRmaReason("");
       setItemForms([]);
       const updated: any = await accountService.getRmas();
-      setRmaList(updated.data ?? []);
+      setRmaList(Array.isArray(updated) ? updated : []);
     } catch (err: any) {
-      setError(err?.response?.data?.error?.message ?? "Failed to submit RMA. Please try again.");
+      setError(err?.message ?? "Failed to submit RMA. Please try again.");
     } finally {
       setSubmitting(false);
     }
