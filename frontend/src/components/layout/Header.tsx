@@ -101,7 +101,7 @@ export function Header() {
       <AnnouncementBar />
 
       {/* Main header */}
-      <header style={{ background: "#FFFFFF", borderBottom: "1px solid #E2E2DE", position: "sticky", top: 0, zIndex: 1 }}>
+      <header style={{ background: "#FFFFFF", borderBottom: "1px solid #E2E2DE", position: "sticky", top: 0, zIndex: 50 }}>
         <div className="header-inner" style={{ maxWidth: "1500px", margin: "0 auto", padding: "0 32px", display: "flex", alignItems: "center", justifyContent: "space-between", height: "90px", gap: "24px" }}>
 
           {/* Logo */}
