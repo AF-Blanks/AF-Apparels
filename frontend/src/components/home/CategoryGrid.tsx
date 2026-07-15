@@ -22,7 +22,16 @@ interface CategoryGridProps {
 }
 
 export default function CategoryGrid({ categories }: CategoryGridProps) {
-  const items = categories.length > 0 ? categories.slice(0, 4) : fallbackCategories.map(c => ({ ...c, id: c.slug }));
+  // Prefer categories that actually have a photo uploaded — an empty
+  // placeholder tile looks broken, so a category without an image_url
+  // yields its slot to the next one (in sort_order) that has one.
+  const withImages = categories.filter(c => c.image_url);
+  const items =
+    withImages.length >= 4
+      ? withImages.slice(0, 4)
+      : categories.length > 0
+        ? categories.slice(0, 4)
+        : fallbackCategories.map(c => ({ ...c, id: c.slug }));
 
   return (
     <section style={{ padding: "72px 24px", background: "#F8F8F6" }}>
