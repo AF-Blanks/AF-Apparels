@@ -132,7 +132,7 @@ export function AdminSidebar() {
         </div>
       )}
 
-      <NavLink href="/admin/returns" label="Returns (RMA)" icon={<RefreshIcon size={15} color="currentColor" />} />
+      {/* <NavLink href="/admin/returns" label="Returns (RMA)" icon={<RefreshIcon size={15} color="currentColor" />} /> */}
       <NavLink href="/admin/purchase-orders" label="Purchase Orders" icon={<ShoppingCartIcon size={15} color="currentColor" />} />
 
       {/* ── CUSTOMERS ── */}
