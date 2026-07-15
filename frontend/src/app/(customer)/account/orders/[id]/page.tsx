@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { accountService } from "@/services/account.service";
 import { apiClient } from "@/lib/api-client";
@@ -406,6 +407,17 @@ export default function OrderDetailPage() {
               </svg>
               Packing Slip
             </button>
+          )}
+          {order.status === "delivered" && (
+            <Link
+              href="/account/rma"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+            >
+              <svg className="w-4 h-4 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h10a5 5 0 015 5v1M3 10l4-4M3 10l4 4" />
+              </svg>
+              Request a Return
+            </Link>
           )}
         </div>
       </div>
