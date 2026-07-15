@@ -8,7 +8,8 @@ interface OrderItem {
   variant_id: string;
   sku: string;
   product_name: string;
-  variant_name: string;
+  color: string | null;
+  size: string | null;
   quantity: number;
   unit_price: number;
 }
@@ -17,6 +18,9 @@ interface Order {
   id: string;
   order_number: string;
   created_at: string;
+}
+
+interface OrderDetail extends Order {
   items: OrderItem[];
 }
 
@@ -39,7 +43,8 @@ const RMA_REASONS = [
 export default function RmaPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [rmaReason, setRmaReason] = useState("");
   const [itemForms, setItemForms] = useState<RmaItemForm[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -67,19 +72,25 @@ export default function RmaPage() {
       setItemForms([]);
       return;
     }
-    const order = orders.find((o) => o.id === selectedOrderId) ?? null;
-    setSelectedOrder(order);
-    if (order) {
+    // The /orders list only returns item_count (a number), not the actual
+    // line items — fetch the single-order detail endpoint to get real items.
+    setLoadingItems(true);
+    accountService.getOrder(selectedOrderId).then((detail: any) => {
+      setSelectedOrder(detail ?? null);
       setItemForms(
-        order.items.map((item) => ({
+        (detail?.items ?? []).map((item: OrderItem) => ({
           order_item_id: item.id,
           quantity: 1,
           reason: "",
           selected: false,
         }))
       );
-    }
-  }, [selectedOrderId, orders]);
+    }).catch(() => {
+      setSelectedOrder(null);
+      setItemForms([]);
+      setError("Failed to load items for this order. Please try again.");
+    }).finally(() => setLoadingItems(false));
+  }, [selectedOrderId]);
 
   function toggleItem(idx: number) {
     setItemForms((prev) =>
@@ -243,7 +254,10 @@ export default function RmaPage() {
           </div>
 
           {/* Item selection */}
-          {selectedOrder && (
+          {loadingItems && (
+            <p className="text-sm text-gray-500">Loading order items…</p>
+          )}
+          {selectedOrder && !loadingItems && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Select Items to Return <span className="text-red-500">*</span>
@@ -268,8 +282,10 @@ export default function RmaPage() {
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-900">
                           {item.product_name}{" "}
-                          {item.variant_name && (
-                            <span className="text-gray-500">— {item.variant_name}</span>
+                          {(item.color || item.size) && (
+                            <span className="text-gray-500">
+                              — {[item.color, item.size].filter(Boolean).join(" / ")}
+                            </span>
                           )}
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5">
