@@ -8,7 +8,7 @@ import { useCartStore } from "@/stores/cart.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { cartService } from "@/services/cart.service";
 import { ordersService } from "@/services/orders.service";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiClientError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/utils";
 import type { Cart } from "@/types/order.types";
 
@@ -88,6 +88,7 @@ export default function CheckoutReviewPage() {
   const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
   const [isPlacing, setIsPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [wholesaleEmailConflict, setWholesaleEmailConflict] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount_amount: number; discount_type: string } | null>(null);
   // Seed from checkout store; API fetch is a fallback in case user navigated directly here
   const [taxRate, setTaxRate] = useState<{ region: string; rate: number } | null>(
@@ -178,6 +179,7 @@ export default function CheckoutReviewPage() {
     if (!shippingAddress) return;
     setIsPlacing(true);
     setError(null);
+    setWholesaleEmailConflict(false);
 
     // Belt-and-suspenders: read from store first, fall back to sessionStorage
     const _storeSnap = useCheckoutStore.getState();
@@ -337,6 +339,7 @@ export default function CheckoutReviewPage() {
       window.dispatchEvent(new Event("cart_updated"));
       router.push("/checkout/confirmed");
     } catch (err: unknown) {
+      setWholesaleEmailConflict(err instanceof ApiClientError && err.code === "WHOLESALE_ACCOUNT_EXISTS");
       setError(err instanceof Error ? err.message : "Failed to place order. Please try again.");
       setIsPlacing(false);
     }
@@ -534,6 +537,13 @@ export default function CheckoutReviewPage() {
             {error && (
               <div style={{ padding: "12px 16px", background: "rgba(232,36,42,.07)", border: "1px solid rgba(232,36,42,.25)", color: "#E8242A", fontSize: "13px", fontWeight: 600, marginBottom: "14px" }}>
                 {error}
+                {wholesaleEmailConflict && (
+                  <div style={{ marginTop: "8px" }}>
+                    <a href="/login" style={{ color: "#E8242A", textDecoration: "underline", fontWeight: 700 }}>
+                      Log in to your account →
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
