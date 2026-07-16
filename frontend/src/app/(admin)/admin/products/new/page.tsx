@@ -100,31 +100,45 @@ function colorSwatch(name: string, customColors?: Record<string, string>): strin
   return name;
 }
 
-/** True if the browser can't resolve `name` as any real color (neither our
- * list, a saved custom pick, nor a native CSS color name) — meaning the
- * swatch would otherwise render blank/incorrect and needs a manual hex. */
-function needsManualColor(name: string, customColors: Record<string, string>): boolean {
-  if (!name) return false;
-  if (COLOR_MAP[name]) return false;
-  if (Object.keys(COLOR_MAP).some(k => k.toLowerCase() === name.toLowerCase())) return false;
-  if (customColors[name.trim().toLowerCase()]) return false;
-  if (typeof document === "undefined") return false;
-  const probe = new Option();
-  probe.style.color = name;
-  return probe.style.color === "";
+/** True if `name` is one of our hand-mapped colors (exact or case-insensitive)
+ * — these are already well-defined and don't need a manual override. */
+function isCuratedColor(name: string): boolean {
+  if (!name) return true;
+  if (COLOR_MAP[name]) return true;
+  return Object.keys(COLOR_MAP).some(k => k.toLowerCase() === name.toLowerCase());
 }
 
-/** Best starting hex for the manual color-picker input — reuses a known
- * color if the typed name contains one as a word (e.g. "Ferrari Red" → Red's
- * hex), otherwise a neutral grey. Just a starting point; admin fine-tunes it. */
-function guessStartingHex(name: string): string {
+/** If the browser can resolve `value` as a real color, returns its exact
+ * #rrggbb hex (via a 1×1 canvas) — used to seed the picker at the right
+ * starting point instead of defaulting to grey. Returns null if unresolvable. */
+function resolveNativeHex(value: string): string | null {
+  if (typeof document === "undefined") return null;
+  const probe = new Option();
+  probe.style.color = value;
+  if (probe.style.color === "") return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = 1; canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = value;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  return "#" + [r ?? 0, g ?? 0, b ?? 0].map(n => n.toString(16).padStart(2, "0")).join("");
+}
+
+/** Best starting hex for the manual color-picker input: the admin's own saved
+ * pick first, then a token match against our curated list (e.g. "Ferrari Red"
+ * → Red's hex), then the browser's own resolution of the raw name, else grey. */
+function guessStartingHex(name: string, customColors: Record<string, string>): string {
+  const custom = customColors[name.trim().toLowerCase()];
+  if (custom) return custom;
   const tokens = name.split(/\s+/);
   for (const t of tokens) {
     const key = Object.keys(COLOR_MAP).find(k => k.toLowerCase() === t.toLowerCase());
     const hex = key ? COLOR_MAP[key] : undefined;
     if (hex) return hex;
   }
-  return "#9ca3af";
+  return resolveNativeHex(name) ?? "#9ca3af";
 }
 
 function ColorDot({
@@ -136,7 +150,8 @@ function ColorDot({
   customColors: Record<string, string>;
   onSetCustom: (name: string, hex: string) => void;
 }) {
-  const manual = needsManualColor(name, customColors);
+  const showEditor = !!name && !isCuratedColor(name);
+  const savedCustom = customColors[name.trim().toLowerCase()];
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
       <span
@@ -145,12 +160,13 @@ function ColorDot({
           background: colorSwatch(name, customColors), border, display: "inline-block", flexShrink: 0,
         }}
       />
-      {manual && (
+      {showEditor && (
         <input
+          key={savedCustom ?? "unset"}
           type="color"
-          defaultValue={guessStartingHex(name)}
+          defaultValue={guessStartingHex(name, customColors)}
           onChange={e => onSetCustom(name, e.target.value)}
-          title={`"${name}" isn't a recognized color — pick its exact shade`}
+          title={`Set exact shade for "${name}"`}
           style={{ width: size, height: size, padding: 0, border: "1px solid rgba(0,0,0,.2)", borderRadius: "4px", cursor: "pointer", background: "none", flexShrink: 0 }}
         />
       )}
