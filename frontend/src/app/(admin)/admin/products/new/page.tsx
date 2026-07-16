@@ -80,20 +80,82 @@ const COLOR_MAP: Record<string, string> = {
   "Decadent Chocolate": "#723638",
 };
 
+const CUSTOM_COLOR_STORAGE_KEY = "af_custom_swatch_colors";
+
 /** Resolve a swatch color for a typed color name. Tries our curated list
- * first (exact, then case-insensitive), then falls back to letting the
- * browser resolve the raw text as a native CSS color name — this covers
- * many real color words (e.g. "Khaki", "Salmon", "SteelBlue") we haven't
- * hand-mapped, instead of showing an unrelated flat grey for anything
- * outside our list. */
-function colorSwatch(name: string): string {
+ * first (exact, then case-insensitive), then an admin-picked custom hex
+ * (remembered per browser), then falls back to letting the browser resolve
+ * the raw text as a native CSS color name — this covers many real color
+ * words (e.g. "Khaki", "Salmon", "SteelBlue") we haven't hand-mapped,
+ * instead of showing an unrelated flat grey for anything outside our list. */
+function colorSwatch(name: string, customColors?: Record<string, string>): string {
   if (!name) return "#e5e7eb";
   const exact = COLOR_MAP[name];
   if (exact) return exact;
   const key = Object.keys(COLOR_MAP).find(k => k.toLowerCase() === name.toLowerCase());
   const ci = key ? COLOR_MAP[key] : undefined;
   if (ci) return ci;
+  const custom = customColors?.[name.trim().toLowerCase()];
+  if (custom) return custom;
   return name;
+}
+
+/** True if the browser can't resolve `name` as any real color (neither our
+ * list, a saved custom pick, nor a native CSS color name) — meaning the
+ * swatch would otherwise render blank/incorrect and needs a manual hex. */
+function needsManualColor(name: string, customColors: Record<string, string>): boolean {
+  if (!name) return false;
+  if (COLOR_MAP[name]) return false;
+  if (Object.keys(COLOR_MAP).some(k => k.toLowerCase() === name.toLowerCase())) return false;
+  if (customColors[name.trim().toLowerCase()]) return false;
+  if (typeof document === "undefined") return false;
+  const probe = new Option();
+  probe.style.color = name;
+  return probe.style.color === "";
+}
+
+/** Best starting hex for the manual color-picker input — reuses a known
+ * color if the typed name contains one as a word (e.g. "Ferrari Red" → Red's
+ * hex), otherwise a neutral grey. Just a starting point; admin fine-tunes it. */
+function guessStartingHex(name: string): string {
+  const tokens = name.split(/\s+/);
+  for (const t of tokens) {
+    const key = Object.keys(COLOR_MAP).find(k => k.toLowerCase() === t.toLowerCase());
+    const hex = key ? COLOR_MAP[key] : undefined;
+    if (hex) return hex;
+  }
+  return "#9ca3af";
+}
+
+function ColorDot({
+  name, size, border, customColors, onSetCustom,
+}: {
+  name: string;
+  size: number;
+  border: string;
+  customColors: Record<string, string>;
+  onSetCustom: (name: string, hex: string) => void;
+}) {
+  const manual = needsManualColor(name, customColors);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
+      <span
+        style={{
+          width: size, height: size, borderRadius: "50%",
+          background: colorSwatch(name, customColors), border, display: "inline-block", flexShrink: 0,
+        }}
+      />
+      {manual && (
+        <input
+          type="color"
+          defaultValue={guessStartingHex(name)}
+          onChange={e => onSetCustom(name, e.target.value)}
+          title={`"${name}" isn't a recognized color — pick its exact shade`}
+          style={{ width: size, height: size, padding: 0, border: "1px solid rgba(0,0,0,.2)", borderRadius: "4px", cursor: "pointer", background: "none", flexShrink: 0 }}
+        />
+      )}
+    </span>
+  );
 }
 
 const ALL_SIZES = ["XS", "S", "S/M", "M", "M/L", "L", "XL", "2XL", "3XL", "4XL", "5XL", "One Size"];
@@ -122,6 +184,22 @@ export default function NewProductPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
+
+  // Custom colors: admin-picked hex for color names we can't auto-resolve, remembered per browser
+  const [customColors, setCustomColors] = useState<Record<string, string>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CUSTOM_COLOR_STORAGE_KEY);
+      if (raw) setCustomColors(JSON.parse(raw));
+    } catch {}
+  }, []);
+  function setCustomColor(name: string, hex: string) {
+    setCustomColors(prev => {
+      const next = { ...prev, [name.trim().toLowerCase()]: hex };
+      try { localStorage.setItem(CUSTOM_COLOR_STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
 
   // Media
   const [pendingImages, setPendingImages] = useState<File[]>([]);
@@ -486,7 +564,7 @@ export default function NewProductPage() {
                     <div key={color} style={{ border: "1px solid #E2E0DA", borderRadius: "8px", marginBottom: "10px", overflow: "hidden" }}>
                       {/* Color header */}
                       <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "#F4F3EF" }}>
-                        <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: colorSwatch(color), border: "1.5px solid rgba(0,0,0,.1)", flexShrink: 0 }} />
+                        <ColorDot name={color} size={18} border="1.5px solid rgba(0,0,0,.1)" customColors={customColors} onSetCustom={setCustomColor} />
                         <span style={{ fontWeight: 700, fontSize: "13px", color: "#2A2830" }}>{color}</span>
                         <span style={{ fontSize: "12px", color: "#7A7880" }}>({rows.length} size{rows.length !== 1 ? "s" : ""})</span>
                       </div>
@@ -848,7 +926,7 @@ export default function NewProductPage() {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
                   {parsedBulkColors.map(c => (
                     <span key={c} style={{ display: "flex", alignItems: "center", gap: "5px", background: "#F4F3EF", padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 600 }}>
-                      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: colorSwatch(c), border: "1px solid rgba(0,0,0,.1)", display: "inline-block", flexShrink: 0 }} />
+                      <ColorDot name={c} size={10} border="1px solid rgba(0,0,0,.1)" customColors={customColors} onSetCustom={setCustomColor} />
                       {c}
                     </span>
                   ))}
