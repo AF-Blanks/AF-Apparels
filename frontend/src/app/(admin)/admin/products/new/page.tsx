@@ -80,6 +80,22 @@ const COLOR_MAP: Record<string, string> = {
   "Decadent Chocolate": "#723638",
 };
 
+/** Resolve a swatch color for a typed color name. Tries our curated list
+ * first (exact, then case-insensitive), then falls back to letting the
+ * browser resolve the raw text as a native CSS color name — this covers
+ * many real color words (e.g. "Khaki", "Salmon", "SteelBlue") we haven't
+ * hand-mapped, instead of showing an unrelated flat grey for anything
+ * outside our list. */
+function colorSwatch(name: string): string {
+  if (!name) return "#e5e7eb";
+  const exact = COLOR_MAP[name];
+  if (exact) return exact;
+  const key = Object.keys(COLOR_MAP).find(k => k.toLowerCase() === name.toLowerCase());
+  const ci = key ? COLOR_MAP[key] : undefined;
+  if (ci) return ci;
+  return name;
+}
+
 const ALL_SIZES = ["XS", "S", "S/M", "M", "M/L", "L", "XL", "2XL", "3XL", "4XL", "5XL", "One Size"];
 
 interface PendingVariant {
@@ -470,7 +486,7 @@ export default function NewProductPage() {
                     <div key={color} style={{ border: "1px solid #E2E0DA", borderRadius: "8px", marginBottom: "10px", overflow: "hidden" }}>
                       {/* Color header */}
                       <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", background: "#F4F3EF" }}>
-                        <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: COLOR_MAP[color] ?? "#888", border: "1.5px solid rgba(0,0,0,.1)", flexShrink: 0 }} />
+                        <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: colorSwatch(color), border: "1.5px solid rgba(0,0,0,.1)", flexShrink: 0 }} />
                         <span style={{ fontWeight: 700, fontSize: "13px", color: "#2A2830" }}>{color}</span>
                         <span style={{ fontSize: "12px", color: "#7A7880" }}>({rows.length} size{rows.length !== 1 ? "s" : ""})</span>
                       </div>
@@ -832,7 +848,7 @@ export default function NewProductPage() {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
                   {parsedBulkColors.map(c => (
                     <span key={c} style={{ display: "flex", alignItems: "center", gap: "5px", background: "#F4F3EF", padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 600 }}>
-                      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: COLOR_MAP[c] ?? "#888", border: "1px solid rgba(0,0,0,.1)", display: "inline-block", flexShrink: 0 }} />
+                      <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: colorSwatch(c), border: "1px solid rgba(0,0,0,.1)", display: "inline-block", flexShrink: 0 }} />
                       {c}
                     </span>
                   ))}
