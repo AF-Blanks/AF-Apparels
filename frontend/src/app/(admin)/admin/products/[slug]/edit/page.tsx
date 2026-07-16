@@ -156,7 +156,7 @@ function ColorDot({
   onSetCustom: (name: string, hex: string) => void;
 }) {
   const showEditor = !!name && !isCuratedColor(name);
-  const savedCustom = customColors[name.trim().toLowerCase()];
+  const pickerValue = guessStartingHex(name, customColors);
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
       <span
@@ -167,9 +167,8 @@ function ColorDot({
       />
       {showEditor && (
         <input
-          key={savedCustom ?? "unset"}
           type="color"
-          defaultValue={guessStartingHex(name, customColors)}
+          value={pickerValue}
           onChange={e => onSetCustom(name, e.target.value)}
           title={`Set exact shade for "${name}"`}
           style={{ width: size, height: size, padding: 0, border: "1px solid rgba(0,0,0,.2)", borderRadius: "4px", cursor: "pointer", background: "none", flexShrink: 0 }}
