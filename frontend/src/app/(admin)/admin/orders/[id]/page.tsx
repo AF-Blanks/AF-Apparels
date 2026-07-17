@@ -232,6 +232,15 @@ const SectionHead: React.CSSProperties = {
   letterSpacing: ".06em", color: "#2A2830",
 };
 
+const AddrInput: React.CSSProperties = {
+  width: "100%", padding: "7px 10px", border: "1.5px solid #1A5CFF", borderRadius: "6px",
+  fontSize: "13px", fontFamily: "var(--font-jakarta)", outline: "none", boxSizing: "border-box" as const,
+};
+const AddrLabel: React.CSSProperties = {
+  fontSize: "10px", fontWeight: 700, textTransform: "uppercase" as const,
+  letterSpacing: ".06em", color: "#aaa", marginBottom: "3px", display: "block",
+};
+
 export default function AdminOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -284,6 +293,13 @@ export default function AdminOrderDetailPage() {
   // Notes state
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState("");
+
+  // Shipping address edit state
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState({
+    full_name: "", address_line1: "", address_line2: "", city: "", state: "", postal_code: "", country: "US", phone: "",
+  });
+  const [savingAddress, setSavingAddress] = useState(false);
 
   // Order items edit mode
   const [editingItems, setEditingItems] = useState(false);
@@ -593,6 +609,42 @@ export default function AdminOrderDetailPage() {
       setMsg({ text: "Note saved.", ok: true });
     } catch {
       setMsg({ text: "Failed to save note.", ok: false });
+    }
+  }
+
+  function openAddressEditor() {
+    const a = order?.shipping_address;
+    setAddressForm({
+      full_name: a?.full_name ?? "",
+      address_line1: a?.address_line1 ?? "",
+      address_line2: a?.address_line2 ?? "",
+      city: a?.city ?? "",
+      state: a?.state ?? "",
+      postal_code: a?.postal_code ?? a?.zip_code ?? "",
+      country: a?.country ?? "US",
+      phone: "",
+    });
+    setEditingAddress(true);
+  }
+
+  async function handleSaveAddress() {
+    if (!addressForm.address_line1.trim() || !addressForm.city.trim() || !addressForm.state.trim() || !addressForm.postal_code.trim()) {
+      setMsg({ text: "Street address, city, state and ZIP are required.", ok: false });
+      return;
+    }
+    setSavingAddress(true);
+    try {
+      const data = await apiClient.patch<{ shipping_address: ShippingAddress }>(
+        `/api/v1/admin/orders/${order?.id ?? id}/shipping-address`,
+        addressForm
+      );
+      setOrder(prev => prev ? { ...prev, shipping_address: data.shipping_address } : prev);
+      setEditingAddress(false);
+      setMsg({ text: "Shipping address updated. Try generating the label again.", ok: true });
+    } catch {
+      setMsg({ text: "Failed to update shipping address.", ok: false });
+    } finally {
+      setSavingAddress(false);
     }
   }
 
@@ -1380,20 +1432,74 @@ export default function AdminOrderDetailPage() {
             {/* Shipping Address */}
             {addr && (
               <div style={{ borderTop: "1px solid #F4F3EF", paddingTop: "14px", marginBottom: "14px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: ".08em", color: "#aaa", marginBottom: "8px" }}>Shipping Address</div>
-                <div style={{ fontSize: "13px", color: "#2A2830", lineHeight: 1.7 }}>
-                  {addr.full_name && <div style={{ fontWeight: 600 }}>{addr.full_name}</div>}
-                  {addr.address_line1 && <div>{addr.address_line1}</div>}
-                  {addr.address_line2 && <div>{addr.address_line2}</div>}
-                  {(addr.city || addr.state) && <div>{[addr.city, addr.state, zip].filter(Boolean).join(", ")}</div>}
-                  <div>{addr.country ?? "United States"}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: ".08em", color: "#aaa" }}>Shipping Address</div>
+                  {!editingAddress && (
+                    <button onClick={openAddressEditor}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", lineHeight: 1 }}>✏️</button>
+                  )}
                 </div>
-                {mapQuery && (
-                  <a href={`https://maps.google.com/?q=${encodeURIComponent(mapQuery)}`}
-                    target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: "12px", color: "#1A5CFF", fontWeight: 700, textDecoration: "none", display: "inline-block", marginTop: "6px" }}>
-                    View map →
-                  </a>
+
+                {editingAddress ? (
+                  <div>
+                    <div style={{ marginBottom: "8px" }}>
+                      <label style={AddrLabel}>Full Name</label>
+                      <input value={addressForm.full_name} onChange={e => setAddressForm(f => ({ ...f, full_name: e.target.value }))} style={AddrInput} />
+                    </div>
+                    <div style={{ marginBottom: "8px" }}>
+                      <label style={AddrLabel}>Street Address *</label>
+                      <input value={addressForm.address_line1} onChange={e => setAddressForm(f => ({ ...f, address_line1: e.target.value }))} style={AddrInput} />
+                    </div>
+                    <div style={{ marginBottom: "8px" }}>
+                      <label style={AddrLabel}>Apt / Suite / Unit</label>
+                      <input value={addressForm.address_line2} onChange={e => setAddressForm(f => ({ ...f, address_line2: e.target.value }))} style={AddrInput} />
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                      <div style={{ flex: 2 }}>
+                        <label style={AddrLabel}>City *</label>
+                        <input value={addressForm.city} onChange={e => setAddressForm(f => ({ ...f, city: e.target.value }))} style={AddrInput} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={AddrLabel}>State *</label>
+                        <input value={addressForm.state} onChange={e => setAddressForm(f => ({ ...f, state: e.target.value }))} style={AddrInput} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={AddrLabel}>ZIP *</label>
+                        <input value={addressForm.postal_code} onChange={e => setAddressForm(f => ({ ...f, postal_code: e.target.value }))} style={AddrInput} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: "10px" }}>
+                      <label style={AddrLabel}>Phone (helps USPS/Shippo validate the address)</label>
+                      <input value={addressForm.phone} onChange={e => setAddressForm(f => ({ ...f, phone: e.target.value }))} style={AddrInput} placeholder="Optional" />
+                    </div>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={handleSaveAddress} disabled={savingAddress}
+                        style={{ background: "#1A5CFF", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: savingAddress ? 0.6 : 1 }}>
+                        {savingAddress ? "Saving…" : "Save"}
+                      </button>
+                      <button onClick={() => setEditingAddress(false)} disabled={savingAddress}
+                        style={{ background: "none", border: "1px solid #E2E0DA", padding: "8px 16px", borderRadius: "6px", fontSize: "13px", cursor: "pointer", color: "#555" }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: "13px", color: "#2A2830", lineHeight: 1.7 }}>
+                      {addr.full_name && <div style={{ fontWeight: 600 }}>{addr.full_name}</div>}
+                      {addr.address_line1 && <div>{addr.address_line1}</div>}
+                      {addr.address_line2 && <div>{addr.address_line2}</div>}
+                      {(addr.city || addr.state) && <div>{[addr.city, addr.state, zip].filter(Boolean).join(", ")}</div>}
+                      <div>{addr.country ?? "United States"}</div>
+                    </div>
+                    {mapQuery && (
+                      <a href={`https://maps.google.com/?q=${encodeURIComponent(mapQuery)}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: "12px", color: "#1A5CFF", fontWeight: 700, textDecoration: "none", display: "inline-block", marginTop: "6px" }}>
+                        View map →
+                      </a>
+                    )}
+                  </>
                 )}
               </div>
             )}
