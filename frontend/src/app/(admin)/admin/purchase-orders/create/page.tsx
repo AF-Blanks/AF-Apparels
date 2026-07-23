@@ -589,6 +589,35 @@ function ProductBlockEditor({
   const [applyQtyVal, setApplyQtyVal] = useState("");
   const variantRows = block.mode === "existing" ? block.search_variant_rows : block.new_variant_rows;
 
+  // Known catalog variants (from the selected product) render as a color × size
+  // grid instead of one row per color+size — a product with 6 colors × 6 sizes
+  // otherwise means 36 scroll-heavy rows. Manually-added rows (new color/size not
+  // yet in the catalog) stay in the flat list below since they don't have a
+  // ready-made column yet.
+  const knownRows = variantRows.filter(r => !r.is_new_variant);
+  const newRows = variantRows.filter(r => r.is_new_variant);
+
+  const gridSizes: string[] = [];
+  for (const s of SIZE_ORDER) {
+    if (knownRows.some(r => (r.size || "").toUpperCase() === s)) gridSizes.push(s);
+  }
+  for (const r of knownRows) {
+    const s = r.size || "";
+    if (s && !gridSizes.some(g => g.toUpperCase() === s.toUpperCase())) gridSizes.push(s);
+  }
+
+  const gridColors: string[] = [];
+  const gridColorRows = new Map<string, VariantRow[]>();
+  for (const row of knownRows) {
+    const c = row.color || "—";
+    if (!gridColorRows.has(c)) { gridColorRows.set(c, []); gridColors.push(c); }
+    gridColorRows.get(c)!.push(row);
+  }
+
+  function applyCostToColor(colorRows: VariantRow[], cost: number) {
+    for (const r of colorRows) onUpdateRow(r.key, { unit_cost_expected: cost });
+  }
+
   return (
     <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: "10px", padding: "24px", marginBottom: "16px" }}>
       {/* Block header */}
@@ -691,68 +720,116 @@ function ProductBlockEditor({
             </div>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px" }}>
-            <thead>
-              <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
-                {["COLOR", "SIZE", "CURRENT STOCK", "QTY ORDERED", "UNIT COST ($)", ""].map(h => (
-                  <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {variantRows.map(row => (
-                <tr key={row.key} style={{ borderBottom: "1px solid #F3F4F6" }}>
-                  <td style={{ padding: "8px 12px" }}>
-                    {row.is_new_variant ? (
+          {/* Known catalog variants — color × size grid */}
+          {gridColors.length > 0 && (
+            <div style={{ overflowX: "auto", marginBottom: newRows.length > 0 ? "16px" : "8px" }}>
+              <table style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+                    <th style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em", whiteSpace: "nowrap" }}>COLOR</th>
+                    {gridSizes.map(s => (
+                      <th key={s} style={{ padding: "9px 8px", textAlign: "center", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em", width: "70px" }}>{s}</th>
+                    ))}
+                    <th style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em", whiteSpace: "nowrap" }}>COST ($)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gridColors.map(color => {
+                    const colorRows = gridColorRows.get(color)!;
+                    const colorCost = colorRows[0]?.unit_cost_expected ?? 0;
+                    return (
+                      <tr key={color} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap" }}>{color}</td>
+                        {gridSizes.map(size => {
+                          const row = colorRows.find(r => (r.size || "").toUpperCase() === size.toUpperCase());
+                          if (!row) {
+                            return <td key={size} style={{ padding: "8px", textAlign: "center", color: "#D1D5DB", fontSize: "13px" }}>—</td>;
+                          }
+                          return (
+                            <td key={size} style={{ padding: "6px" }}>
+                              <input type="number" min={0}
+                                value={row.qty_ordered === 0 ? "" : row.qty_ordered}
+                                onChange={e => onUpdateRow(row.key, { qty_ordered: parseInt(e.target.value) || 0 })}
+                                placeholder="0"
+                                style={{ ...INPUT, width: "60px", textAlign: "center", padding: "6px 4px", background: row.qty_ordered > 0 ? "#F0F4FF" : "#fff" }}
+                              />
+                              <div style={{ fontSize: "10px", textAlign: "center", color: row.stock_quantity > 0 ? "#9CA3AF" : "#D1D5DB", marginTop: "2px" }}>
+                                {row.stock_quantity} in stock
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td style={{ padding: "8px 12px" }}>
+                          <input type="number" min={0} step={0.01}
+                            value={colorCost === 0 ? "" : colorCost}
+                            onChange={e => applyCostToColor(colorRows, parseFloat(e.target.value) || 0)}
+                            placeholder="0.00"
+                            style={{ ...INPUT, width: "80px" }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Manually-added rows — new color/size not yet in the catalog */}
+          {newRows.length > 0 && (
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "8px" }}>
+              <thead>
+                <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+                  {["COLOR", "SIZE", "CURRENT STOCK", "QTY ORDERED", "UNIT COST ($)", ""].map(h => (
+                    <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {newRows.map(row => (
+                  <tr key={row.key} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                    <td style={{ padding: "8px 12px" }}>
                       <input value={row.color} onChange={e => onUpdateRow(row.key, { color: e.target.value })}
                         placeholder="Color" style={{ ...INPUT, width: "100px" }} />
-                    ) : (
-                      <span style={{ fontSize: "13px" }}>{row.color || "—"}</span>
-                    )}
-                  </td>
-                  <td style={{ padding: "8px 12px" }}>
-                    {row.is_new_variant ? (
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
                       <select value={row.size} onChange={e => onUpdateRow(row.key, { size: e.target.value })}
                         style={{ ...SELECT, width: "90px" }}>
                         {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
-                    ) : (
-                      <span style={{ fontSize: "13px" }}>{row.size || "—"}</span>
-                    )}
-                  </td>
-                  <td style={{ padding: "8px 12px", fontSize: "13px", color: row.stock_quantity > 0 ? "#374151" : "#9CA3AF" }}>
-                    {row.stock_quantity}
-                  </td>
-                  <td style={{ padding: "8px 12px" }}>
-                    <input type="number" min={0}
-                      value={row.qty_ordered === 0 ? "" : row.qty_ordered}
-                      onChange={e => onUpdateRow(row.key, { qty_ordered: parseInt(e.target.value) || 0 })}
-                      placeholder="0"
-                      style={{ ...INPUT, width: "80px", background: row.qty_ordered > 0 ? "#F0F4FF" : "#fff" }}
-                    />
-                  </td>
-                  <td style={{ padding: "8px 12px" }}>
-                    <input type="number" min={0} step={0.01}
-                      value={row.unit_cost_expected === 0 ? "" : row.unit_cost_expected}
-                      onChange={e => onUpdateRow(row.key, { unit_cost_expected: parseFloat(e.target.value) || 0 })}
-                      placeholder="0.00"
-                      style={{ ...INPUT, width: "90px" }}
-                    />
-                  </td>
-                  <td style={{ padding: "8px 12px" }}>
-                    <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                      <button onClick={() => onDuplicateRow(row.key)} title="Duplicate row"
-                        style={{ background: "none", border: "1px solid #D1D5DB", borderRadius: "4px", cursor: "pointer", color: "#6B7280", fontSize: "12px", padding: "2px 6px" }}>⧉</button>
-                      {row.is_new_variant && (
+                    </td>
+                    <td style={{ padding: "8px 12px", fontSize: "13px", color: row.stock_quantity > 0 ? "#374151" : "#9CA3AF" }}>
+                      {row.stock_quantity}
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <input type="number" min={0}
+                        value={row.qty_ordered === 0 ? "" : row.qty_ordered}
+                        onChange={e => onUpdateRow(row.key, { qty_ordered: parseInt(e.target.value) || 0 })}
+                        placeholder="0"
+                        style={{ ...INPUT, width: "80px", background: row.qty_ordered > 0 ? "#F0F4FF" : "#fff" }}
+                      />
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <input type="number" min={0} step={0.01}
+                        value={row.unit_cost_expected === 0 ? "" : row.unit_cost_expected}
+                        onChange={e => onUpdateRow(row.key, { unit_cost_expected: parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                        style={{ ...INPUT, width: "90px" }}
+                      />
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        <button onClick={() => onDuplicateRow(row.key)} title="Duplicate row"
+                          style={{ background: "none", border: "1px solid #D1D5DB", borderRadius: "4px", cursor: "pointer", color: "#6B7280", fontSize: "12px", padding: "2px 6px" }}>⧉</button>
                         <button onClick={() => onRemoveRow(row.key)}
                           style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: "16px" }}>×</button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
           <button onClick={onAddNewVariant}
             style={{ fontSize: "12px", color: "#1A5CFF", background: "none", border: "1px dashed #93C5FD", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", width: "100%", marginBottom: "4px" }}>
