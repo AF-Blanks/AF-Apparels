@@ -7,6 +7,7 @@ import { adminService } from "@/services/admin.service";
 interface InventoryItem {
   sku: string;
   product_name: string;
+  product_code: string | null;
   variant_name: string;
   quantity_on_hand: number;
   quantity_reserved: number;
@@ -45,7 +46,8 @@ export default function InventoryReportPage() {
       (i) =>
         !search ||
         i.sku.toLowerCase().includes(search.toLowerCase()) ||
-        i.product_name.toLowerCase().includes(search.toLowerCase())
+        i.product_name.toLowerCase().includes(search.toLowerCase()) ||
+        (i.product_code ?? "").toLowerCase().includes(search.toLowerCase())
     ) ?? [];
 
   return (
@@ -84,7 +86,7 @@ export default function InventoryReportPage() {
       <div className="flex gap-4 flex-wrap">
         <input
           type="text"
-          placeholder="Search SKU or product..."
+          placeholder="Search SKU, product code, or name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="border border-gray-300 rounded-md px-3 py-2 text-sm w-64"
@@ -128,7 +130,12 @@ export default function InventoryReportPage() {
                   filtered.map((item, i) => (
                     <tr key={i} className={`hover:bg-gray-50 ${item.is_low_stock ? "bg-red-50" : ""}`}>
                       <td className="px-6 py-3 font-mono text-xs">{item.sku}</td>
-                      <td className="px-6 py-3 font-medium">{item.product_name}</td>
+                      <td className="px-6 py-3 font-medium">
+                        {item.product_code && (
+                          <span className="text-gray-400 font-mono text-xs mr-1.5">{item.product_code}</span>
+                        )}
+                        {item.product_name}
+                      </td>
                       <td className="px-6 py-3 text-gray-500">{item.variant_name}</td>
                       <td className="px-6 py-3 text-right">{item.quantity_on_hand}</td>
                       <td className="px-6 py-3 text-right text-orange-600">{item.quantity_reserved}</td>
