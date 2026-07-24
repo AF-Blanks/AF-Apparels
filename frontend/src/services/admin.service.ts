@@ -279,6 +279,14 @@ export const adminService = {
     return downloadCsv("/api/v1/admin/companies/export-csv", "customers-export.csv");
   },
 
+  async importCompaniesCsv(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return apiClient.postForm<{ created: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] }>(
+      "/api/v1/admin/companies/import-csv", form
+    );
+  },
+
   // Orders
   async listOrders(params?: { q?: string; status?: string; page?: number | string; company_id?: string; page_size?: number; date_from?: string; date_to?: string; guest_only?: string }) {
     const query = new URLSearchParams();

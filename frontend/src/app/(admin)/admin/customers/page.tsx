@@ -1,7 +1,7 @@
 // frontend/src/app/%28admin%29/admin/customers/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminService } from "@/services/admin.service";
 import { UsersIcon, CheckCircleIcon, BarChartIcon, DollarSignIcon, DownloadIcon } from "@/components/ui/icons";
@@ -239,6 +239,9 @@ export default function AdminCustomersPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([]);
   const [exportLoading, setExportLoading] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] } | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 50;
 
   async function load() {
@@ -285,6 +288,21 @@ export default function AdminCustomersPage() {
     try { await adminService.exportCompaniesCsv(); } catch { /* ignore */ } finally { setExportLoading(false); }
   }
 
+  async function handleImportFile(file: File) {
+    setImportLoading(true);
+    setImportResult(null);
+    try {
+      const result = await adminService.importCompaniesCsv(file);
+      setImportResult(result);
+      load();
+    } catch (err: unknown) {
+      setImportResult({ created: 0, skipped_duplicate: 0, skipped_no_email: 0, errors: [err instanceof Error ? err.message : "Import failed"] });
+    } finally {
+      setImportLoading(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }
+
   const thStyle: React.CSSProperties = {
     padding: "11px 14px", textAlign: "left", fontSize: "10px",
     textTransform: "uppercase", letterSpacing: ".07em", color: "#7A7880", fontWeight: 700,
@@ -308,6 +326,18 @@ export default function AdminCustomersPage() {
           <p style={{ fontSize: "13px", color: "#7A7880", marginTop: "4px" }}>{total} companies · wholesale accounts</p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+          />
+          <button
+            onClick={() => importInputRef.current?.click()} disabled={importLoading}
+            style={{ padding: "10px 18px", border: "1px solid #E2E0DA", borderRadius: "8px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: importLoading ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: importLoading ? .6 : 1 }}>
+            {importLoading ? "Importing…" : "Import Customers"}
+          </button>
           <button
             onClick={handleExport} disabled={exportLoading}
             style={{ padding: "10px 18px", border: "1px solid #E2E0DA", borderRadius: "8px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: exportLoading ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: exportLoading ? .6 : 1 }}>
@@ -320,6 +350,20 @@ export default function AdminCustomersPage() {
           </button>
         </div>
       </div>
+
+      {importResult && (
+        <div style={{ background: importResult.errors.length ? "rgba(232,36,42,.06)" : "rgba(5,150,105,.06)", border: `1px solid ${importResult.errors.length ? "rgba(232,36,42,.2)" : "rgba(5,150,105,.2)"}`, borderRadius: "8px", padding: "14px 16px", marginBottom: "20px", fontSize: "13px" }}>
+          <div style={{ fontWeight: 700, marginBottom: "4px", color: "#2A2830" }}>
+            Import complete — {importResult.created} created, {importResult.skipped_duplicate} skipped (already exist), {importResult.skipped_no_email} skipped (no email)
+          </div>
+          {importResult.errors.length > 0 && (
+            <ul style={{ margin: "6px 0 0", paddingLeft: "18px", color: "#E8242A" }}>
+              {importResult.errors.slice(0, 10).map((e, i) => <li key={i}>{e}</li>)}
+              {importResult.errors.length > 10 && <li>…and {importResult.errors.length - 10} more</li>}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="admin-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "20px" }}>
