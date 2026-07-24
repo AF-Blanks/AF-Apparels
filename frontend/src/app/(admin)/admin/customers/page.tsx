@@ -45,6 +45,7 @@ function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
     contact_email: "", contact_phone: "",
     pricing_tier_id: "", admin_notes: "",
   });
+  const [taxExempt, setTaxExempt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,6 +74,7 @@ function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
         contact_phone: form.contact_phone || undefined,
         pricing_tier_id: form.pricing_tier_id || undefined,
         admin_notes: form.admin_notes || undefined,
+        tax_exempt: taxExempt,
       });
       onSuccess();
     } catch (err: unknown) {
@@ -172,6 +174,34 @@ function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
               <label style={lbl}>Phone</label>
               <input style={inp} value={form.contact_phone} onChange={e => set("contact_phone", e.target.value)} />
             </div>
+          </div>
+
+          <div style={{ marginTop: "16px", border: "1.5px solid #E2E0DA", borderRadius: "8px", padding: "12px 14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830", marginBottom: "4px" }}>Tax Exempt</div>
+            <p style={{ fontSize: "12px", color: "#7A7880", marginBottom: "10px", lineHeight: 1.5 }}>
+              When enabled, this customer will not be charged or shown any tax at checkout.
+            </p>
+            <label
+              onClick={() => setTaxExempt(v => !v)}
+              style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}
+            >
+              <div style={{
+                position: "relative", width: "44px", height: "24px", borderRadius: "12px",
+                background: taxExempt ? "#059669" : "#E2E0DA",
+                transition: "background .2s", flexShrink: 0,
+              }}>
+                <div style={{
+                  position: "absolute", top: "3px",
+                  left: taxExempt ? "23px" : "3px",
+                  width: "18px", height: "18px", borderRadius: "50%",
+                  background: "#fff", transition: "left .2s",
+                  boxShadow: "0 1px 4px rgba(0,0,0,.2)",
+                }} />
+              </div>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: taxExempt ? "#059669" : "#7A7880" }}>
+                {taxExempt ? "Tax Exempt — no tax charged" : "Not exempt (standard tax)"}
+              </span>
+            </label>
           </div>
 
           <div style={{ marginTop: "16px" }}>

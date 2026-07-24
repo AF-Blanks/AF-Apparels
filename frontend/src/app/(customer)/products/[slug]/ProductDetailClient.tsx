@@ -68,7 +68,7 @@ const COLOR_MAP: Record<string, string> = {
   "Decadent Chocolate": "#723638",
 };
 
-const TABS = ["Description", "Specifications", "Size Chart", "Reviews"] as const;
+const TABS = ["Specifications", "Size Chart", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
 // ── Reviews Tab ───────────────────────────────────────────────────────────────
@@ -422,7 +422,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
   // ── Other state ───────────────────────────────────────────────────────────
   const [assetMsg, setAssetMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>("Description");
+  const [activeTab, setActiveTab] = useState<Tab>("Specifications");
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [showImageLibrary, setShowImageLibrary] = useState(false);
   const [expandedLibraryColor, setExpandedLibraryColor] = useState<string | null>(null);
@@ -804,6 +804,14 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
               {[(product as any).fabric, (product as any).weight, uniqueColors.length > 0 ? `${uniqueColors.length} Colors` : null].filter(Boolean).join(" · ")}
             </div>
 
+            {/* Description — shown directly under the title, not behind a tab */}
+            {product.description && (
+              <div
+                style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "15px", color: "#6B6B6B", lineHeight: 1.75, marginBottom: "22px", maxWidth: "660px" }}
+                dangerouslySetInnerHTML={{ __html: product.description }}
+              />
+            )}
+
             {/* Guest state — plain inline text, no card/box */}
             {!isAuthenticated && (
               <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", color: "#6B6B6B", marginBottom: "22px" }}>
@@ -990,21 +998,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
           </div>
 
           <div style={{ padding: "32px 0" }}>
-            {activeTab === "Description" && (
-              <div style={{ maxWidth: "660px" }}>
-                {product.description ? (
-                  <div
-                    style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "15px", color: "#6B6B6B", lineHeight: 1.75 }}
-                    dangerouslySetInnerHTML={{ __html: product.description }}
-                  />
-                ) : (
-                  <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "15px", color: "#6B6B6B", lineHeight: 1.75 }}>
-                    No description available for this product.
-                  </p>
-                )}
-              </div>
-            )}
-
             {activeTab === "Specifications" && (
               <div style={{ maxWidth: "600px" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
