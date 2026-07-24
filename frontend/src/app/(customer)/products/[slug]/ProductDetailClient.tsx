@@ -68,6 +68,18 @@ const COLOR_MAP: Record<string, string> = {
   "Decadent Chocolate": "#723638",
 };
 
+/** Resolve a swatch hex for a color name: curated list (exact, then
+ * case-insensitive) first, then an admin-picked custom color, else grey. */
+function resolveHex(name: string, customColors: Record<string, string>): string {
+  if (!name) return "#E2E2DE";
+  const exact = COLOR_MAP[name];
+  if (exact) return exact;
+  const key = Object.keys(COLOR_MAP).find(k => k.toLowerCase() === name.toLowerCase());
+  const ci = key ? COLOR_MAP[key] : undefined;
+  if (ci) return ci;
+  return customColors[name.trim().toLowerCase()] ?? "#E2E2DE";
+}
+
 const TABS = ["Description", "Specifications", "Size Chart", "Reviews"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -427,6 +439,14 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   const [showImageLibrary, setShowImageLibrary] = useState(false);
   const [expandedLibraryColor, setExpandedLibraryColor] = useState<string | null>(null);
 
+  // Admin-picked custom colors for names not in COLOR_MAP (e.g. "Ferrari Red")
+  const [customColors, setCustomColors] = useState<Record<string, string>>({});
+  useEffect(() => {
+    apiClient.get<Record<string, string>>("/api/v1/custom-colors")
+      .then(setCustomColors)
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (authIsLoading) return; // wait for auth to resolve before fetching
     console.log("[ProductDetail] fetching slug:", slug, "| isAuthenticated:", isAuthenticated);
@@ -516,7 +536,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
         img.alt_text?.toLowerCase().includes(cg.color.toLowerCase())
       );
       if (colorImgs.length > 0) {
-        imageGroups.push({ color: cg.color, hex: COLOR_MAP[cg.color] ?? "#E2E2DE", images: colorImgs });
+        imageGroups.push({ color: cg.color, hex: resolveHex(cg.color, customColors), images: colorImgs });
         colorImgs.forEach(img => assigned.add(img.id));
       }
     }
@@ -936,7 +956,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "28px" }}>
                   {colorGroups.map(group => {
-                    const hex = COLOR_MAP[group.color] ?? "#E2E2DE";
+                    const hex = resolveHex(group.color, customColors);
                     const isLight = ["#FFFFFF", "#fffff0", "#fef3c7", "#f5f0e8"].includes(hex);
                     const isSel = selectedColor === group.color;
                     return (
@@ -971,7 +991,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
                     {/* One section per color */}
                     {colorGroups.map((group, groupIdx) => {
-                      const hex = COLOR_MAP[group.color] ?? "#E2E2DE";
+                      const hex = resolveHex(group.color, customColors);
                       const isLight = ["#FFFFFF", "#fffff0", "#fef3c7", "#f5f0e8"].includes(hex);
                       const rowQty = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0), 0);
                       const rowTotal = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0) * Number(v.effective_price ?? v.retail_price ?? 0), 0);

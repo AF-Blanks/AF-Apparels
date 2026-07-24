@@ -80,8 +80,6 @@ const COLOR_MAP: Record<string, string> = {
   "Decadent Chocolate": "#723638",
 };
 
-const CUSTOM_COLOR_STORAGE_KEY = "af_custom_swatch_colors";
-
 /** Resolve a swatch color for a typed color name. Tries our curated list
  * first (exact, then case-insensitive), then an admin-picked custom hex
  * (remembered per browser), then falls back to letting the browser resolve
@@ -200,20 +198,19 @@ export default function NewProductPage() {
   const [error, setError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // Custom colors: admin-picked hex for color names we can't auto-resolve, remembered per browser
+  // Custom colors: admin-picked hex for color names we can't auto-resolve. Saved
+  // server-side so a color set once resolves everywhere — other admins, other
+  // products, and the customer-facing product page — not just this browser.
   const [customColors, setCustomColors] = useState<Record<string, string>>({});
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(CUSTOM_COLOR_STORAGE_KEY);
-      if (raw) setCustomColors(JSON.parse(raw));
-    } catch {}
+    apiClient.get<Record<string, string>>("/api/v1/custom-colors")
+      .then(setCustomColors)
+      .catch(() => {});
   }, []);
   function setCustomColor(name: string, hex: string) {
-    setCustomColors(prev => {
-      const next = { ...prev, [name.trim().toLowerCase()]: hex };
-      try { localStorage.setItem(CUSTOM_COLOR_STORAGE_KEY, JSON.stringify(next)); } catch {}
-      return next;
-    });
+    const key = name.trim().toLowerCase();
+    setCustomColors(prev => ({ ...prev, [key]: hex }));
+    apiClient.post("/api/v1/admin/products/custom-colors", { name: key, hex }).catch(() => {});
   }
 
   // Media
