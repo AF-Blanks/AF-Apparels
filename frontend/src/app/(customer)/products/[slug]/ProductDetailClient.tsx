@@ -68,6 +68,8 @@ const COLOR_MAP: Record<string, string> = {
   "Decadent Chocolate": "#723638",
 };
 
+const TABS = ["Specifications", "Size Chart", "Reviews"] as const;
+type Tab = (typeof TABS)[number];
 
 // ── Reviews Tab ───────────────────────────────────────────────────────────────
 
@@ -420,6 +422,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
   // ── Other state ───────────────────────────────────────────────────────────
   const [assetMsg, setAssetMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("Specifications");
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [showImageLibrary, setShowImageLibrary] = useState(false);
   const [expandedLibraryColor, setExpandedLibraryColor] = useState<string | null>(null);
@@ -809,6 +812,98 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
               />
             )}
 
+            {/* ── Product Tabs — moved up so Specs/Size Chart/Reviews don't require scrolling past pricing/cart ── */}
+            <div style={{ marginBottom: "24px" }}>
+              <div style={{ display: "flex", borderBottom: "1px solid #E2E2DE", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
+                {TABS.map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    style={{ padding: "10px 16px", fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 500, color: activeTab === tab ? "#1C3557" : "#6B6B6B", background: "none", border: "none", borderBottom: activeTab === tab ? "2px solid #1C3557" : "2px solid transparent", marginBottom: "-1px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, transition: "color .15s" }}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ padding: "20px 0" }}>
+                {activeTab === "Specifications" && (
+                  <div style={{ maxWidth: "600px" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+                      <tbody>
+                        {[
+                          { label: "Colors Available", value: uniqueColors.join(", ") || "—" },
+                          { label: "Sizes Available", value: uniqueSizes.join(", ") || "—" },
+                          { label: "Variants", value: `${product.variants?.length ?? 0} options` },
+                          ...(((product as any).fabric) ? [{ label: "Fabric", value: (product as any).fabric }] : []),
+                          ...(() => {
+                            const ws = [...new Set(
+                              (product.variants ?? [])
+                                .filter(v => v.weight_grams != null && v.weight_grams > 0)
+                                .map(v => `${v.size}: ${v.weight_grams}g`)
+                            )];
+                            return ws.length ? [{ label: "Weight per Size", value: ws.join(", ") }] : [];
+                          })(),
+                          ...(((product as any).product_code) ? [{ label: "Product Code", value: (product as any).product_code }] : []),
+                        ].map(row => (
+                          <tr key={row.label} style={{ borderBottom: "1px solid #F4F3EF" }}>
+                            <td style={{ padding: "12px 0", color: "#7A7880", fontWeight: 600, width: "40%" }}>{row.label}</td>
+                            <td style={{ padding: "12px 0", color: "#2A2830" }}>{row.value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {(product as any).care_instructions && (
+                      <div style={{ marginTop: "20px", padding: "16px", background: "#F4F3EF", borderRadius: "8px", border: "1px solid #E2E0DA" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#7A7880", marginBottom: "8px" }}>Care Instructions</div>
+                        <p style={{ fontSize: "14px", color: "#2A2830", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>{(product as any).care_instructions}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === "Size Chart" && (
+                  <div style={{ overflowX: "auto" }}>
+                    {(() => {
+                      const rows: any[] = ((product as any).size_chart_data as any[]) ?? [];
+                      if (rows.length === 0) {
+                        return (
+                          <div style={{ padding: "32px", textAlign: "center", background: "#F4F3EF", borderRadius: "10px", border: "1px solid #E2E0DA", color: "#7A7880", fontSize: "14px" }}>
+                            Size chart coming soon.
+                          </div>
+                        );
+                      }
+                      return (
+                        <table style={{ borderCollapse: "collapse", fontSize: "13px", minWidth: "500px" }}>
+                          <thead>
+                            <tr style={{ background: "#1B3A5C" }}>
+                              {["Size", "Chest (in)", "Length (in)", "Box Size"].map(h => (
+                                <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#fff", fontFamily: "var(--font-bebas)", letterSpacing: ".06em", fontSize: "13px" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row: any, i: number) => (
+                              <tr key={i} style={{ background: i % 2 === 0 ? "#F4F3EF" : "#fff", borderBottom: "1px solid #E2E0DA" }}>
+                                <td style={{ padding: "10px 16px", color: "#2A2830", fontWeight: 700 }}>{row.size ?? "—"}</td>
+                                <td style={{ padding: "10px 16px", color: "#2A2830" }}>{row.chest ?? "—"}</td>
+                                <td style={{ padding: "10px 16px", color: "#2A2830" }}>{row.length ?? "—"}</td>
+                                <td style={{ padding: "10px 16px", color: "#2A2830" }}>{row.sleeve ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {activeTab === "Reviews" && (
+                  <ReviewsTab productId={product.id} isAuthenticated={isAuthenticated} />
+                )}
+              </div>
+            </div>
+
             {/* Guest state — plain inline text, no card/box */}
             {!isAuthenticated && (
               <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", color: "#6B6B6B", marginBottom: "22px" }}>
@@ -980,86 +1075,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
           </div>
         </div>
 
-        {/* ── Product Info Sections — all shown directly, no tab-click needed ── */}
-        <div style={{ marginTop: "40px", borderTop: "1px solid #E2E2DE" }}>
-          <div style={{ padding: "32px 0", borderBottom: "1px solid #E2E2DE" }}>
-            <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "18px", fontWeight: 600, color: "#1A1A1A", margin: "0 0 20px" }}>Specifications</h2>
-            <div style={{ maxWidth: "600px" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
-                <tbody>
-                  {[
-                    { label: "Colors Available", value: uniqueColors.join(", ") || "—" },
-                    { label: "Sizes Available", value: uniqueSizes.join(", ") || "—" },
-                    { label: "Variants", value: `${product.variants?.length ?? 0} options` },
-                    ...(((product as any).fabric) ? [{ label: "Fabric", value: (product as any).fabric }] : []),
-                    ...(() => {
-                      const ws = [...new Set(
-                        (product.variants ?? [])
-                          .filter(v => v.weight_grams != null && v.weight_grams > 0)
-                          .map(v => `${v.size}: ${v.weight_grams}g`)
-                      )];
-                      return ws.length ? [{ label: "Weight per Size", value: ws.join(", ") }] : [];
-                    })(),
-                    ...(((product as any).product_code) ? [{ label: "Product Code", value: (product as any).product_code }] : []),
-                  ].map(row => (
-                    <tr key={row.label} style={{ borderBottom: "1px solid #F4F3EF" }}>
-                      <td style={{ padding: "12px 0", color: "#7A7880", fontWeight: 600, width: "40%" }}>{row.label}</td>
-                      <td style={{ padding: "12px 0", color: "#2A2830" }}>{row.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {(product as any).care_instructions && (
-                <div style={{ marginTop: "20px", padding: "16px", background: "#F4F3EF", borderRadius: "8px", border: "1px solid #E2E0DA" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#7A7880", marginBottom: "8px" }}>Care Instructions</div>
-                  <p style={{ fontSize: "14px", color: "#2A2830", lineHeight: 1.7, margin: 0, whiteSpace: "pre-wrap" }}>{(product as any).care_instructions}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ padding: "32px 0", borderBottom: "1px solid #E2E2DE" }}>
-            <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "18px", fontWeight: 600, color: "#1A1A1A", margin: "0 0 20px" }}>Size Chart</h2>
-            <div style={{ overflowX: "auto" }}>
-              {(() => {
-                const rows: any[] = ((product as any).size_chart_data as any[]) ?? [];
-                if (rows.length === 0) {
-                  return (
-                    <div style={{ padding: "32px", textAlign: "center", background: "#F4F3EF", borderRadius: "10px", border: "1px solid #E2E0DA", color: "#7A7880", fontSize: "14px" }}>
-                      Size chart coming soon.
-                    </div>
-                  );
-                }
-                return (
-                  <table style={{ borderCollapse: "collapse", fontSize: "13px", minWidth: "500px" }}>
-                    <thead>
-                      <tr style={{ background: "#1B3A5C" }}>
-                        {["Size", "Chest (in)", "Length (in)", "Box Size"].map(h => (
-                          <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#fff", fontFamily: "var(--font-bebas)", letterSpacing: ".06em", fontSize: "13px" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row: any, i: number) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? "#F4F3EF" : "#fff", borderBottom: "1px solid #E2E0DA" }}>
-                          <td style={{ padding: "10px 16px", color: "#2A2830", fontWeight: 700 }}>{row.size ?? "—"}</td>
-                          <td style={{ padding: "10px 16px", color: "#2A2830" }}>{row.chest ?? "—"}</td>
-                          <td style={{ padding: "10px 16px", color: "#2A2830" }}>{row.length ?? "—"}</td>
-                          <td style={{ padding: "10px 16px", color: "#2A2830" }}>{row.sleeve ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                );
-              })()}
-            </div>
-          </div>
-
-          <div style={{ padding: "32px 0" }}>
-            <h2 style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "18px", fontWeight: 600, color: "#1A1A1A", margin: "0 0 20px" }}>Reviews</h2>
-            <ReviewsTab productId={product.id} isAuthenticated={isAuthenticated} />
-          </div>
-        </div>
       </div>
 
       <style>{`
