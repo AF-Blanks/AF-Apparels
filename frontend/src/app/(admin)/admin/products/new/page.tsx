@@ -251,6 +251,8 @@ export default function NewProductPage() {
     care_instructions: "",
     print_guide_methods: [] as string[],
     size_chart_data: [] as SizeChartRow[],
+    tagline: "",
+    is_bestseller: false,
   });
 
   useEffect(() => {
@@ -383,6 +385,8 @@ export default function NewProductPage() {
         care_instructions: form.care_instructions || null,
         print_guide: form.print_guide_methods.length ? { methods: form.print_guide_methods } : null,
         size_chart_data: form.size_chart_data.length ? form.size_chart_data : null,
+        tagline: form.tagline || null,
+        is_bestseller: form.is_bestseller,
       };
 
       const product = await adminService.createProduct(payload) as { id: string; slug: string };
@@ -503,6 +507,33 @@ export default function NewProductPage() {
                   style={inputStyle}
                 />
                 <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Auto-generated from name. Must be unique.</div>
+              </div>
+              <div style={{ marginBottom: "18px" }}>
+                <label style={labelStyle}>
+                  Tagline
+                  <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#B0ADBA", marginLeft: "8px" }}>
+                    short badge shown on the shop page
+                  </span>
+                </label>
+                <input
+                  name="tagline"
+                  value={form.tagline}
+                  onChange={handleChange}
+                  placeholder='e.g. Available from 15 Sep on new product'
+                  style={inputStyle}
+                />
+              </div>
+              <div style={{ marginBottom: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="checkbox"
+                  id="is_bestseller"
+                  checked={form.is_bestseller}
+                  onChange={e => setForm(p => ({ ...p, is_bestseller: e.target.checked }))}
+                  style={{ width: "16px", height: "16px" }}
+                />
+                <label htmlFor="is_bestseller" style={{ fontSize: "13px", fontWeight: 600, color: "#2A2830", cursor: "pointer" }}>
+                  Mark as Best Seller
+                </label>
               </div>
               <div>
                 <label style={labelStyle}>Description</label>

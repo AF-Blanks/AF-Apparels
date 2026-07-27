@@ -51,6 +51,8 @@ export interface ProductListItem {
   fabric?: string | null;
   product_code?: string | null;
   weight?: string | null;
+  tagline?: string | null;
+  is_bestseller?: boolean;
 }
 
 /** Full product detail — matches backend ProductDetail schema. */
@@ -79,6 +81,8 @@ export interface ProductDetail {
   review_count?: number;
   avg_rating?: number;
   sort_order?: number;
+  tagline?: string | null;
+  is_bestseller?: boolean;
 }
 
 /** Product asset (flyer, spec sheet). */

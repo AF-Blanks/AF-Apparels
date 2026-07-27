@@ -814,6 +814,22 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
               </div>
             )}
 
+            {/* Badges: Best Seller + Tagline */}
+            {((product as any).is_bestseller || (product as any).tagline) && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+                {(product as any).is_bestseller && (
+                  <span style={{ background: "#1C3557", color: "#fff", fontSize: "11px", fontWeight: 700, letterSpacing: ".04em", padding: "5px 10px", borderRadius: "3px" }}>
+                    ★ BEST SELLER
+                  </span>
+                )}
+                {(product as any).tagline && (
+                  <span style={{ background: "#E8242A", color: "#fff", fontSize: "11px", fontWeight: 700, letterSpacing: ".03em", padding: "5px 10px", borderRadius: "3px" }}>
+                    {(product as any).tagline}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Title */}
             <h1 className="pdp-title" style={{ fontFamily: "'Fraunces', serif", fontSize: "36px", fontWeight: 600, color: "#1A1A1A", lineHeight: 1.15, marginBottom: "10px" }}>
               {product.name}

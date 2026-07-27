@@ -14,6 +14,7 @@ export interface ProductFilters {
   gender?: string;
   in_stock?: boolean;
   product_code?: string;
+  is_bestseller?: boolean;
 }
 
 export const productsService = {
@@ -34,6 +35,7 @@ export const productsService = {
     if (filters.gender) params.set("gender", filters.gender);
     if (filters.in_stock) params.set("in_stock", "true");
     if (filters.product_code) params.set("product_code", filters.product_code);
+    if (filters.is_bestseller) params.set("is_bestseller", "true");
 
     const query = params.toString();
     return apiClient.get<PaginatedResponse<ProductListItem>>(

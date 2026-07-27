@@ -30,6 +30,8 @@ interface ProductItem {
   fabric?: string | null;
   product_code?: string | null;
   weight?: string | null;
+  tagline?: string | null;
+  is_bestseller?: boolean;
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -79,17 +81,12 @@ const FALLBACK: ProductItem[] = [
   { id: "4", name: "Casual Denim Jacket", slug: "casual-denim-jacket", base_price: 65.00, categories: [{ name: "Jackets" }] },
 ];
 
-const BADGES: Record<number, { label: string; bg: string }> = {
-  0: { label: "BEST SELLER", bg: "#E8242A" },
-  1: { label: "POPULAR", bg: "#1A5CFF" },
-};
-
 export function BestSellers() {
   const [products, setProducts] = useState<ProductItem[]>([]);
 
   useEffect(() => {
     productsService
-      .listProducts({ page_size: 4 })
+      .listProducts({ page_size: 4, is_bestseller: true })
       .then(res => {
         const items = (res?.items ?? []) as ProductItem[];
         setProducts(items.length > 0 ? items : FALLBACK);
@@ -118,7 +115,7 @@ export function BestSellers() {
 
         {/* Grid — same 4-col as collection page */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px" }} className="best-sellers-grid">
-          {products.map((product, i) => {
+          {products.map((product) => {
             const primaryImage = product.primary_image;
             const imgSrc = typeof primaryImage === "string"
               ? primaryImage
@@ -154,9 +151,9 @@ export function BestSellers() {
                     </div>
                   )}
                   {/* Badge */}
-                  {BADGES[i] && (
-                    <div style={{ position: "absolute", top: "12px", left: "12px", background: BADGES[i]!.bg, color: "#fff", fontFamily: "var(--font-bebas)", fontSize: "11px", letterSpacing: ".08em", padding: "4px 10px", borderRadius: "4px", zIndex: 1 }}>
-                      {BADGES[i]!.label}
+                  {product.is_bestseller && (
+                    <div style={{ position: "absolute", top: "12px", left: "12px", background: "#E8242A", color: "#fff", fontFamily: "var(--font-bebas)", fontSize: "11px", letterSpacing: ".08em", padding: "4px 10px", borderRadius: "4px", zIndex: 1 }}>
+                      BEST SELLER
                     </div>
                   )}
                   {/* In Stock badge */}

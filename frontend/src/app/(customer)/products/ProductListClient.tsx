@@ -181,14 +181,6 @@ export function ProductListClient({
     setFilterOpen(false);
   }
 
-  function applyPriceFilter() {
-    router.push(buildFilterUrl({
-      price_min: localPriceMin > 0 ? String(localPriceMin) : null,
-      price_max: localPriceMax < 500 ? String(localPriceMax) : null,
-    }));
-    setFilterOpen(false);
-  }
-
   function applyCodeFilter() {
     router.push(buildFilterUrl({ product_code: localCode.trim() || null }));
     setFilterOpen(false);
@@ -370,39 +362,6 @@ export function ProductListClient({
           </div>
         </div>
       )}
-
-      {/* Price Range */}
-      <div style={filterGroupStyle}>
-        <h4 style={filterHeaderStyle}>Price Range</h4>
-        <input
-          type="range"
-          min={0} max={500} step={5}
-          value={localPriceMax}
-          onChange={e => setLocalPriceMax(Math.max(Number(e.target.value), localPriceMin + 5))}
-          style={{ width: "100%", accentColor: "#1C3557", marginBottom: "10px" }}
-        />
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <input
-            type="text"
-            value={localPriceMin}
-            onChange={e => setLocalPriceMin(Number(e.target.value.replace(/\D/g, "")) || 0)}
-            style={{ width: "70px", border: "1px solid #E2E2DE", padding: "6px 8px", fontSize: "12px", fontFamily: "'DM Sans', sans-serif", outline: "none" }}
-          />
-          <span style={{ fontSize: "12px", color: "#6B6B6B" }}>–</span>
-          <input
-            type="text"
-            value={localPriceMax}
-            onChange={e => setLocalPriceMax(Number(e.target.value.replace(/\D/g, "")) || 0)}
-            style={{ width: "70px", border: "1px solid #E2E2DE", padding: "6px 8px", fontSize: "12px", fontFamily: "'DM Sans', sans-serif", outline: "none" }}
-          />
-          <button
-            onClick={applyPriceFilter}
-            style={{ background: "#1C3557", color: "#fff", border: "none", padding: "7px 14px", fontSize: "12px", fontFamily: "'DM Sans', sans-serif", cursor: "pointer" }}
-          >
-            Apply
-          </button>
-        </div>
-      </div>
 
       {/* Min. Inventory */}
       <div style={filterGroupStyle}>
@@ -685,6 +644,11 @@ export function ProductListClient({
                   >
                     {/* Image area */}
                     <div style={{ background: "#ffffff", height: "220px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#6B6B6B", fontSize: "12px", position: "relative" }}>
+                      {product.is_bestseller && (
+                        <span style={{ position: "absolute", top: "10px", left: "10px", zIndex: 2, background: "#1C3557", color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: ".04em", padding: "4px 9px", borderRadius: "3px" }}>
+                          ★ BEST SELLER
+                        </span>
+                      )}
                       {primaryImage ? (
                         <Image
                           src={primaryImage.url_medium_webp ?? primaryImage.url_medium}
@@ -702,6 +666,11 @@ export function ProductListClient({
 
                     {/* Body */}
                     <div style={{ padding: "10px 12px" }}>
+                      {product.tagline && (
+                        <div style={{ display: "inline-block", background: "#E8242A", color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: ".03em", padding: "3px 8px", borderRadius: "3px", marginBottom: "6px" }}>
+                          {product.tagline}
+                        </div>
+                      )}
                       <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", fontWeight: 500, color: "#1A1A1A", marginBottom: "4px", lineHeight: 1.3 }}>
                         {product.name}
                       </div>

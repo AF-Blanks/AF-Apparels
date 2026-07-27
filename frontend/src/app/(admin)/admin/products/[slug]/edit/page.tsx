@@ -519,6 +519,8 @@ export default function AdminProductEditPage() {
         print_guide: (product as any).print_guide ?? null,
         size_chart_data: (product as any).size_chart_data ?? null,
         highlight_text: (product as any).highlight_text ?? null,
+        tagline: (product as any).tagline ?? null,
+        is_bestseller: (product as any).is_bestseller ?? false,
       });
       await Promise.all([...variantSaves, productSave]);
       setVariantEdits({});
@@ -642,6 +644,32 @@ export default function AdminProductEditPage() {
                 placeholder="e.g. Print-optimized CVC Blend. Tested for DTF transfers, screen printing, and embroidery. Consistent shrinkage below 3%."
                 style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
               />
+            </div>
+            <div style={{ marginBottom: "18px" }}>
+              <label style={labelStyle}>
+                Tagline
+                <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#B0ADBA", marginLeft: "8px" }}>
+                  short badge shown on the shop page
+                </span>
+              </label>
+              <input
+                value={(product as any).tagline ?? ""}
+                onChange={e => setProduct(p => p ? { ...p, tagline: e.target.value } as any : p)}
+                placeholder='e.g. Available from 15 Sep on new product'
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ marginBottom: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="checkbox"
+                id="is_bestseller"
+                checked={Boolean((product as any).is_bestseller)}
+                onChange={e => setProduct(p => p ? { ...p, is_bestseller: e.target.checked } as any : p)}
+                style={{ width: "16px", height: "16px" }}
+              />
+              <label htmlFor="is_bestseller" style={{ fontSize: "13px", fontWeight: 600, color: "#2A2830", cursor: "pointer" }}>
+                Mark as Best Seller
+              </label>
             </div>
             <div>
               <label style={labelStyle}>Description</label>
