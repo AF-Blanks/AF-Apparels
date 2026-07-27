@@ -125,7 +125,7 @@ export default function AboutPage() {
             Need compliance documents for your procurement team? We have everything ready.
           </p>
           <p style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "15px", color: "rgba(255,255,255,0.9)" }}>
-            info@afblanks.com &nbsp;·&nbsp; +1 (469) 367-9753
+            info@afblanks.com &nbsp;·&nbsp; +1 (214) 272-7213
           </p>
         </div>
       </div>

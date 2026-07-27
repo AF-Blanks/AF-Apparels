@@ -137,13 +137,13 @@ export default function PrivacyPolicyPage() {
           {active === "terms" && (
             <div>
               <h2 style={sectionStyle}>Payment Methods</h2>
-              <p style={bodyStyle}>We accept cash (will call only), credit cards, approved company or personal checks, and cashier&rsquo;s checks. NET terms are available for accounts approved by our credit department or that have built sufficient order history with us. For more information contact 469-367-9753.</p>
+              <p style={bodyStyle}>We accept cash (will call only), credit cards, approved company or personal checks, and cashier&rsquo;s checks. NET terms are available for accounts approved by our credit department or that have built sufficient order history with us. For more information contact 214-272-7213.</p>
 
               <h2 style={sectionStyle}>No Minimums</h2>
               <p style={bodyStyle}>We do not have any minimum order quantities on standard in-stock items.</p>
 
               <h2 style={sectionStyle}>Order Processing</h2>
-              <p style={bodyStyle}>Most orders placed before 12:00PM CT are completed same day. If you need an order rushed, email info@afblanks.com or call 469-367-9753.</p>
+              <p style={bodyStyle}>Most orders placed before 12:00PM CT are completed same day. If you need an order rushed, email info@afblanks.com or call 214-272-7213.</p>
 
               <h2 style={sectionStyle}>Wholesale Accounts</h2>
               <p style={bodyStyle}>All wholesale accounts are for business-to-business use only. You must hold a valid resale certificate to maintain a wholesale account. We reserve the right to approve, suspend, or close any account at our discretion.</p>
@@ -155,7 +155,7 @@ export default function PrivacyPolicyPage() {
               <p style={bodyStyle}>All claims must be made within 5 days of receiving goods. Items must be unaltered. Returns require a Return Authorization. Items returned without one will be refused. A 10% restocking fee applies. Customers are responsible for return shipping unless the return is our fault.</p>
 
               <h2 style={sectionStyle}>Cancellations</h2>
-              <p style={bodyStyle}>Once you receive an order confirmation, the order cannot be cancelled. Call customer service to request any changes: 469-367-9753, Monday–Friday 8:30AM–5:00PM CT.</p>
+              <p style={bodyStyle}>Once you receive an order confirmation, the order cannot be cancelled. Call customer service to request any changes: 214-272-7213, Monday–Friday 8:30AM–5:00PM CT.</p>
 
               <h2 style={sectionStyle}>Liability</h2>
               <p style={bodyStyle}>AF Apparels is not responsible for delays caused by shipping carriers or events outside our control. Our liability is limited to the value of the order placed.</p>

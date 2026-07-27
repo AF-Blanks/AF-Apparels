@@ -469,4 +469,22 @@ export const adminService = {
   async resetUserPassword(id: string) {
     return apiClient.post(`/api/v1/admin/users/${id}/reset-password`, {});
   },
+
+  // Marketing
+  async getMarketingRecipientsCount() {
+    return apiClient.get<{ count: number }>("/api/v1/admin/marketing/recipients-count");
+  },
+
+  async sendMarketingCampaign(subject: string, body_html: string) {
+    return apiClient.post<{ campaign_id: string; recipient_count: number }>(
+      "/api/v1/admin/marketing/send",
+      { subject, body_html }
+    );
+  },
+
+  async listMarketingCampaigns() {
+    return apiClient.get<Array<{ id: string; subject: string; recipient_count: number; sent_at: string | null }>>(
+      "/api/v1/admin/marketing/campaigns"
+    );
+  },
 };

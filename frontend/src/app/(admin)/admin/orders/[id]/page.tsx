@@ -256,11 +256,13 @@ export default function AdminOrderDetailPage() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  // Courier state (legacy manual shipping)
+  // Courier state (manual / local shipping)
   const [selectedCourier, setSelectedCourier] = useState("");
   const [selectedService, setSelectedService] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [isShipping, setIsShipping] = useState(false);
+  const [showManualShipping, setShowManualShipping] = useState(false);
+  const [manualShippingAmount, setManualShippingAmount] = useState("");
 
   // Shippo label generation state
   const [selectedCarrier, setSelectedCarrier] = useState("");
@@ -425,11 +427,13 @@ export default function AdminOrderDetailPage() {
     if (!selectedCourier || !selectedService) return;
     setIsShipping(true); setMsg(null);
     try {
+      const shippingCostValue = manualShippingAmount.trim() ? parseFloat(manualShippingAmount) : undefined;
       await apiClient.patch(`/api/v1/admin/orders/${order?.id ?? id}/status`, {
         status: "shipped",
         tracking_number: trackingNumber || undefined,
         courier: selectedCourier,
         courier_service: selectedService,
+        shipping_cost: shippingCostValue,
       });
       const courierLabel = COURIERS.find(c => c.id === selectedCourier)?.name ?? selectedCourier;
       setMsg({ text: `Order marked as shipped via ${courierLabel} ${selectedService}.`, ok: true });
@@ -437,10 +441,12 @@ export default function AdminOrderDetailPage() {
         ...prev, status: "shipped",
         tracking_number: trackingNumber || null,
         courier: selectedCourier, courier_service: selectedService,
+        shipping_cost: shippingCostValue !== undefined ? String(shippingCostValue) : prev.shipping_cost,
         shipped_at: new Date().toISOString(),
       } : prev);
       setStatus("shipped");
       setTracking(trackingNumber);
+      setShowManualShipping(false);
     } catch {
       setMsg({ text: "Failed to mark as shipped.", ok: false });
     } finally { setIsShipping(false); }
@@ -1098,6 +1104,91 @@ export default function AdminOrderDetailPage() {
                 {labelResult && !labelResult.success && (
                   <div style={{ background: "rgba(232,36,42,.06)", border: "1px solid rgba(232,36,42,.2)", borderRadius: "8px", padding: "12px 16px", fontSize: "13px", color: "#E8242A", fontWeight: 600 }}>
                     ✗ {labelResult.error ?? "Label generation failed. Check that Shippo API key and shipping address are set."}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Manual / Local Shipping — bypass Shippo entirely: admin types in the
+                courier, tracking number, and amount charged (e.g. local hand-delivery,
+                a courier without live Shippo rates, or a flat rate already agreed with the customer). */}
+            {!isWillCallPickup && (
+              <div style={{ marginTop: "16px", borderTop: "1px solid #E2E0DA", paddingTop: "16px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowManualShipping(v => !v)}
+                  style={{ background: "none", border: "none", padding: 0, color: "#1A5CFF", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
+                >
+                  {showManualShipping ? "− Hide Manual / Local Shipping" : "+ Manual / Local Shipping (no Shippo label)"}
+                </button>
+
+                {showManualShipping && (
+                  <div style={{ marginTop: "14px", background: "#FAFAFA", border: "1px solid #E2E0DA", borderRadius: "8px", padding: "16px" }}>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" as const, marginBottom: "14px" }}>
+                      {COURIERS.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => handleCourierSelect(c.id)}
+                          style={{
+                            padding: "8px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                            border: `1.5px solid ${selectedCourier === c.id ? "#1A5CFF" : "#E2E0DA"}`,
+                            background: selectedCourier === c.id ? "rgba(26,92,255,.06)" : "#fff",
+                            color: selectedCourier === c.id ? "#1A5CFF" : "#2A2830",
+                          }}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedCourier && (
+                      <div style={{ display: "flex", flexDirection: "column" as const, gap: "12px" }}>
+                        <div>
+                          <label style={LabelStyle}>Service</label>
+                          <select
+                            value={selectedService}
+                            onChange={e => setSelectedService(e.target.value)}
+                            style={{ padding: "10px 14px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "14px", fontFamily: "var(--font-jakarta)", background: "#fff", width: "100%", maxWidth: "280px" }}
+                          >
+                            <option value="">Select service…</option>
+                            {COURIERS.find(c => c.id === selectedCourier)?.services.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={LabelStyle}>Tracking Number</label>
+                          <input
+                            value={trackingNumber}
+                            onChange={e => setTrackingNumber(e.target.value)}
+                            placeholder="Tracking number"
+                            style={{ padding: "10px 14px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "14px", fontFamily: "var(--font-jakarta)", width: "100%", maxWidth: "280px", boxSizing: "border-box" as const }}
+                          />
+                        </div>
+                        <div>
+                          <label style={LabelStyle}>Shipping Amount ($)</label>
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={manualShippingAmount}
+                            onChange={e => setManualShippingAmount(e.target.value)}
+                            placeholder="0.00"
+                            style={{ padding: "10px 14px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "14px", fontFamily: "var(--font-jakarta)", width: "100%", maxWidth: "160px", boxSizing: "border-box" as const }}
+                          />
+                          <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Leave blank to keep the existing shipping charge on this order.</div>
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            onClick={handleMarkShipped}
+                            disabled={!selectedService || isShipping}
+                            style={{ background: selectedService ? "#1A5CFF" : "#E2E0DA", color: "#fff", border: "none", padding: "11px 22px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: selectedService ? "pointer" : "not-allowed", opacity: isShipping ? .65 : 1 }}
+                          >
+                            {isShipping ? "Saving…" : "Mark as Shipped"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

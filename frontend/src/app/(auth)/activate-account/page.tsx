@@ -179,7 +179,7 @@ function SuccessView({ firstName }: { firstName: string }) {
             We review applications within 1–2 business days. You'll receive an email once your account is approved.
           </p>
           <div style={{ background: "#F9F8F4", borderRadius: "8px", padding: "16px", marginBottom: "28px", fontSize: "13px", color: "#6b7280" }}>
-            Questions? Call <a href="tel:+14693679753" style={{ color: "#1B3A5C", fontWeight: 700, textDecoration: "none" }}>+1 (469) 367-9753</a> or email <a href="mailto:info@afblanks.com" style={{ color: "#1B3A5C", textDecoration: "none" }}>info@afblanks.com</a>
+            Questions? Call <a href="tel:+12142727213" style={{ color: "#1B3A5C", fontWeight: 700, textDecoration: "none" }}>+1 (214) 272-7213</a> or email <a href="mailto:info@afblanks.com" style={{ color: "#1B3A5C", textDecoration: "none" }}>info@afblanks.com</a>
           </div>
           <Link
             href="/"

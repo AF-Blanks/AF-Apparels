@@ -168,7 +168,7 @@ export default function LoginPage() {
                     Your wholesale application is currently being reviewed by our team. You will receive an email within 1–2 business days once a decision has been made.
                   </p>
                   <p style={{ fontSize: "12px", color: "#7A7880", margin: "8px 0 0" }}>
-                    Questions? Call <a href="tel:+14693679753" style={{ color: "#93c5fd", textDecoration: "none" }}>+1 (469) 367-9753</a>
+                    Questions? Call <a href="tel:+12142727213" style={{ color: "#93c5fd", textDecoration: "none" }}>+1 (214) 272-7213</a>
                   </p>
                 </div>
               )}
