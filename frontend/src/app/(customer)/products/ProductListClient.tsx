@@ -63,6 +63,9 @@ function swatchColor(name: string): string {
   return COLOR_MAP[name] ?? "#ccc";
 }
 
+// Categories kept in the system but not shown as a shop filter option
+const HIDDEN_CATEGORY_NAMES = new Set(["caps", "formal wear", "shorts", "pants", "accessories"]);
+
 export function ProductListClient({
   initialProducts,
   total,
@@ -289,7 +292,7 @@ export function ProductListClient({
           All Products
           <span style={{ marginLeft: "auto", fontSize: "11px", color: "#6B6B6B", fontFamily: "'DM Sans', sans-serif" }}>{total}</span>
         </label>
-        {categories.map((cat) => (
+        {categories.filter(cat => !HIDDEN_CATEGORY_NAMES.has(cat.name.toLowerCase())).map((cat) => (
           <label key={cat.id} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#1A1A1A", marginBottom: "8px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}>
             <input
               type="checkbox"
@@ -644,10 +647,19 @@ export function ProductListClient({
                   >
                     {/* Image area */}
                     <div style={{ background: "#ffffff", height: "220px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#6B6B6B", fontSize: "12px", position: "relative" }}>
-                      {product.is_bestseller && (
-                        <span style={{ position: "absolute", top: "10px", left: "10px", zIndex: 2, background: "#1C3557", color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: ".04em", padding: "4px 9px", borderRadius: "3px" }}>
-                          ★ BEST SELLER
-                        </span>
+                      {(product.is_bestseller || product.tagline) && (
+                        <div style={{ position: "absolute", top: "10px", left: "10px", zIndex: 2, display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                          {product.is_bestseller && (
+                            <span style={{ background: "#1C3557", color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: ".04em", padding: "4px 9px", borderRadius: "3px" }}>
+                              ★ BEST SELLER
+                            </span>
+                          )}
+                          {product.tagline && (
+                            <span style={{ background: "#E8242A", color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: ".03em", padding: "4px 9px", borderRadius: "3px" }}>
+                              {product.tagline}
+                            </span>
+                          )}
+                        </div>
                       )}
                       {primaryImage ? (
                         <Image
@@ -666,11 +678,6 @@ export function ProductListClient({
 
                     {/* Body */}
                     <div style={{ padding: "10px 12px" }}>
-                      {product.tagline && (
-                        <div style={{ display: "inline-block", background: "#E8242A", color: "#fff", fontSize: "10px", fontWeight: 700, letterSpacing: ".03em", padding: "3px 8px", borderRadius: "3px", marginBottom: "6px" }}>
-                          {product.tagline}
-                        </div>
-                      )}
                       <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", fontWeight: 500, color: "#1A1A1A", marginBottom: "4px", lineHeight: 1.3 }}>
                         {product.name}
                       </div>
