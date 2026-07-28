@@ -879,14 +879,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                           { label: "Sizes Available", value: uniqueSizes.join(", ") || "—" },
                           { label: "Variants", value: `${product.variants?.length ?? 0} options` },
                           ...(((product as any).fabric) ? [{ label: "Fabric", value: (product as any).fabric }] : []),
-                          ...(() => {
-                            const ws = [...new Set(
-                              (product.variants ?? [])
-                                .filter(v => v.weight_grams != null && v.weight_grams > 0)
-                                .map(v => `${v.size}: ${v.weight_grams}g`)
-                            )];
-                            return ws.length ? [{ label: "Weight per Size", value: ws.join(", ") }] : [];
-                          })(),
+                          ...(((product as any).weight) ? [{ label: "Weight", value: (product as any).weight }] : []),
                           ...(((product as any).product_code) ? [{ label: "Product Code", value: (product as any).product_code }] : []),
                         ].map(row => (
                           <tr key={row.label} style={{ borderBottom: "1px solid #F4F3EF" }}>
