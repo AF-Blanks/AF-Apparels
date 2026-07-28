@@ -101,11 +101,13 @@ export function ProductListClient({
     setProducts(initialProducts);
   }, [initialProducts]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch with auth token for wholesale prices.
+  // Always re-fetch fresh from the client on mount/navigation — a plain
+  // browser fetch(), so it's never subject to Next.js's Router Cache
+  // reusing a previous visit's snapshot. Runs for guests too (not just
+  // authenticated users) so everyone always sees current data.
   // Includes all filter params as deps so it re-runs on every navigation.
   // Cancellation flag prevents stale responses from overwriting newer results.
   useEffect(() => {
-    if (!isAuthenticated) return;
     let cancelled = false;
     const params: Record<string, string> = {};
     if (currentCategory) params.category = currentCategory;
