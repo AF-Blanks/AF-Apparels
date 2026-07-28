@@ -9,15 +9,21 @@ interface InventoryRow {
   sku: string;
   color?: string;
   size?: string;
-  warehouse_id: string;
+  product_name: string;
+  product_code?: string | null;
+  warehouse_id: string | null;
   warehouse_name: string;
   quantity: number;
   low_stock_threshold: number;
 }
 
+const SIZE_ORDER = ["XS", "S", "S/M", "M", "M/L", "L", "XL", "2XL", "3XL", "4XL", "5XL", "One Size"];
+
 function ThresholdInput({ row, onSaved }: { row: InventoryRow; onSaved: (val: number) => void }) {
   const [val, setVal] = useState(String(row.low_stock_threshold));
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setVal(String(row.low_stock_threshold)); }, [row.low_stock_threshold]);
 
   async function save() {
     const num = parseInt(val, 10);
@@ -26,7 +32,7 @@ function ThresholdInput({ row, onSaved }: { row: InventoryRow; onSaved: (val: nu
     try {
       await adminService.updateStockThreshold({
         variant_id: row.variant_id,
-        warehouse_id: row.warehouse_id,
+        warehouse_id: row.warehouse_id!,
         threshold: num,
       });
       onSaved(num);
@@ -44,18 +50,18 @@ function ThresholdInput({ row, onSaved }: { row: InventoryRow; onSaved: (val: nu
       value={val}
       onChange={e => setVal(e.target.value)}
       onBlur={save}
-      onKeyDown={e => e.key === "Enter" && save()}
+      onKeyDown={e => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       disabled={saving}
-      className="w-16 text-center border border-gray-300 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
       title="Alert when stock drops below this number"
+      style={{ width: "44px", textAlign: "center", border: "1px solid #E5E7EB", borderRadius: "4px", fontSize: "10px", padding: "1px 2px", outline: "none" }}
     />
   );
 }
 
 function exportInventoryToCsv(rows: InventoryRow[]) {
-  const header = ["SKU", "Color", "Size", "Warehouse", "Quantity", "Low Stock Threshold"];
+  const header = ["Product", "Product Code", "SKU", "Color", "Size", "Warehouse", "Quantity", "Low Stock Threshold"];
   const lines = rows.map(r => [
-    r.sku, r.color ?? "", r.size ?? "", r.warehouse_name, r.quantity, r.low_stock_threshold,
+    r.product_name, r.product_code ?? "", r.sku, r.color ?? "", r.size ?? "", r.warehouse_name, r.quantity, r.low_stock_threshold,
   ]);
   const csv = [header, ...lines].map(row => row.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -67,15 +73,11 @@ function exportInventoryToCsv(rows: InventoryRow[]) {
 
 export default function AdminInventoryPage() {
   const [rows, setRows] = useState<InventoryRow[]>([]);
-
-  function updateThreshold(index: number, val: number) {
-    setRows(prev => prev.map((r, i) => i === index ? { ...r, low_stock_threshold: val } : r));
-  }
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<InventoryRow | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [warehouseFilter, setWarehouseFilter] = useState("");
+  const [warehouseId, setWarehouseId] = useState<string>("");
 
   async function load() {
     setIsLoading(true);
@@ -89,28 +91,75 @@ export default function AdminInventoryPage() {
 
   useEffect(() => { load(); }, [lowStockOnly]);
 
+  // Distinct real warehouses seen in the data — defaults the filter to the first
+  // one so the matrix always has an unambiguous, editable single-warehouse context.
   const warehouses = useMemo(() => {
-    const names = new Set(rows.map(r => r.warehouse_name));
-    return Array.from(names).sort();
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      if (r.warehouse_id) map.set(r.warehouse_id, r.warehouse_name);
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
+
+  useEffect(() => {
+    if (!warehouseId && warehouses.length > 0) setWarehouseId(warehouses[0]!.id);
+  }, [warehouses, warehouseId]);
+
+  const isAllWarehouses = warehouseId === "__all__";
 
   const filtered = useMemo(() => {
     let list = rows;
     if (search) {
       const q = search.toLowerCase();
       list = list.filter(r =>
-        r.sku.toLowerCase().includes(q) ||
+        r.product_name.toLowerCase().includes(q) ||
+        (r.product_code ?? "").toLowerCase().includes(q) ||
         (r.color ?? "").toLowerCase().includes(q) ||
         (r.size ?? "").toLowerCase().includes(q)
       );
     }
-    if (warehouseFilter) {
-      list = list.filter(r => r.warehouse_name === warehouseFilter);
+    if (!isAllWarehouses && warehouseId) {
+      list = list.filter(r => r.warehouse_id === warehouseId);
     }
     return list;
-  }, [rows, search, warehouseFilter]);
+  }, [rows, search, warehouseId, isAllWarehouses]);
 
   const lowCount = filtered.filter(r => r.quantity <= r.low_stock_threshold).length;
+
+  // Group into product blocks, each with a color x size matrix (mirrors the
+  // Purchase Order "block" layout so this page isn't a 1600-row wall of text).
+  const productGroups = useMemo(() => {
+    const order: string[] = [];
+    const byProduct = new Map<string, InventoryRow[]>();
+    for (const r of filtered) {
+      const key = `${r.product_name}::${r.product_code ?? ""}`;
+      if (!byProduct.has(key)) { byProduct.set(key, []); order.push(key); }
+      byProduct.get(key)!.push(r);
+    }
+    return order.map(key => {
+      const productRows = byProduct.get(key)!;
+      const [product_name, product_code] = key.split("::");
+
+      const gridSizes: string[] = [];
+      for (const s of SIZE_ORDER) {
+        if (productRows.some(r => (r.size ?? "").toUpperCase() === s.toUpperCase())) gridSizes.push(s);
+      }
+      for (const r of productRows) {
+        const s = r.size ?? "";
+        if (s && !gridSizes.some(g => g.toUpperCase() === s.toUpperCase())) gridSizes.push(s);
+      }
+
+      const gridColors: string[] = [];
+      const byColor = new Map<string, InventoryRow[]>();
+      for (const r of productRows) {
+        const c = r.color || "—";
+        if (!byColor.has(c)) { byColor.set(c, []); gridColors.push(c); }
+        byColor.get(c)!.push(r);
+      }
+
+      return { product_name, product_code: product_code || null, gridSizes, gridColors, byColor };
+    });
+  }, [filtered]);
 
   return (
     <div className="p-6">
@@ -134,15 +183,15 @@ export default function AdminInventoryPage() {
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by SKU, color, size…"
+          placeholder="Search by product, code, color, size…"
           className="rounded-md border border-gray-300 px-3 py-2 text-sm w-64"
         />
         <select
-          value={warehouseFilter}
-          onChange={e => setWarehouseFilter(e.target.value)}
+          value={warehouseId}
+          onChange={e => setWarehouseId(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-          <option value="">All Warehouses</option>
-          {warehouses.map(w => <option key={w} value={w}>{w}</option>)}
+          {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+          <option value="__all__">All Warehouses (view only)</option>
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
           <input
@@ -153,72 +202,109 @@ export default function AdminInventoryPage() {
           />
           Low stock only
         </label>
-        {(search || warehouseFilter) && (
+        {(search) && (
           <button
-            onClick={() => { setSearch(""); setWarehouseFilter(""); }}
+            onClick={() => setSearch("")}
             className="text-xs text-blue-600 hover:text-blue-800 font-medium">
             Clear
           </button>
         )}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">SKU</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">Color</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">Size</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">Warehouse</th>
-              <th className="text-right px-4 py-3 text-gray-600 font-medium">Qty</th>
-              <th className="text-center px-4 py-3 text-gray-600 font-medium">Alert Below</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && filtered.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "#bbb", fontSize: "14px" }}>Loading…</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="py-8 text-center text-gray-400">No inventory records</td></tr>
-            ) : (
-              filtered.map((row, i) => (
-                <tr key={i} className={`border-b border-gray-100 last:border-0 ${row.quantity <= row.low_stock_threshold ? "bg-red-50" : ""}`}>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.sku}</td>
-                  <td className="px-4 py-3 text-gray-700">{row.color ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-700">{row.size ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-600">{row.warehouse_name}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${row.quantity <= row.low_stock_threshold ? "text-red-600" : "text-gray-900"}`}>
-                    {row.quantity}
-                    {row.quantity <= row.low_stock_threshold && (
-                      <span className="ml-1 text-xs font-normal text-red-400">(low)</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <ThresholdInput
-                      row={row}
-                      onSaved={(val) => updateThreshold(rows.indexOf(row), val)}
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setAdjustTarget(row)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-                      Adjust
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {isAllWarehouses && (
+        <div className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+          Showing combined quantity across all warehouses — pick a specific warehouse above to adjust stock or edit alert thresholds.
+        </div>
+      )}
+
+      {isLoading && filtered.length === 0 ? (
+        <div className="py-16 text-center text-gray-400 text-sm">Loading…</div>
+      ) : productGroups.length === 0 ? (
+        <div className="bg-white rounded-lg border border-gray-200 py-16 text-center text-gray-400 text-sm">No inventory records</div>
+      ) : (
+        productGroups.map(group => (
+          <div key={`${group.product_name}::${group.product_code}`} className="bg-white rounded-lg border border-gray-200 p-5 mb-4">
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-sm font-bold text-gray-900">{group.product_name}</span>
+              {group.product_code && (
+                <span className="text-xs text-gray-400 font-mono">{group.product_code}</span>
+              )}
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
+                    <th style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em", whiteSpace: "nowrap" }}>COLOR</th>
+                    {group.gridSizes.map(s => (
+                      <th key={s} style={{ padding: "9px 8px", textAlign: "center", fontSize: "11px", fontWeight: 700, color: "#6B7280", letterSpacing: ".06em", width: "62px" }}>{s}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.gridColors.map(color => {
+                    const colorRows = group.byColor.get(color)!;
+                    return (
+                      <tr key={color} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                        <td style={{ padding: "8px 12px", fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap" }}>{color}</td>
+                        {group.gridSizes.map(size => {
+                          const sizeRows = colorRows.filter(r => (r.size ?? "").toUpperCase() === size.toUpperCase());
+                          if (sizeRows.length === 0) {
+                            return <td key={size} style={{ padding: "8px", textAlign: "center", color: "#D1D5DB", fontSize: "13px" }}>—</td>;
+                          }
+                          if (isAllWarehouses) {
+                            const totalQty = sizeRows.reduce((sum, r) => sum + r.quantity, 0);
+                            const totalThreshold = sizeRows.reduce((sum, r) => sum + r.low_stock_threshold, 0);
+                            const low = totalQty <= totalThreshold;
+                            return (
+                              <td key={size} style={{ padding: "6px", textAlign: "center" }}>
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: low ? "#DC2626" : "#111827" }}>{totalQty}</div>
+                                <div style={{ fontSize: "9px", color: "#9CA3AF", marginTop: "2px" }}>{sizeRows.length} wh</div>
+                              </td>
+                            );
+                          }
+                          const row = sizeRows[0]!;
+                          const low = row.quantity <= row.low_stock_threshold;
+                          return (
+                            <td key={size} style={{ padding: "6px", textAlign: "center" }}>
+                              <button
+                                onClick={() => setAdjustTarget(row)}
+                                title="Click to adjust stock"
+                                style={{
+                                  width: "44px", padding: "5px 4px", borderRadius: "6px", cursor: "pointer",
+                                  border: `1px solid ${low ? "#FCA5A5" : "#E5E7EB"}`,
+                                  background: low ? "#FEF2F2" : "#fff",
+                                  color: low ? "#DC2626" : "#111827",
+                                  fontSize: "13px", fontWeight: 700,
+                                }}
+                              >
+                                {row.quantity}
+                              </button>
+                              <div style={{ marginTop: "3px" }}>
+                                <ThresholdInput
+                                  row={row}
+                                  onSaved={(val) => setRows(prev => prev.map(r => r.variant_id === row.variant_id && r.warehouse_id === row.warehouse_id ? { ...r, low_stock_threshold: val } : r))}
+                                />
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
+      )}
 
       {adjustTarget && (
         <StockAdjustmentModal
           sku={adjustTarget.sku}
           currentQty={adjustTarget.quantity}
           variantId={adjustTarget.variant_id}
-          warehouseId={adjustTarget.warehouse_id}
+          warehouseId={adjustTarget.warehouse_id!}
           onClose={() => setAdjustTarget(null)}
           onSuccess={() => { setAdjustTarget(null); load(); }}
         />
