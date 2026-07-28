@@ -463,7 +463,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
         if (groups.length > 0) {
           const imgs = p.images ?? [];
           const firstColorWithImages = groups.find(g =>
-            imgs.some(img => img.alt_text?.toLowerCase().includes(g.color.toLowerCase()))
+            imgs.some(img => img.alt_text?.trim().toLowerCase() === g.color.trim().toLowerCase())
           );
           if (firstColorWithImages) {
             setSelectedColor(firstColorWithImages.color);
@@ -520,7 +520,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   const displayImages = selectedColor
     ? (() => {
         const colorImgs = images.filter(img =>
-          img.alt_text?.toLowerCase().includes(selectedColor.toLowerCase())
+          img.alt_text?.trim().toLowerCase() === selectedColor.trim().toLowerCase()
         );
         return colorImgs.length > 0 ? colorImgs : images;
       })()
@@ -533,7 +533,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     const assigned = new Set<string>();
     for (const cg of colorGroups) {
       const colorImgs = images.filter(img =>
-        img.alt_text?.toLowerCase().includes(cg.color.toLowerCase())
+        img.alt_text?.trim().toLowerCase() === cg.color.trim().toLowerCase()
       );
       if (colorImgs.length > 0) {
         imageGroups.push({ color: cg.color, hex: resolveHex(cg.color, customColors), images: colorImgs });
