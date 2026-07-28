@@ -837,7 +837,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
             {/* Meta line */}
             <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", color: "#6B6B6B", marginBottom: "20px" }}>
-              {[(product as any).fabric, (product as any).weight, uniqueColors.length > 0 ? `${uniqueColors.length} Colors` : null].filter(Boolean).join(" · ")}
+              {[(product as any).fabric?.replace(/\s*\n\s*/g, ", "), (product as any).weight, uniqueColors.length > 0 ? `${uniqueColors.length} Colors` : null].filter(Boolean).join(" · ")}
             </div>
 
             {/* ── Product Tabs — moved up so Specs/Size Chart/Reviews don't require scrolling past pricing/cart ── */}
@@ -884,7 +884,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                         ].map(row => (
                           <tr key={row.label} style={{ borderBottom: "1px solid #F4F3EF" }}>
                             <td style={{ padding: "12px 0", color: "#7A7880", fontWeight: 600, width: "40%" }}>{row.label}</td>
-                            <td style={{ padding: "12px 0", color: "#2A2830" }}>{row.value}</td>
+                            <td style={{ padding: "12px 0", color: "#2A2830", whiteSpace: "pre-line" }}>{row.value}</td>
                           </tr>
                         ))}
                       </tbody>

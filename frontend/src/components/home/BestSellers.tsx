@@ -166,7 +166,7 @@ export function BestSellers() {
                 <div style={{ padding: "14px 16px" }}>
                   {/* Category/fabric label */}
                   <div style={{ fontSize: "11px", color: "#7A7880", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "4px", fontWeight: 600 }}>
-                    {[product.fabric, product.product_code, product.weight].filter(Boolean).join(" · ") || product.categories?.[0]?.name || "Apparel"}
+                    {[product.fabric?.replace(/\s*\n\s*/g, ", "), product.product_code, product.weight].filter(Boolean).join(" · ") || product.categories?.[0]?.name || "Apparel"}
                   </div>
 
                   {/* Product name */}
