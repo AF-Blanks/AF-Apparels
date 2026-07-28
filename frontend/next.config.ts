@@ -9,6 +9,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  // Force every client-side (Link/router) navigation to a dynamic route to
+  // re-fetch from the server instead of reusing the Router Cache's last
+  // snapshot — without this, revisiting a page like /products shows the data
+  // that was true the first time it was visited, not what's true now.
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+    },
+  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   },
