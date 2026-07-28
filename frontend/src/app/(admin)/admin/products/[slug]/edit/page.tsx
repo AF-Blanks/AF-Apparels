@@ -1095,11 +1095,12 @@ export default function AdminProductEditPage() {
 
             <div style={{ marginBottom: "14px" }}>
               <label style={labelStyle}>Fabric</label>
-              <input
+              <textarea
                 value={(product as any).fabric ?? ""}
                 onChange={e => setProduct(p => p ? { ...p, fabric: e.target.value } as any : p)}
                 placeholder="e.g. 100% Cotton, 50/50 Cotton-Poly"
-                style={inputStyle}
+                rows={3}
+                style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }}
               />
             </div>
 

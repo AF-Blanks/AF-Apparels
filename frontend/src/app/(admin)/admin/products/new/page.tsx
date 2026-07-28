@@ -707,7 +707,7 @@ export default function NewProductPage() {
               </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Fabric</label>
-                <input name="fabric" value={form.fabric} onChange={handleChange} placeholder="e.g. 100% Cotton, 50/50 Cotton-Poly" style={inputStyle} />
+                <textarea name="fabric" value={form.fabric} onChange={handleChange} placeholder="e.g. 100% Cotton, 50/50 Cotton-Poly" rows={3} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
               </div>
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Product Code</label>
