@@ -223,6 +223,35 @@ export default function AdminProductEditPage() {
   // Bulk apply to all variants
   const [bulkApply, setBulkApply] = useState({ price: "", compare: "", cost: "", origin: "", stock: "" });
 
+  // ── Pricing & margin (configurable, stored in platform settings) ───────────
+  // These drive the read-only margin display + Suggested Price. Prices never
+  // change automatically — only when the admin clicks "Update Price".
+  const [targetMarginPct, setTargetMarginPct] = useState(40);
+  const [minMarginPct, setMinMarginPct] = useState(15);
+  const [priceUpdating, setPriceUpdating] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    adminService.getSettings().then((s) => {
+      const set = s as Record<string, unknown>;
+      if (set?.pricing_target_margin_pct != null) setTargetMarginPct(Number(set.pricing_target_margin_pct));
+      if (set?.pricing_min_margin_pct != null) setMinMarginPct(Number(set.pricing_min_margin_pct));
+    }).catch(() => {});
+  }, []);
+  function savePricingSettings(target: number, min: number) {
+    adminService.updateSettings({ pricing_target_margin_pct: target, pricing_min_margin_pct: min }).catch(() => {});
+  }
+  // Gross Margin % = (Price − Cost) / Price × 100  (NOT markup)
+  function grossMarginPct(price: number, cost: number): number | null {
+    if (!price || price <= 0) return null;
+    return ((price - cost) / price) * 100;
+  }
+  // Suggested Price = Cost / (1 − TargetMargin%)  → e.g. cost 4, 40% → 6.67
+  function suggestedPrice(cost: number): number | null {
+    if (!cost || cost <= 0) return null;
+    const m = targetMarginPct / 100;
+    if (m >= 1) return null;
+    return Math.round((cost / (1 - m)) * 100) / 100;
+  }
+
   async function applyToAllVariants() {
     if (!product) return;
     const updates: Record<string, string> = {};
@@ -352,6 +381,33 @@ export default function AdminProductEditPage() {
   async function saveVariant(variantId: string) {
     if (!product || !variantEdits[variantId]) return;
     await adminService.updateVariant(product.id, variantId, variantEdits[variantId]);
+  }
+
+  // Merchant-approved price change — sets retail_price + syncs to QuickBooks.
+  // Only ever called on an explicit "Update Price" click; never automatic.
+  async function handleUpdatePrice(variantId: string, newPrice: number) {
+    if (!product || !(newPrice > 0)) return;
+    const rounded = Math.round(newPrice * 100) / 100;
+    setPriceUpdating(prev => ({ ...prev, [variantId]: true }));
+    try {
+      await adminService.updateVariantPrice(product.id, variantId, rounded);
+      setProduct(p => p ? {
+        ...p,
+        variants: p.variants.map(v => v.id === variantId ? ({ ...v, retail_price: rounded } as unknown as ProductVariant) : v),
+      } : p);
+      // drop any pending inline edit for this price so the field reflects the new value
+      setVariantEdits(prev => {
+        const next = { ...prev };
+        if (next[variantId]) {
+          const copy = { ...next[variantId] };
+          delete copy.retail_price;
+          next[variantId] = copy;
+        }
+        return next;
+      });
+    } finally {
+      setPriceUpdating(prev => ({ ...prev, [variantId]: false }));
+    }
   }
 
   async function handleAddVariants() {
@@ -1011,6 +1067,123 @@ export default function AdminProductEditPage() {
               </div>
             ))}
           </div>
+
+          {/* ── PRICING & MARGIN (admin-only decision tool) ──────────────────
+              Read-only insight — never changes prices automatically. The admin
+              approves each price with an explicit "Update Price" click, which
+              also syncs the new price to QuickBooks in the background. */}
+          {groupedVariants.length > 0 && (
+            <div style={sectionCard}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "14px" }}>
+                <div>
+                  <span style={sectionTitle}>PRICING &amp; MARGIN</span>
+                  <p style={{ fontSize: "12px", color: "#7A7880", margin: "4px 0 0" }}>
+                    Suggested prices are based on your latest purchase cost. Prices never change on their own — click <strong>Update Price</strong> to apply.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: "#7A7880" }}>
+                    Target Margin %
+                    <input
+                      type="number" min={0} max={95} value={targetMarginPct}
+                      onChange={e => setTargetMarginPct(Number(e.target.value))}
+                      onBlur={() => savePricingSettings(targetMarginPct, minMarginPct)}
+                      style={{ display: "block", marginTop: "3px", width: "64px", padding: "5px 8px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "13px" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: "#7A7880" }}>
+                    Min Margin %
+                    <input
+                      type="number" min={0} max={95} value={minMarginPct}
+                      onChange={e => setMinMarginPct(Number(e.target.value))}
+                      onBlur={() => savePricingSettings(targetMarginPct, minMarginPct)}
+                      style={{ display: "block", marginTop: "3px", width: "64px", padding: "5px 8px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "13px" }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #E2E0DA" }}>
+                      {["Variant", "Last Cost", "Avg Cost (QB)", "Current Price", "Margin", "Suggested", ""].map(h => (
+                        <th key={h} style={{ ...thStyle, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupedVariants.flatMap(group => group.variants.map(v => {
+                      const lastCost = Number(v.cost_per_item ?? 0);
+                      const avgCostRaw = (v as unknown as { avg_cost?: number | string | null }).avg_cost;
+                      const avgCost = avgCostRaw != null ? Number(avgCostRaw) : null;
+                      const price = Number(v.retail_price ?? 0);
+                      const costNotSet = !(lastCost > 0);
+                      const margin = grossMarginPct(price, lastCost);
+                      const suggested = suggestedPrice(lastCost);
+                      const belowCost = price > 0 && lastCost > 0 && price < lastCost;
+                      const belowMin = margin != null && lastCost > 0 && margin < minMarginPct;
+                      const marginColor = belowCost ? "#E8242A" : belowMin ? "#D97706" : "#059669";
+                      const canUpdate = suggested != null && Math.abs(suggested - price) >= 0.01;
+                      return (
+                        <tr key={v.id} style={{ borderBottom: "1px solid #F4F3EF" }}>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                            <span style={{ fontWeight: 600 }}>{v.color ?? "—"}</span>
+                            <span style={{ color: "#7A7880" }}> · {v.size ?? "—"}</span>
+                          </td>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                            {costNotSet
+                              ? <span style={{ color: "#B0ADBA", fontStyle: "italic" }}>not set</span>
+                              : `$${lastCost.toFixed(2)}`}
+                          </td>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap", color: "#7A7880" }}>
+                            {avgCost != null ? `$${avgCost.toFixed(2)}` : "—"}
+                          </td>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap", fontWeight: 600 }}>
+                            ${price.toFixed(2)}
+                          </td>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                            {costNotSet || margin == null ? (
+                              <span style={{ color: "#B0ADBA" }}>—</span>
+                            ) : (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: marginColor, fontWeight: 700 }}>
+                                {margin.toFixed(0)}%
+                                {belowCost && <span title="Selling below purchase cost">🔴</span>}
+                                {!belowCost && belowMin && <span title={`Below minimum margin (${minMarginPct}%)`}>🟠</span>}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap", color: "#1A5CFF", fontWeight: 600 }}>
+                            {suggested != null ? `$${suggested.toFixed(2)}` : "—"}
+                          </td>
+                          <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                            <button
+                              onClick={() => suggested != null && handleUpdatePrice(v.id, suggested)}
+                              disabled={!canUpdate || priceUpdating[v.id]}
+                              title={canUpdate ? `Set price to $${suggested?.toFixed(2)} and sync to QuickBooks` : "Price already matches suggested"}
+                              style={{
+                                padding: "6px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 700,
+                                border: "none",
+                                background: canUpdate ? "#1A5CFF" : "#E2E0DA",
+                                color: "#fff",
+                                cursor: canUpdate && !priceUpdating[v.id] ? "pointer" : "not-allowed",
+                                opacity: priceUpdating[v.id] ? 0.6 : 1,
+                              }}
+                            >
+                              {priceUpdating[v.id] ? "Updating…" : "Update Price"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }))}
+                  </tbody>
+                </table>
+              </div>
+              <p style={{ fontSize: "11px", color: "#aaa", marginTop: "10px" }}>
+                🔴 selling below cost · 🟠 margin below your minimum · Avg Cost (QB) is the weighted average from received purchase orders.
+              </p>
+            </div>
+          )}
 
         </div>
 

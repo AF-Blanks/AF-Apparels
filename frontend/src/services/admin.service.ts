@@ -105,6 +105,15 @@ export const adminService = {
     return apiClient.patch(`/api/v1/admin/products/${productId}/variants/${variantId}`, data);
   },
 
+  // Merchant-approved selling-price change: sets retail_price + syncs the new
+  // price to QuickBooks in the background. Never fires automatically.
+  async updateVariantPrice(productId: string, variantId: string, retail_price: number) {
+    return apiClient.post<{ id: string; retail_price: string }>(
+      `/api/v1/admin/products/${productId}/variants/${variantId}/update-price`,
+      { retail_price }
+    );
+  },
+
   async deleteVariant(productId: string, variantId: string) {
     return apiClient.delete(`/api/v1/admin/products/${productId}/variants/${variantId}`);
   },
