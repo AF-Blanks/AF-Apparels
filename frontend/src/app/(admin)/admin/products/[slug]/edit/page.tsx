@@ -1078,7 +1078,7 @@ export default function AdminProductEditPage() {
                 <div>
                   <span style={sectionTitle}>PRICING &amp; MARGIN</span>
                   <p style={{ fontSize: "12px", color: "#7A7880", margin: "4px 0 0" }}>
-                    Suggested prices are based on your latest purchase cost. Prices never change on their own — click <strong>Update Price</strong> to apply.
+                    Suggested prices are based on your latest purchase cost. Prices never change on their own. <strong>Update Price</strong> applies the suggested price and records it in the audit log; the inline <strong>Price</strong> field above lets you type any price. Both sync to QuickBooks.
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
