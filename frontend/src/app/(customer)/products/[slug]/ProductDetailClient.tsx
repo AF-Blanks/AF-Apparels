@@ -46,7 +46,7 @@ const COLOR_MAP: Record<string, string> = {
   "Dark Navy": "#0f1f3d", Indigo: "#3730a3", Cardinal: "#7b1520", Crimson: "#9f0712",
   "Carolina Blue": "#56a0d3", "Columbia Blue": "#9bc4e2", Silver: "#c0c0c0",
   "Ash Grey": "#b2b2b2", Ash: "#b2b2b2", Stone: "#a8a29e", Mocha: "#7c5c48",
-  Chocolate: "#5c3d2e", Caramel: "#b5651d", Camo: "#d5b695", "Oatmeal Heather": "#D6CFC7",
+  Chocolate: "#5c3d2e", Caramel: "#b5651d", Camo: "#78866b", "Oatmeal Heather": "#D6CFC7",
   "Sports Grey": "#C4C4C4",
   "Charcoal Heather": "#4A4A4A",
   "Texas Orange": "#BF5700",
@@ -376,13 +376,6 @@ function groupVariantsByColor(variants: ProductVariant[]) {
       groups.push({ color, variants: colorVariants });
     }
   }
-  // Black first, White second, all others keep original order
-  const COLOR_PRIORITY: Record<string, number> = { "Black": 0, "White": 1 };
-  groups.sort((a, b) => {
-    const pa = COLOR_PRIORITY[a.color] ?? 2;
-    const pb = COLOR_PRIORITY[b.color] ?? 2;
-    return pa - pb;
-  });
   return groups;
 }
 
@@ -634,22 +627,30 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     else setAssetMsg("No style sheet available for this product.");
   }
 
-  function handleDownload(imageId: string, filename: string) {
-    const base = process.env.NEXT_PUBLIC_API_URL || "";
-    const a = document.createElement("a");
-    a.href = `${base}/api/v1/products/${product?.id}/images/${imageId}/download?filename=${encodeURIComponent(filename)}`;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  async function handleDownloadAll(imgs: Array<{ imageId: string; filename: string }>) {
-    for (let i = 0; i < imgs.length; i++) {
-      await new Promise<void>(resolve => setTimeout(resolve, 300));
-      handleDownload(imgs[i]!.imageId, imgs[i]!.filename);
+  async function handleDownload(imageUrl: string, filename: string) {
+    try {
+      const response = await fetch(imageUrl, { mode: "cors" });
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "image.jpg";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // fallback: force download via anchor with download attribute
+      const a = document.createElement("a");
+      a.href = imageUrl;
+      a.download = filename || "image.jpg";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   }
+
 
   async function handleRowAddToCart(group: { color: string; variants: ProductVariant[] }) {
     const rowItems = group.variants
@@ -700,7 +701,8 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   }
 
   async function handleDownloadImages() {
-    window.open(`/api/v1/products/${product?.id}/download-images`, "_blank");
+    const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+    window.open(`${base}/api/v1/products/${product?.id}/download-images`, "_blank");
   }
 
   function handleDownloadFlyer() {
@@ -744,7 +746,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
           {/* ── LEFT: Image Gallery ─────────────────────────────────────── */}
           <div className="pdp-gallery-col" style={{ position: "sticky", top: "24px", alignSelf: "start" }}>
             {/* Main image */}
-            <div className="pdp-main-img" style={{ width: "100%", height: "480px", border: "1px solid #E2E2DE", display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", overflow: "hidden", position: "relative" }}>
+            <div className="pdp-main-img" style={{ width: "100%", height: "480px", border: "1px solid #E2E2DE", display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", overflow: "hidden" }}>
               {displayImages[activeImageIdx] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -754,15 +756,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                 />
               ) : (
                 <span style={{ fontSize: "80px", opacity: 0.1 }}>👕</span>
-              )}
-              {/* Logo overlay — top left */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/Af-apparel logo.png" alt="AF Blanks" className="pdp-overlay-logo" style={{ position: "absolute", top: "10px", left: "10px", width: "auto", objectFit: "contain", pointerEvents: "none" }} />
-              {/* Product code overlay — top right */}
-              {((product as any).product_code || (product as any).code) && (
-                <div className="pdp-overlay-code" style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(255,255,255,0.88)", border: "1px solid #E2E2DE", borderRadius: "4px", padding: "3px 9px", fontFamily: "'IBM Plex Mono', monospace", color: "#1B3A5C", fontWeight: 600, letterSpacing: "0.05em", pointerEvents: "none" }}>
-                  {(product as any).product_code || (product as any).code}
-                </div>
               )}
             </div>
 
@@ -961,7 +954,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
             {colorGroups.length > 0 && (
               <>
                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B6B6B", fontWeight: 600, marginBottom: "10px" }}>
-                  {selectedColor ? `Color: ${selectedColor}` : "Color"}
+                  Color
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "28px" }}>
                   {colorGroups.map(group => {
@@ -1233,12 +1226,11 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                       {group.images.length} image{group.images.length !== 1 ? "s" : ""}
                     </div>
                     <button
-                      onClick={() => handleDownloadAll(
-                        group.images.map((img, idx) => ({
-                          imageId: img.id,
-                          filename: `${product.slug}-${group.color ?? "image"}-${idx + 1}.jpg`,
-                        }))
-                      )}
+                      onClick={() => {
+                        const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+                        const q = group.color ? `?color=${encodeURIComponent(group.color)}` : "";
+                        window.open(`${base}/api/v1/products/${product.id}/download-images${q}`, "_blank");
+                      }}
                       style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1C3557", background: "none", border: "none", cursor: "pointer", padding: 0, display: "block" }}
                     >
                       Download All
@@ -1256,7 +1248,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                 {img.alt_text ?? `Image ${idx + 1}`}
                               </div>
                               <button
-                                onClick={() => handleDownload(img.id, `${product.slug}-${group.color ?? "image"}-${idx + 1}.jpg`)}
+                                onClick={() => handleDownload(imgSrc(img), `${product.slug}-${group.color ?? "image"}-${idx + 1}.jpg`)}
                                 style={{ fontSize: "10px", color: "#1C3557", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'DM Sans', sans-serif" }}
                               >
                                 Download

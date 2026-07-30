@@ -22,15 +22,17 @@ interface CategoryGridProps {
 }
 
 export default function CategoryGrid({ categories }: CategoryGridProps) {
-  // Prefer categories that actually have a photo uploaded — an empty
-  // placeholder tile looks broken, so a category without an image_url
-  // yields its slot to the next one (in sort_order) that has one.
+  // Show EVERY category that has a photo uploaded, in rows of 4 — so when the
+  // client adds a new collection (with an image) it appears here automatically,
+  // no code change needed. A category without an image_url is skipped (an empty
+  // placeholder tile looks broken). If none have images yet, fall back to all
+  // categories, then to the hardcoded defaults.
   const withImages = categories.filter(c => c.image_url);
   const items =
-    withImages.length >= 4
-      ? withImages.slice(0, 4)
+    withImages.length > 0
+      ? withImages
       : categories.length > 0
-        ? categories.slice(0, 4)
+        ? categories
         : fallbackCategories.map(c => ({ ...c, id: c.slug }));
 
   return (
