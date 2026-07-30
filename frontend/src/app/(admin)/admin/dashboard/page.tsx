@@ -34,6 +34,7 @@ interface DashboardState {
   recentApplications: Application[];
   dailyCounts: number[];
   conversionRate: number;
+  totalTaxCollected: number;
 }
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
@@ -184,6 +185,7 @@ export default function AdminDashboard() {
 
       if (analyticsRes.status === "fulfilled") {
         s.conversionRate = (analyticsRes.value as any)?.overview?.conversion_rate ?? 0;
+        s.totalTaxCollected = (analyticsRes.value as any)?.overview?.total_tax_collected ?? 0;
       }
 
       setState(s);
@@ -239,6 +241,13 @@ export default function AdminDashboard() {
       sub: `avg $${(state.avgOrderValue ?? 0).toFixed(0)}`,
     },
     { label: "Conversion Rate", value: `${(state.conversionRate ?? 0).toFixed(1)}%`, change: "", up: true, sub: "paid / total orders" },
+    {
+      label: "Tax Collected",
+      value: `$${(state.totalTaxCollected ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: "",
+      up: true,
+      sub: "synced to QuickBooks",
+    },
   ];
 
   return (
@@ -273,7 +282,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Stat Cards */}
-      <div className="admin-dash-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px", marginBottom: "24px" }}>
+      <div className="admin-dash-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "16px", marginBottom: "24px" }}>
         {statCards.map(stat => (
           <div key={stat.label} style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", padding: "20px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
