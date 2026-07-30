@@ -63,7 +63,7 @@ const COLOR_MAP: Record<string, string> = {
   "Dark Navy": "#0f1f3d", Indigo: "#3730a3", Cardinal: "#7b1520", Crimson: "#9f0712",
   "Carolina Blue": "#56a0d3", "Columbia Blue": "#9bc4e2", Silver: "#c0c0c0",
   "Ash Grey": "#b2b2b2", Ash: "#b2b2b2", Stone: "#a8a29e", Mocha: "#7c5c48",
-  Chocolate: "#5c3d2e", Caramel: "#b5651d", Camo: "#d5b695", "Oatmeal Heather": "#D6CFC7",
+  Chocolate: "#5c3d2e", Caramel: "#b5651d", Camo: "#78866b", "Oatmeal Heather": "#D6CFC7",
   "Sports Grey": "#C4C4C4",
   "Charcoal Heather": "#4A4A4A",
   "Texas Orange": "#BF5700",
@@ -228,7 +228,7 @@ export default function AdminProductEditPage() {
   // change automatically — only when the admin clicks "Update Price".
   const [targetMarginPct, setTargetMarginPct] = useState(40);
   const [minMarginPct, setMinMarginPct] = useState(15);
-  const [priceUpdating, setPriceUpdating] = useState<Record<string, boolean>>({});
+  const [colorPriceUpdating, setColorPriceUpdating] = useState<Record<string, boolean>>({});
   useEffect(() => {
     adminService.getSettings().then((s) => {
       const set = s as Record<string, unknown>;
@@ -383,30 +383,31 @@ export default function AdminProductEditPage() {
     await adminService.updateVariant(product.id, variantId, variantEdits[variantId]);
   }
 
-  // Merchant-approved price change — sets retail_price + syncs to QuickBooks.
-  // Only ever called on an explicit "Update Price" click; never automatic.
-  async function handleUpdatePrice(variantId: string, newPrice: number) {
+  // Merchant-approved price change for a WHOLE color (all its sizes) in one click.
+  // Runs sequentially to stay gentle on QuickBooks' rate limit; each variant syncs.
+  async function handleUpdateColorPrice(color: string, variants: ProductVariant[], newPrice: number) {
     if (!product || !(newPrice > 0)) return;
     const rounded = Math.round(newPrice * 100) / 100;
-    setPriceUpdating(prev => ({ ...prev, [variantId]: true }));
+    setColorPriceUpdating(prev => ({ ...prev, [color]: true }));
     try {
-      await adminService.updateVariantPrice(product.id, variantId, rounded);
+      for (const v of variants) {
+        if (Math.abs(Number(v.retail_price ?? 0) - rounded) < 0.01) continue; // already at target
+        await adminService.updateVariantPrice(product.id, v.id, rounded);
+      }
+      const ids = new Set(variants.map(v => v.id));
       setProduct(p => p ? {
         ...p,
-        variants: p.variants.map(v => v.id === variantId ? ({ ...v, retail_price: rounded } as unknown as ProductVariant) : v),
+        variants: p.variants.map(v => ids.has(v.id) ? ({ ...v, retail_price: rounded } as unknown as ProductVariant) : v),
       } : p);
-      // drop any pending inline edit for this price so the field reflects the new value
       setVariantEdits(prev => {
         const next = { ...prev };
-        if (next[variantId]) {
-          const copy = { ...next[variantId] };
-          delete copy.retail_price;
-          next[variantId] = copy;
+        for (const v of variants) {
+          if (next[v.id]) { const copy = { ...next[v.id] }; delete copy.retail_price; next[v.id] = copy; }
         }
         return next;
       });
     } finally {
-      setPriceUpdating(prev => ({ ...prev, [variantId]: false }));
+      setColorPriceUpdating(prev => ({ ...prev, [color]: false }));
     }
   }
 
@@ -1078,7 +1079,7 @@ export default function AdminProductEditPage() {
                 <div>
                   <span style={sectionTitle}>PRICING &amp; MARGIN</span>
                   <p style={{ fontSize: "12px", color: "#7A7880", margin: "4px 0 0" }}>
-                    Suggested prices are based on your latest purchase cost. Prices never change on their own. <strong>Update Price</strong> applies the suggested price and records it in the audit log; the inline <strong>Price</strong> field above lets you type any price. Both sync to QuickBooks.
+                    One row per colour — all its sizes together. Suggested prices are based on your latest purchase cost. Prices never change on their own. <strong>Update Price</strong> applies the suggested price to <strong>every size of that colour</strong> and records it in the audit log; the inline <strong>Price</strong> field above lets you set any single size. Both sync to QuickBooks.
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -1107,49 +1108,67 @@ export default function AdminProductEditPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                   <thead>
                     <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #E2E0DA" }}>
-                      {["Variant", "Last Cost", "Avg Cost (QB)", "Current Price", "Margin", "Suggested", ""].map(h => (
+                      {["Colour", "Last Cost", "Avg Cost (QB)", "Current Price", "Margin", "Suggested", ""].map(h => (
                         <th key={h} style={{ ...thStyle, whiteSpace: "nowrap" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedVariants.flatMap(group => group.variants.map(v => {
-                      const lastCost = Number(v.cost_per_item ?? 0);
-                      const avgCostRaw = (v as unknown as { avg_cost?: number | string | null }).avg_cost;
-                      const avgCost = avgCostRaw != null ? Number(avgCostRaw) : null;
-                      const price = Number(v.retail_price ?? 0);
-                      const costNotSet = !(lastCost > 0);
-                      const margin = grossMarginPct(price, lastCost);
-                      const suggested = suggestedPrice(lastCost);
-                      const belowCost = price > 0 && lastCost > 0 && price < lastCost;
-                      const belowMin = margin != null && lastCost > 0 && margin < minMarginPct;
-                      const marginColor = belowCost ? "#E8242A" : belowMin ? "#D97706" : "#059669";
-                      const canUpdate = suggested != null && Math.abs(suggested - price) >= 0.01;
+                    {groupedVariants.map(group => {
+                      const variants = group.variants;
+                      const fmtMoneyRange = (arr: number[]) => {
+                        const mn = Math.min(...arr), mx = Math.max(...arr);
+                        return mn === mx ? `$${mn.toFixed(2)}` : `$${mn.toFixed(2)}–$${mx.toFixed(2)}`;
+                      };
+                      // ── cost (per colour, normally uniform across sizes) ──
+                      const costs = variants.map(v => Number(v.cost_per_item ?? 0));
+                      const nonZeroCosts = costs.filter(c => c > 0);
+                      const repCost: number = nonZeroCosts[0] ?? 0;
+                      const costNotSet = !(repCost > 0);
+                      // ── avg cost (QB) ──
+                      const avgVals = variants
+                        .map(v => (v as unknown as { avg_cost?: number | string | null }).avg_cost)
+                        .filter((x): x is number | string => x != null)
+                        .map(Number);
+                      // ── current prices across sizes ──
+                      const prices = variants.map(v => Number(v.retail_price ?? 0));
+                      const firstPrice: number = prices[0] ?? 0;
+                      const priceUniform = prices.every(p => p === firstPrice);
+                      // ── margins + warnings across every size ──
+                      const margins = prices.map(p => grossMarginPct(p, repCost)).filter((m): m is number => m != null);
+                      const anyBelowCost = prices.some(p => p > 0 && repCost > 0 && p < repCost);
+                      const anyBelowMin = margins.some(m => repCost > 0 && m < minMarginPct);
+                      const marginColor = anyBelowCost ? "#E8242A" : anyBelowMin ? "#D97706" : "#059669";
+                      const suggested = suggestedPrice(repCost);
+                      const canUpdate = suggested != null && prices.some(p => Math.abs(suggested - p) >= 0.01);
+                      const updating = colorPriceUpdating[group.color];
                       return (
-                        <tr key={v.id} style={{ borderBottom: "1px solid #F4F3EF" }}>
+                        <tr key={group.color} style={{ borderBottom: "1px solid #F4F3EF" }}>
                           <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
-                            <span style={{ fontWeight: 600 }}>{v.color ?? "—"}</span>
-                            <span style={{ color: "#7A7880" }}> · {v.size ?? "—"}</span>
+                            <span style={{ fontWeight: 600 }}>{group.color}</span>
+                            <span style={{ color: "#B0ADBA", fontSize: "12px" }}> · {variants.length} {variants.length === 1 ? "size" : "sizes"}</span>
                           </td>
                           <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
                             {costNotSet
                               ? <span style={{ color: "#B0ADBA", fontStyle: "italic" }}>not set</span>
-                              : `$${lastCost.toFixed(2)}`}
+                              : fmtMoneyRange(nonZeroCosts)}
                           </td>
                           <td style={{ padding: "9px 12px", whiteSpace: "nowrap", color: "#7A7880" }}>
-                            {avgCost != null ? `$${avgCost.toFixed(2)}` : "—"}
+                            {avgVals.length ? fmtMoneyRange(avgVals) : "—"}
                           </td>
                           <td style={{ padding: "9px 12px", whiteSpace: "nowrap", fontWeight: 600 }}>
-                            ${price.toFixed(2)}
+                            {priceUniform ? `$${firstPrice.toFixed(2)}` : fmtMoneyRange(prices)}
                           </td>
                           <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
-                            {costNotSet || margin == null ? (
+                            {costNotSet || margins.length === 0 ? (
                               <span style={{ color: "#B0ADBA" }}>—</span>
                             ) : (
                               <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", color: marginColor, fontWeight: 700 }}>
-                                {margin.toFixed(0)}%
-                                {belowCost && <span title="Selling below purchase cost">🔴</span>}
-                                {!belowCost && belowMin && <span title={`Below minimum margin (${minMarginPct}%)`}>🟠</span>}
+                                {Math.min(...margins).toFixed(0) === Math.max(...margins).toFixed(0)
+                                  ? `${Math.min(...margins).toFixed(0)}%`
+                                  : `${Math.min(...margins).toFixed(0)}–${Math.max(...margins).toFixed(0)}%`}
+                                {anyBelowCost && <span title="A size is selling below purchase cost">🔴</span>}
+                                {!anyBelowCost && anyBelowMin && <span title={`A size is below minimum margin (${minMarginPct}%)`}>🟠</span>}
                               </span>
                             )}
                           </td>
@@ -1158,29 +1177,29 @@ export default function AdminProductEditPage() {
                           </td>
                           <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
                             <button
-                              onClick={() => suggested != null && handleUpdatePrice(v.id, suggested)}
-                              disabled={!canUpdate || priceUpdating[v.id]}
-                              title={canUpdate ? `Set price to $${suggested?.toFixed(2)} and sync to QuickBooks` : "Price already matches suggested"}
+                              onClick={() => suggested != null && handleUpdateColorPrice(group.color, variants, suggested)}
+                              disabled={!canUpdate || updating}
+                              title={canUpdate ? `Set all ${variants.length} sizes to $${suggested?.toFixed(2)} and sync to QuickBooks` : "All sizes already match suggested"}
                               style={{
                                 padding: "6px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 700,
                                 border: "none",
                                 background: canUpdate ? "#1A5CFF" : "#E2E0DA",
                                 color: "#fff",
-                                cursor: canUpdate && !priceUpdating[v.id] ? "pointer" : "not-allowed",
-                                opacity: priceUpdating[v.id] ? 0.6 : 1,
+                                cursor: canUpdate && !updating ? "pointer" : "not-allowed",
+                                opacity: updating ? 0.6 : 1,
                               }}
                             >
-                              {priceUpdating[v.id] ? "Updating…" : "Update Price"}
+                              {updating ? "Updating…" : "Update Price"}
                             </button>
                           </td>
                         </tr>
                       );
-                    }))}
+                    })}
                   </tbody>
                 </table>
               </div>
               <p style={{ fontSize: "11px", color: "#aaa", marginTop: "10px" }}>
-                🔴 selling below cost · 🟠 margin below your minimum · Avg Cost (QB) is the weighted average from received purchase orders.
+                One row per colour (all sizes together). 🔴 a size selling below cost · 🟠 a size below your minimum margin · ranges (e.g. $5.00–$6.00) mean sizes differ · Avg Cost (QB) is the weighted average from received purchase orders. <strong>Update Price</strong> applies the suggested price to every size of that colour at once.
               </p>
             </div>
           )}
@@ -1244,26 +1263,17 @@ export default function AdminProductEditPage() {
             </div>
             <div style={{ marginBottom: "14px" }}>
               <label style={labelStyle}>Gender</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
-                {[{ value: "unisex", label: "Unisex" }, { value: "mens", label: "Men's" }, { value: "womens", label: "Women's" }, { value: "youth", label: "Youth" }].map(opt => {
-                  const current = ((product as any).gender ?? "").split(",").filter(Boolean) as string[];
-                  const checked = current.includes(opt.value);
-                  return (
-                    <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "#2A2830", userSelect: "none" }}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          const next = checked ? current.filter(g => g !== opt.value) : [...current, opt.value];
-                          setProduct(p => p ? { ...p, gender: next.join(",") } as any : p);
-                        }}
-                        style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
-                      />
-                      {opt.label}
-                    </label>
-                  );
-                })}
-              </div>
+              <select
+                value={(product as any).gender ?? ""}
+                onChange={e => setProduct(p => p ? { ...p, gender: e.target.value } as any : p)}
+                style={{ ...inputStyle, background: "#fff" }}
+              >
+                <option value="">Select gender…</option>
+                <option value="mens">Men's</option>
+                <option value="womens">Women's</option>
+                <option value="youth">Youth</option>
+                <option value="unisex">Unisex</option>
+              </select>
             </div>
 
             <div style={{ marginBottom: "14px" }}>
@@ -1299,29 +1309,19 @@ export default function AdminProductEditPage() {
 
             <div style={{ marginBottom: "14px" }}>
               <label style={labelStyle}>Category</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingTop: "4px" }}>
-                {categories.map(cat => {
-                  const checked = (product.categories ?? []).some(c => c.id === cat.id);
-                  return (
-                    <label key={cat.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", color: "#2A2830", userSelect: "none" }}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => {
-                          setProduct(p => {
-                            if (!p) return p;
-                            const current = p.categories ?? [];
-                            const next = checked ? current.filter(c => c.id !== cat.id) : [...current, cat];
-                            return { ...p, categories: next };
-                          });
-                        }}
-                        style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
-                      />
-                      {cat.name}
-                    </label>
-                  );
-                })}
-              </div>
+              <select
+                value={product.categories?.[0]?.id ?? ""}
+                onChange={e => {
+                  const cat = categories.find(c => c.id === e.target.value);
+                  setProduct(p => p ? { ...p, categories: cat ? [cat] : [] } : p);
+                }}
+                style={{ ...inputStyle, background: "#fff" }}
+              >
+                <option value="">Select category…</option>
+                {categories.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
             </div>
 
             <div>
