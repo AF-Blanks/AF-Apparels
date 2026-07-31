@@ -291,7 +291,7 @@ export const adminService = {
   async importCompaniesCsv(file: File) {
     const form = new FormData();
     form.append("file", file);
-    return apiClient.postForm<{ created: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] }>(
+    return apiClient.postForm<{ created: number; updated: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] }>(
       "/api/v1/admin/companies/import-csv", form
     );
   },

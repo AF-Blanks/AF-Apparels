@@ -240,7 +240,7 @@ export default function AdminCustomersPage() {
   const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([]);
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
-  const [importResult, setImportResult] = useState<{ created: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] } | null>(null);
+  const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] } | null>(null);
   const [pwSetupLoading, setPwSetupLoading] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 50;
@@ -317,7 +317,7 @@ export default function AdminCustomersPage() {
       setImportResult(result);
       load();
     } catch (err: unknown) {
-      setImportResult({ created: 0, skipped_duplicate: 0, skipped_no_email: 0, errors: [err instanceof Error ? err.message : "Import failed"] });
+      setImportResult({ created: 0, updated: 0, skipped_duplicate: 0, skipped_no_email: 0, errors: [err instanceof Error ? err.message : "Import failed"] });
     } finally {
       setImportLoading(false);
       if (importInputRef.current) importInputRef.current.value = "";
@@ -381,7 +381,7 @@ export default function AdminCustomersPage() {
       {importResult && (
         <div style={{ background: importResult.errors.length ? "rgba(232,36,42,.06)" : "rgba(5,150,105,.06)", border: `1px solid ${importResult.errors.length ? "rgba(232,36,42,.2)" : "rgba(5,150,105,.2)"}`, borderRadius: "8px", padding: "14px 16px", marginBottom: "20px", fontSize: "13px" }}>
           <div style={{ fontWeight: 700, marginBottom: "4px", color: "#2A2830" }}>
-            Import complete — {importResult.created} created, {importResult.skipped_duplicate} skipped (already exist), {importResult.skipped_no_email} skipped (no email)
+            Import complete — {importResult.created} created, {importResult.updated} updated (tier &amp; tax-exempt), {importResult.skipped_no_email} skipped (no email/id)
           </div>
           {importResult.errors.length > 0 && (
             <ul style={{ margin: "6px 0 0", paddingLeft: "18px", color: "#E8242A" }}>
