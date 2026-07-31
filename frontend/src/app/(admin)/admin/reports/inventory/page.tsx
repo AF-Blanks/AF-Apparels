@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { adminService } from "@/services/admin.service";
 
@@ -23,6 +23,29 @@ interface InventoryReport {
   low_stock: InventoryItem[];
 }
 
+// Known sizes (longest-match first for the trailing-token split)
+const SIZE_TOKENS = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "XXL", "XXXL"];
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "XXL", "XXXL", "—"];
+
+// "Charcoal Heather 2XL" → { color: "Charcoal Heather", size: "2XL" }
+function splitVariant(name: string): { color: string; size: string } {
+  const parts = (name || "").trim().split(/\s+/);
+  const last = (parts[parts.length - 1] || "").toUpperCase();
+  if (parts.length > 1 && SIZE_TOKENS.includes(last)) {
+    return { color: parts.slice(0, -1).join(" ") || "—", size: last };
+  }
+  return { color: name || "—", size: "—" };
+}
+
+interface ProductGroup {
+  key: string;
+  code: string | null;
+  name: string;
+  colors: string[];
+  sizes: string[];
+  cells: Record<string, InventoryItem>; // `${color}|${size}` → item
+}
+
 export default function InventoryReportPage() {
   const [data, setData] = useState<InventoryReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,7 +56,7 @@ export default function InventoryReportPage() {
     setLoading(true);
     apiClient
       .get(`/api/v1/admin/reports/inventory?low_stock_only=${lowStockOnly}`)
-      .then((r: any) => setData(r))
+      .then((r: unknown) => setData(r as InventoryReport))
       .finally(() => setLoading(false));
   }, [lowStockOnly]);
 
@@ -41,14 +64,43 @@ export default function InventoryReportPage() {
     adminService.exportInventoryCsv().catch(() => {});
   }
 
-  const filtered =
-    data?.items.filter(
-      (i) =>
-        !search ||
-        i.sku.toLowerCase().includes(search.toLowerCase()) ||
-        i.product_name.toLowerCase().includes(search.toLowerCase()) ||
-        (i.product_code ?? "").toLowerCase().includes(search.toLowerCase())
-    ) ?? [];
+  const filtered = useMemo(
+    () =>
+      data?.items.filter(
+        (i) =>
+          !search ||
+          i.sku.toLowerCase().includes(search.toLowerCase()) ||
+          i.product_name.toLowerCase().includes(search.toLowerCase()) ||
+          (i.product_code ?? "").toLowerCase().includes(search.toLowerCase())
+      ) ?? [],
+    [data, search]
+  );
+
+  // Group into product → colour × size matrix
+  const groups = useMemo<ProductGroup[]>(() => {
+    const map: Record<string, ProductGroup> = {};
+    for (const it of filtered) {
+      const { color, size } = splitVariant(it.variant_name);
+      const key = `${it.product_code ?? ""}|${it.product_name}`;
+      if (!map[key]) {
+        map[key] = { key, code: it.product_code, name: it.product_name, colors: [], sizes: [], cells: {} };
+      }
+      const g = map[key];
+      if (!g.colors.includes(color)) g.colors.push(color);
+      if (!g.sizes.includes(size)) g.sizes.push(size);
+      g.cells[`${color}|${size}`] = it;
+    }
+    const list = Object.values(map);
+    for (const g of list) {
+      g.sizes.sort((a, b) => {
+        const ai = SIZE_ORDER.indexOf(a), bi = SIZE_ORDER.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+      g.colors.sort((a, b) => a.localeCompare(b));
+    }
+    list.sort((a, b) => (a.code ?? a.name).localeCompare(b.code ?? b.name));
+    return list;
+  }, [filtered]);
 
   return (
     <div className="space-y-6">
@@ -56,7 +108,7 @@ export default function InventoryReportPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Inventory Report</h1>
-          <p className="text-sm text-gray-500 mt-1">Stock levels and low-stock alerts</p>
+          <p className="text-sm text-gray-500 mt-1">Stock by product — colour × size grid (available units)</p>
         </div>
         <button
           onClick={handleExport}
@@ -83,7 +135,7 @@ export default function InventoryReportPage() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-4 flex-wrap">
+      <div className="flex gap-4 flex-wrap items-center">
         <input
           type="text"
           placeholder="Search SKU, product code, or name..."
@@ -92,71 +144,66 @@ export default function InventoryReportPage() {
           className="border border-gray-300 rounded-md px-3 py-2 text-sm w-64"
         />
         <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={lowStockOnly}
-            onChange={(e) => setLowStockOnly(e.target.checked)}
-          />
+          <input type="checkbox" checked={lowStockOnly} onChange={(e) => setLowStockOnly(e.target.checked)} />
           Low stock only
         </label>
+        <span className="text-xs text-gray-400">Red = low stock · numbers are available units</span>
       </div>
 
-      {/* Table */}
+      {/* Matrix per product */}
       {loading ? (
         <div className="text-center py-12 text-gray-500">Loading...</div>
+      ) : groups.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-lg py-12 text-center text-gray-400">
+          No inventory data found.
+        </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-lg">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                <tr>
-                  <th className="px-6 py-3 text-left">SKU</th>
-                  <th className="px-6 py-3 text-left">Product</th>
-                  <th className="px-6 py-3 text-left">Variant</th>
-                  <th className="px-6 py-3 text-right">On Hand</th>
-                  <th className="px-6 py-3 text-right">Reserved</th>
-                  <th className="px-6 py-3 text-right">Available</th>
-                  <th className="px-6 py-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-400">
-                      No inventory data found.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((item, i) => (
-                    <tr key={i} className={`hover:bg-gray-50 ${item.is_low_stock ? "bg-red-50" : ""}`}>
-                      <td className="px-6 py-3 font-mono text-xs">{item.sku}</td>
-                      <td className="px-6 py-3 font-medium">
-                        {item.product_code && (
-                          <span className="text-gray-400 font-mono text-xs mr-1.5">{item.product_code}</span>
-                        )}
-                        {item.product_name}
-                      </td>
-                      <td className="px-6 py-3 text-gray-500">{item.variant_name}</td>
-                      <td className="px-6 py-3 text-right">{item.quantity_on_hand}</td>
-                      <td className="px-6 py-3 text-right text-orange-600">{item.quantity_reserved}</td>
-                      <td className="px-6 py-3 text-right font-semibold">{item.available}</td>
-                      <td className="px-6 py-3 text-center">
-                        {item.is_low_stock ? (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
-                            Low Stock
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                            OK
-                          </span>
-                        )}
-                      </td>
+        <div className="space-y-5">
+          {groups.map((g) => (
+            <div key={g.key} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 flex items-baseline gap-2">
+                {g.code && <span className="font-mono text-xs text-gray-400">{g.code}</span>}
+                <span className="font-semibold text-gray-900">{g.name}</span>
+                <span className="text-xs text-gray-400">
+                  · {g.colors.length} colour{g.colors.length !== 1 ? "s" : ""} × {g.sizes.length} size{g.sizes.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                    <tr>
+                      <th className="px-4 py-2 text-left sticky left-0 bg-gray-50">Colour</th>
+                      {g.sizes.map((s) => (
+                        <th key={s} className="px-3 py-2 text-center font-semibold tabular-nums">{s}</th>
+                      ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {g.colors.map((color) => (
+                      <tr key={color} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white">{color}</td>
+                        {g.sizes.map((size) => {
+                          const it = g.cells[`${color}|${size}`];
+                          if (!it) return <td key={size} className="px-3 py-2 text-center text-gray-200">·</td>;
+                          return (
+                            <td
+                              key={size}
+                              title={`On hand ${it.quantity_on_hand} · Reserved ${it.quantity_reserved} · Available ${it.available}`}
+                              className={`px-3 py-2 text-center tabular-nums font-semibold ${
+                                it.is_low_stock ? "bg-red-50 text-red-700" : "text-gray-800"
+                              }`}
+                            >
+                              {it.available}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
