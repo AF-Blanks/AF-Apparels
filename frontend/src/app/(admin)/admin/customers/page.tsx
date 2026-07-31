@@ -437,7 +437,8 @@ export default function AdminCustomersPage() {
 
       {/* Table */}
       <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "760px" }}>
           <thead>
             <tr style={{ background: "#F4F3EF", borderBottom: "2px solid #E2E0DA" }}>
               <th style={thStyle}>Company</th>
@@ -507,6 +508,7 @@ export default function AdminCustomersPage() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Pagination */}
