@@ -296,6 +296,14 @@ export const adminService = {
     );
   },
 
+  async getPasswordSetupCount() {
+    return apiClient.get<{ count: number }>("/api/v1/admin/customers/password-setup-count");
+  },
+
+  async sendPasswordSetupToAll() {
+    return apiClient.post<{ queued: number }>("/api/v1/admin/customers/send-password-setup", {});
+  },
+
   // Orders
   async listOrders(params?: { q?: string; status?: string; page?: number | string; company_id?: string; page_size?: number; date_from?: string; date_to?: string; guest_only?: string }) {
     const query = new URLSearchParams();

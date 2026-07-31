@@ -241,6 +241,7 @@ export default function AdminCustomersPage() {
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] } | null>(null);
+  const [pwSetupLoading, setPwSetupLoading] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 50;
 
@@ -286,6 +287,26 @@ export default function AdminCustomersPage() {
   async function handleExport() {
     setExportLoading(true);
     try { await adminService.exportCompaniesCsv(); } catch { /* ignore */ } finally { setExportLoading(false); }
+  }
+
+  // Bulk "Set Your Password" invite — queues one email per customer (rate-safe).
+  async function handleSendPasswordSetup() {
+    try {
+      const { count } = await adminService.getPasswordSetupCount();
+      if (!count) { alert("No active customers with an email to send to."); return; }
+      if (!confirm(
+        `Send a "Set Your Password" email to all ${count} customers now?\n\n` +
+        `Each customer gets their own secure link (valid 14 days) to create a password and log in. ` +
+        `Emails are sent gradually in the background.`
+      )) return;
+      setPwSetupLoading(true);
+      const res = await adminService.sendPasswordSetupToAll();
+      alert(`Done ✅  A "Set Your Password" email has been queued for ${res.queued} customers. They'll receive it shortly.`);
+    } catch (err) {
+      alert(`Failed to send: ${err instanceof Error ? err.message : "Server error"}`);
+    } finally {
+      setPwSetupLoading(false);
+    }
   }
 
   async function handleImportFile(file: File) {
@@ -337,6 +358,12 @@ export default function AdminCustomersPage() {
             onClick={() => importInputRef.current?.click()} disabled={importLoading}
             style={{ padding: "10px 18px", border: "1px solid #E2E0DA", borderRadius: "8px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: importLoading ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: importLoading ? .6 : 1 }}>
             {importLoading ? "Importing…" : "Import Customers"}
+          </button>
+          <button
+            onClick={handleSendPasswordSetup} disabled={pwSetupLoading}
+            title="Email every customer a secure link to set their password"
+            style={{ padding: "10px 18px", border: "1px solid #1B3A5C", borderRadius: "8px", background: "#1B3A5C", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: pwSetupLoading ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: pwSetupLoading ? .6 : 1 }}>
+            {pwSetupLoading ? "Sending…" : "✉ Send Password Setup"}
           </button>
           <button
             onClick={handleExport} disabled={exportLoading}
