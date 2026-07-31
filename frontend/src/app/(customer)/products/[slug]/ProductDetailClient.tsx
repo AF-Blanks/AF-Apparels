@@ -627,29 +627,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     else setAssetMsg("No style sheet available for this product.");
   }
 
-  async function handleDownload(imageUrl: string, filename: string) {
-    try {
-      const response = await fetch(imageUrl, { mode: "cors" });
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename || "image.jpg";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      // fallback: force download via anchor with download attribute
-      const a = document.createElement("a");
-      a.href = imageUrl;
-      a.download = filename || "image.jpg";
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-  }
 
 
   async function handleRowAddToCart(group: { color: string; variants: ProductVariant[] }) {
@@ -1248,7 +1225,14 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                 {img.alt_text ?? `Image ${idx + 1}`}
                               </div>
                               <button
-                                onClick={() => handleDownload(imgSrc(img), `${product.slug}-${group.color ?? "image"}-${idx + 1}.jpg`)}
+                                onClick={() => {
+                                  const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+                                  const a = document.createElement("a");
+                                  a.href = `${base}/api/v1/products/${product.id}/download-image/${img.id}`;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                }}
                                 style={{ fontSize: "10px", color: "#1C3557", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'DM Sans', sans-serif" }}
                               >
                                 Download

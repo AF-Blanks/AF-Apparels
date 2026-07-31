@@ -1308,20 +1308,37 @@ export default function AdminProductEditPage() {
             </div>
 
             <div style={{ marginBottom: "14px" }}>
-              <label style={labelStyle}>Category</label>
-              <select
-                value={product.categories?.[0]?.id ?? ""}
-                onChange={e => {
-                  const cat = categories.find(c => c.id === e.target.value);
-                  setProduct(p => p ? { ...p, categories: cat ? [cat] : [] } : p);
-                }}
-                style={{ ...inputStyle, background: "#fff" }}
-              >
-                <option value="">Select category…</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
+              <label style={labelStyle}>Collections / Categories</label>
+              <div style={{ border: "1.5px solid #E2E0DA", borderRadius: "8px", maxHeight: "190px", overflowY: "auto", background: "#fff" }}>
+                {categories.length === 0 ? (
+                  <div style={{ padding: "10px 12px", fontSize: "12px", color: "#aaa" }}>No collections yet</div>
+                ) : categories.map((cat, ci) => {
+                  const checked = (product.categories ?? []).some(c => c.id === cat.id);
+                  return (
+                    <label key={cat.id} style={{ display: "flex", alignItems: "center", gap: "9px", padding: "8px 12px", fontSize: "13px", cursor: "pointer", borderBottom: ci < categories.length - 1 ? "1px solid #F4F3EF" : "none", background: checked ? "rgba(26,92,255,.04)" : "transparent" }}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={e => {
+                          setProduct(p => {
+                            if (!p) return p;
+                            const current = p.categories ?? [];
+                            const next = e.target.checked
+                              ? [...current, cat]
+                              : current.filter(c => c.id !== cat.id);
+                            return { ...p, categories: next };
+                          });
+                        }}
+                        style={{ accentColor: "#1A5CFF", width: "15px", height: "15px", cursor: "pointer" }}
+                      />
+                      <span style={{ color: checked ? "#1A5CFF" : "#2A2830", fontWeight: checked ? 600 : 400 }}>{cat.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: "11px", color: "#7A7880", marginTop: "5px" }}>
+                Tick every collection this product should appear in — a product can be in <strong>multiple</strong> collections.
+              </p>
             </div>
 
             <div>
