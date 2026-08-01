@@ -672,10 +672,10 @@ export default function AdminProductEditPage() {
       </div>
 
       {/* 2-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "16px", alignItems: "start" }}>
+      <div className="product-edit-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: "16px", alignItems: "start" }}>
 
         {/* ── LEFT COLUMN ────────────────────────────────────────────────── */}
-        <div>
+        <div style={{ minWidth: 0 }}>
 
           {/* Title & Description */}
           <div style={sectionCard}>
@@ -1689,6 +1689,13 @@ export default function AdminProductEditPage() {
           </div>
         );
       })()}
+
+      {/* On narrower screens the 340px sidebar would overflow — stack it below. */}
+      <style jsx global>{`
+        @media (max-width: 1024px) {
+          .product-edit-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

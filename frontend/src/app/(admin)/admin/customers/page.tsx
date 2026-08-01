@@ -32,8 +32,9 @@ const STATUS_BADGE: Record<string, { bg: string; color: string }> = {
 
 // ── Add Customer Modal ─────────────────────────────────────────────────────────
 
-function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
+function AddCustomerModal({ pricingTiers, discountGroups, onClose, onSuccess }: {
   pricingTiers: PricingTier[];
+  discountGroups: { id: string; title: string; customer_tag: string | null }[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -43,7 +44,7 @@ function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
     address_line1: "", city: "", state_province: "", postal_code: "", country: "US",
     contact_first_name: "", contact_last_name: "",
     contact_email: "", contact_phone: "",
-    pricing_tier_id: "", admin_notes: "",
+    pricing_tier_id: "", customer_tag: "", admin_notes: "",
   });
   const [taxExempt, setTaxExempt] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,6 +74,7 @@ function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
         contact_email: form.contact_email || undefined,
         contact_phone: form.contact_phone || undefined,
         pricing_tier_id: form.pricing_tier_id || undefined,
+        tags: form.customer_tag ? [form.customer_tag] : undefined,
         admin_notes: form.admin_notes || undefined,
         tax_exempt: taxExempt,
       });
@@ -148,12 +150,23 @@ function AddCustomerModal({ pricingTiers, onClose, onSuccess }: {
               <input style={inp} value={form.postal_code} onChange={e => set("postal_code", e.target.value)} />
             </div>
             <div>
-              <label style={lbl}>Pricing Tier</label>
+              <label style={lbl}>Pricing Tier (flat %)</label>
               <select style={inp} value={form.pricing_tier_id} onChange={e => set("pricing_tier_id", e.target.value)}>
                 <option value="">None</option>
                 {pricingTiers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
+          </div>
+
+          <div style={{ marginTop: "14px" }}>
+            <label style={lbl}>Customer Tier (discount group)</label>
+            <select style={inp} value={form.customer_tag} onChange={e => set("customer_tag", e.target.value)}>
+              <option value="">None</option>
+              {discountGroups.map(g => (
+                <option key={g.id} value={g.customer_tag ?? ""}>{g.title}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Your tiers (Tier-1…5, Stephen-5, RAJ-6) — sets the customer&apos;s per-variant pricing.</div>
           </div>
 
           <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#7A7880", marginTop: "20px", marginBottom: "12px" }}>Contact Person (optional)</div>
@@ -238,6 +251,7 @@ export default function AdminCustomersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [pricingTiers, setPricingTiers] = useState<PricingTier[]>([]);
+  const [discountGroups, setDiscountGroups] = useState<{ id: string; title: string; customer_tag: string | null }[]>([]);
   const [exportLoading, setExportLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] } | null>(null);
@@ -265,6 +279,9 @@ export default function AdminCustomersPage() {
 
   useEffect(() => {
     adminService.listPricingTiers().then(t => setPricingTiers(t as PricingTier[])).catch(() => {});
+    adminService.listDiscountGroups()
+      .then(g => setDiscountGroups((g as any[]).map(x => ({ id: x.id, title: x.title, customer_tag: x.customer_tag ?? null }))))
+      .catch(() => {});
   }, []);
 
   const sorted = useMemo(() => {
@@ -335,6 +352,7 @@ export default function AdminCustomersPage() {
       {showAddModal && (
         <AddCustomerModal
           pricingTiers={pricingTiers}
+          discountGroups={discountGroups}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => { setShowAddModal(false); load(); }}
         />

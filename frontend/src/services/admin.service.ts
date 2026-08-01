@@ -280,6 +280,7 @@ export const adminService = {
     shipping_tier_id?: string;
     admin_notes?: string;
     tax_exempt?: boolean;
+    tags?: string[];
   }) {
     return apiClient.post("/api/v1/admin/companies", data);
   },
