@@ -30,6 +30,13 @@ function productLabel(name: string, code: string | null) {
   return code ? `${name} (${code})` : name;
 }
 
+// Size column order — small first, then up (matches the ordering grid).
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"];
+function sizeRank(s: string): number {
+  const i = SIZE_ORDER.indexOf((s || "").toUpperCase().trim());
+  return i === -1 ? 900 : i;
+}
+
 export default function InventoryListingPage() {
   const { isAuthenticated, isLoading } = useAuthStore();
   const hasLoaded = useRef(false);
@@ -45,6 +52,7 @@ export default function InventoryListingPage() {
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [initLoading, setInitLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // Load filter options on mount — do NOT load items
   useEffect(() => {
@@ -116,17 +124,29 @@ export default function InventoryListingPage() {
     URL.revokeObjectURL(url);
   }
 
-  // Group items by product_id
-  const grouped = items.reduce(
+  // Build a color × size matrix per product (sizes as columns, colors as rows).
+  // Quantities are summed across warehouses for each color+size cell — same
+  // shape as the ordering grid so it reads the way customers place orders.
+  const productMatrix = items.reduce(
     (acc, item) => {
-      if (!acc[item.product_id]) {
-        acc[item.product_id] = { product_name: item.product_name, product_code: item.product_code, variants: [] };
+      let p = acc[item.product_id];
+      if (!p) {
+        p = { product_name: item.product_name, product_code: item.product_code, sizes: new Set<string>(), colors: [], cell: {} };
+        acc[item.product_id] = p;
       }
-      acc[item.product_id]!.variants.push(item);
+      p.sizes.add(item.size);
+      if (!p.cell[item.color]) {
+        p.cell[item.color] = {};
+        p.colors.push(item.color);
+      }
+      p.cell[item.color]![item.size] = (p.cell[item.color]![item.size] ?? 0) + item.available;
       return acc;
     },
-    {} as Record<string, { product_name: string; product_code: string | null; variants: InventoryItem[] }>
+    {} as Record<string, { product_name: string; product_code: string | null; sizes: Set<string>; colors: string[]; cell: Record<string, Record<string, number>> }>
   );
+
+  const cellColor = (n: number) =>
+    n === 0 ? "text-red-500" : n < 10 ? "text-orange-500" : "text-gray-900";
 
   if (initLoading) return <div className="py-12 text-center text-gray-400">Loading…</div>;
 
@@ -246,88 +266,87 @@ export default function InventoryListingPage() {
         </div>
       )}
 
-      {/* Results table */}
+      {/* Results — one color × size matrix per product (same shape as ordering) */}
       {generated && items.length > 0 && (
-        <div
-          className="bg-white border border-gray-200 rounded-lg overflow-hidden"
-          id="print-area"
-        >
+        <div id="print-area" className="space-y-4">
           {/* Print-only header */}
-          <div className="hidden print:block px-5 py-4 border-b">
+          <div className="hidden print:block mb-2">
             <h2 className="text-lg font-bold">AF Apparels — Inventory Listing Report</h2>
-            <p className="text-sm text-gray-500">
-              Generated: {new Date().toLocaleDateString()}
-            </p>
+            <p className="text-sm text-gray-500">Generated: {new Date().toLocaleDateString()}</p>
           </div>
 
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: "480px" }}>
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Style</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Color</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Size</th>
-                <th className="text-right px-4 py-3 text-gray-600 font-medium text-xs uppercase">Available</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Warehouse</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(grouped).map(([productId, group]) => (
-                <React.Fragment key={productId}>
-                  {/* Product header row */}
-                  <tr className="bg-blue-50 border-b border-blue-100">
-                    <td colSpan={5} className="px-4 py-2">
-                      <span className="font-semibold text-blue-800 text-sm">
-                        {productLabel(group.product_name, group.product_code)}
-                      </span>
-                    </td>
-                  </tr>
+          {Object.entries(productMatrix).map(([productId, p]) => {
+            const orderedSizes = [...p.sizes].sort(
+              (a, b) => sizeRank(a) - sizeRank(b) || a.localeCompare(b)
+            );
+            const productTotal = p.colors.reduce(
+              (sum, c) => sum + orderedSizes.reduce((s, sz) => s + (p.cell[c]?.[sz] ?? 0), 0),
+              0
+            );
+            const isCollapsed = collapsed[productId];
+            return (
+              <div key={productId} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                {/* Product header — click to collapse/expand */}
+                <button
+                  onClick={() => setCollapsed((prev) => ({ ...prev, [productId]: !prev[productId] }))}
+                  className="w-full flex items-center justify-between px-5 py-3 bg-blue-50 border-b border-blue-100 hover:bg-blue-100 transition-colors text-left"
+                >
+                  <span className="font-semibold text-blue-800 text-sm flex items-center gap-2">
+                    <span className="text-blue-400 text-[10px]">{isCollapsed ? "▶" : "▼"}</span>
+                    {productLabel(p.product_name, p.product_code)}
+                  </span>
+                  <span className="text-xs text-gray-500 whitespace-nowrap ml-3">
+                    {p.colors.length} {p.colors.length === 1 ? "color" : "colors"} · {productTotal.toLocaleString()} units
+                  </span>
+                </button>
 
-                  {/* Variant rows */}
-                  {group.variants.map((item, idx) => (
-                    <tr
-                      key={`${item.variant_id}-${item.warehouse_id}-${idx}`}
-                      className={`border-b border-gray-100 hover:bg-blue-50 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                        }`}
-                    >
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.color}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.size}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${item.available === 0
-                        ? "text-red-500"
-                        : item.available < 10
-                          ? "text-orange-500"
-                          : "text-gray-900"
-                        }`}>
-                        {item.available.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2.5 text-gray-500 text-xs">{item.warehouse_name}</td>
-                    </tr>
-                  ))}
+                {!isCollapsed && (
+                  <div className="overflow-x-auto">
+                    <table className="text-sm" style={{ minWidth: `${160 + orderedSizes.length * 60}px`, width: "100%" }}>
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 text-gray-600 font-medium text-xs uppercase">Color</th>
+                          {orderedSizes.map((sz) => (
+                            <th key={sz} className="text-center px-3 py-2.5 text-gray-600 font-medium text-xs uppercase">{sz}</th>
+                          ))}
+                          <th className="text-center px-3 py-2.5 text-gray-600 font-bold text-xs uppercase">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {p.colors.map((color, idx) => {
+                          const rowTotal = orderedSizes.reduce((s, sz) => s + (p.cell[color]?.[sz] ?? 0), 0);
+                          return (
+                            <tr key={color} className={`border-b border-gray-100 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                              <td className="px-4 py-2 text-gray-700 font-medium whitespace-nowrap">{color}</td>
+                              {orderedSizes.map((sz) => {
+                                const qty = p.cell[color]?.[sz];
+                                return (
+                                  <td
+                                    key={sz}
+                                    className={`px-3 py-2 text-center font-semibold ${qty === undefined ? "text-gray-300" : cellColor(qty)}`}
+                                  >
+                                    {qty === undefined ? "—" : qty.toLocaleString()}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-3 py-2 text-center font-bold text-gray-800 bg-gray-50">{rowTotal.toLocaleString()}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
-                  {/* Product subtotal */}
-                  <tr className="bg-gray-100 border-b border-gray-200">
-                    <td colSpan={3} className="px-4 py-2 text-xs text-gray-500 font-medium">
-                      Subtotal — {group.product_name}
-                    </td>
-                    <td className="px-4 py-2 text-right text-xs font-bold text-gray-700">
-                      {group.variants.reduce((sum, v) => sum + v.available, 0).toLocaleString()}
-                    </td>
-                    <td />
-                  </tr>
-                </React.Fragment>
-              ))}
-
-              {/* Grand total */}
-              <tr className="bg-gray-800">
-                <td colSpan={3} className="px-4 py-3 text-white font-bold text-sm">TOTAL</td>
-                <td className="px-4 py-3 text-right text-white font-bold text-sm">
-                  {items.reduce((sum, i) => sum + i.available, 0).toLocaleString()}
-                </td>
-                <td />
-              </tr>
-            </tbody>
-          </table>
+          {/* Grand total */}
+          <div className="bg-gray-800 rounded-lg px-5 py-3 flex justify-between items-center">
+            <span className="text-white font-bold text-sm">TOTAL AVAILABLE</span>
+            <span className="text-white font-bold text-sm">
+              {items.reduce((sum, i) => sum + i.available, 0).toLocaleString()} units
+            </span>
           </div>
         </div>
       )}

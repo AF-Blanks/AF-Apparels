@@ -104,20 +104,21 @@ export default function EmailFlyerPage() {
   }
 
   const previewHtml = `
-    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;border:1px solid #E2E0DA;border-radius:8px;overflow:hidden">
-      <div style="background:#080808;padding:20px;text-align:center">
-        <span style="font-size:28px;font-weight:900;color:#1A5CFF">A</span>
-        <span style="font-size:28px;font-weight:900;color:#E8242A">F</span>
-        <span style="color:#fff;font-size:12px;margin-left:6px;letter-spacing:.1em">APPARELS</span>
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #E2E0DA;border-radius:8px;overflow:hidden">
+      <div style="background:#fff;padding:20px;text-align:center;border-bottom:3px solid #E8242A">
+        <span style="font-size:26px;font-weight:900;color:#1B3A5C;letter-spacing:-.5px">AF</span>
+        <span style="color:#1B3A5C;font-size:12px;margin-left:6px;letter-spacing:.18em;text-transform:uppercase;font-weight:600">APPARELS</span>
       </div>
-      <div style="padding:24px;background:#fff">
-        <h2 style="margin:0 0 8px;color:#2A2830;font-size:18px">${subject || "(no subject)"}</h2>
-        ${fromEmail ? `<p style="font-size:12px;color:#7A7880;margin:0 0 12px">Reply to: ${fromEmail}</p>` : ""}
-        <hr style="border:none;border-top:1px solid #E2E0DA;margin:12px 0">
-        ${message ? `<p style="color:#374151;font-size:14px;white-space:pre-line;margin:0 0 16px">${message}</p>` : ""}
-        <p style="color:#374151;font-size:14px;margin:0 0 16px">Please find the product flyer for <strong>${product.name}</strong> below:</p>
-        <p><a href="${product.flyerUrl ?? "#"}" style="background:#1A5CFF;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:700;display:inline-block">View / Download Flyer (PDF)</a></p>
-        <p style="color:#7A7880;font-size:11px;margin:20px 0 0">AF Apparels Wholesale · af-apparel.com</p>
+      <div style="padding:28px;background:#fff">
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#E8242A;margin:0 0 6px">Product Flyer</p>
+        <h2 style="margin:0 0 16px;color:#1B3A5C;font-size:22px;font-weight:800">${product.name}</h2>
+        ${fromEmail ? `<p style="font-size:12px;color:#9ca3af;margin:0 0 16px">Sent by <strong>${fromEmail}</strong> — reply to reach them directly.</p>` : ""}
+        ${message ? `<div style="background:#f9fafb;border-left:3px solid #1B3A5C;padding:12px 16px;border-radius:6px;margin:0 0 20px"><p style="color:#374151;font-size:14px;white-space:pre-line;margin:0;line-height:1.6">${message}</p></div>` : ""}
+        <p style="color:#374151;font-size:14px;margin:0 0 20px;line-height:1.6">Here is the product flyer for <strong>${product.name}</strong> — tap below to view or download the full PDF with all colors, sizes, and pricing.</p>
+        <p><a href="${product.flyerUrl ?? "#"}" style="background:#1B3A5C;color:#fff;padding:13px 30px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block">View / Download Flyer (PDF) →</a></p>
+        <div style="border-top:1px solid #e5e7eb;margin-top:24px;padding-top:16px">
+          <p style="color:#9ca3af;font-size:11px;margin:0">Questions? Call +1 (214) 272-7213 or info@afblanks.com — AF Apparels Wholesale Team</p>
+        </div>
       </div>
     </div>
   `;
