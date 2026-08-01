@@ -231,52 +231,57 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                       </div>
                       <button onClick={() => { setSelectedProduct(null); setVariantQtys({}); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#7A7880" }}>✕ back</button>
                     </div>
-                    <div style={{ maxHeight: "320px", overflowY: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                        <thead>
-                          <tr style={{ background: "#FAFAFA" }}>
-                            {["Color", "Size", "Price", "Qty"].map(h => (
-                              <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".06em", color: "#7A7880", fontWeight: 700 }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[...(selectedProduct.variants ?? [])].sort((a, b) => {
-                            const SIZE_ORDER = ['XS','S','M','L','XL','2XL','3XL','4XL','5XL','6XL'];
-                            const sizeSort = (x: string | null, y: string | null) => {
-                              const ai = SIZE_ORDER.indexOf((x ?? '').toUpperCase());
-                              const bi = SIZE_ORDER.indexOf((y ?? '').toUpperCase());
-                              if (ai === -1 && bi === -1) return (x ?? '').localeCompare(y ?? '');
-                              if (ai === -1) return 1;
-                              if (bi === -1) return -1;
-                              return ai - bi;
-                            };
-                            const colorCmp = (a.color ?? '').localeCompare(b.color ?? '');
-                            return colorCmp !== 0 ? colorCmp : sizeSort(a.size, b.size);
-                          }).map(v => {
-                            const retail = parseFloat(v.retail_price);
-                            const discounted = applyDiscount(retail);
-                            const hasDiscount = companyDiscount > 0;
-                            return (
-                            <tr key={v.id} style={{ borderBottom: "1px solid #F4F3EF" }}>
-                              <td style={{ padding: "8px 12px", color: "#2A2830" }}>{v.color ?? "—"}</td>
-                              <td style={{ padding: "8px 12px", color: "#2A2830" }}>{v.size ?? "—"}</td>
-                              <td style={{ padding: "8px 12px", color: "#2A2830" }}>
-                                {hasDiscount ? (
-                                  <><span style={{ textDecoration: "line-through", color: "#bbb", fontSize: "11px" }}>${retail.toFixed(2)}</span>{" "}<span style={{ color: "#059669", fontWeight: 700 }}>${discounted.toFixed(2)}</span></>
-                                ) : `$${retail.toFixed(2)}`}
-                              </td>
-                              <td style={{ padding: "8px 12px" }}>
-                                <input type="number" min="0" placeholder="0"
-                                  value={variantQtys[v.id] ?? ""}
-                                  onChange={e => setVariantQtys(prev => ({ ...prev, [v.id]: e.target.value }))}
-                                  style={{ width: "56px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px", textAlign: "center" }}
-                                />
-                              </td>
-                            </tr>
-                          ); })}
-                        </tbody>
-                      </table>
+                    <div style={{ maxHeight: "340px", overflow: "auto" }}>
+                      {(() => {
+                        const variants = selectedProduct.variants ?? [];
+                        const SIZE_ORDER = ['XS','S','M','L','XL','2XL','3XL','4XL','5XL','6XL','7XL'];
+                        const rank = (s: string | null) => { const i = SIZE_ORDER.indexOf((s ?? '').toUpperCase()); return i === -1 ? 900 : i; };
+                        const colorList: string[] = [];
+                        const sizeSet = new Set<string>();
+                        const cell: Record<string, Record<string, (typeof variants)[number]>> = {};
+                        for (const v of variants) {
+                          const c = v.color ?? '—'; const s = v.size ?? '—';
+                          if (!cell[c]) { cell[c] = {}; colorList.push(c); }
+                          cell[c]![s] = v; sizeSet.add(s);
+                        }
+                        colorList.sort();
+                        const sizeList = [...sizeSet].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+                        const hasDiscount = companyDiscount > 0;
+                        return (
+                          <table style={{ borderCollapse: "collapse", fontSize: "12px", minWidth: `${90 + sizeList.length * 64}px` }}>
+                            <thead>
+                              <tr style={{ background: "#FAFAFA" }}>
+                                <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".06em", color: "#7A7880", fontWeight: 700 }}>Color</th>
+                                {sizeList.map(s => (
+                                  <th key={s} style={{ padding: "8px 6px", textAlign: "center", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880", fontWeight: 700 }}>{s}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {colorList.map(color => (
+                                <tr key={color} style={{ borderBottom: "1px solid #F4F3EF" }}>
+                                  <td style={{ padding: "6px 10px", color: "#2A2830", fontWeight: 600, whiteSpace: "nowrap" }}>{color}</td>
+                                  {sizeList.map(size => {
+                                    const v = cell[color]?.[size];
+                                    if (!v) return <td key={size} style={{ padding: "6px 6px", textAlign: "center", color: "#ddd" }}>—</td>;
+                                    const price = applyDiscount(parseFloat(v.retail_price));
+                                    return (
+                                      <td key={size} style={{ padding: "6px 6px", textAlign: "center", verticalAlign: "top" }}>
+                                        <div style={{ fontSize: "10px", color: hasDiscount ? "#D01F2D" : "#7A7880", fontWeight: hasDiscount ? 700 : 400, marginBottom: "3px" }}>${price.toFixed(2)}</div>
+                                        <input type="number" min="0" placeholder="0"
+                                          value={variantQtys[v.id] ?? ""}
+                                          onChange={e => setVariantQtys(prev => ({ ...prev, [v.id]: e.target.value }))}
+                                          style={{ width: "48px", padding: "4px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px", textAlign: "center" }}
+                                        />
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      })()}
                     </div>
                     <div style={{ padding: "10px 14px", borderTop: "1px solid #E2E0DA", display: "flex", justifyContent: "flex-end" }}>
                       <button onClick={addLineItems}
