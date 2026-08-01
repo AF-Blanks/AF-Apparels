@@ -260,6 +260,7 @@ export default function AdminOrderDetailPage() {
   const [selectedCourier, setSelectedCourier] = useState("");
   const [selectedService, setSelectedService] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
+  const [trackingUrl, setTrackingUrl] = useState("");
   const [isShipping, setIsShipping] = useState(false);
   const [showManualShipping, setShowManualShipping] = useState(false);
   const [manualShippingAmount, setManualShippingAmount] = useState("");
@@ -329,6 +330,7 @@ export default function AdminOrderDetailPage() {
         if (o.courier) setSelectedCourier(o.courier);
         if (o.courier_service) setSelectedService(o.courier_service);
         if (o.tracking_number) setTrackingNumber(o.tracking_number);
+        setTrackingUrl(o.tracking_url ?? "");
         const _cMap: Record<string, string> = { USPS: "usps", UPS: "ups", FedEx: "fedex" };
         if (o.tracking_number && o.label_url) {
           setLabelResult({
@@ -398,7 +400,9 @@ export default function AdminOrderDetailPage() {
   function handleCourierSelect(courierId: string) {
     setSelectedCourier(courierId);
     setSelectedService("");
-    setTrackingNumber(generateTrackingNumber(courierId));
+    // Don't pre-fill a generated tracking number for manual/local shipping —
+    // the admin pastes the real tracking ID from the courier.
+    setTrackingNumber("");
   }
 
   async function handleUpdate(e: React.FormEvent) {
@@ -431,6 +435,7 @@ export default function AdminOrderDetailPage() {
       await apiClient.patch(`/api/v1/admin/orders/${order?.id ?? id}/status`, {
         status: "shipped",
         tracking_number: trackingNumber || undefined,
+        tracking_url: trackingUrl.trim() || undefined,
         courier: selectedCourier,
         courier_service: selectedService,
         shipping_cost: shippingCostValue,
@@ -1162,9 +1167,20 @@ export default function AdminOrderDetailPage() {
                           <input
                             value={trackingNumber}
                             onChange={e => setTrackingNumber(e.target.value)}
-                            placeholder="Tracking number"
+                            placeholder="Paste the real tracking ID from the courier"
                             style={{ padding: "10px 14px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "14px", fontFamily: "var(--font-jakarta)", width: "100%", maxWidth: "280px", boxSizing: "border-box" as const }}
                           />
+                        </div>
+                        <div>
+                          <label style={LabelStyle}>Tracking Link (courier URL)</label>
+                          <input
+                            type="url"
+                            value={trackingUrl}
+                            onChange={e => setTrackingUrl(e.target.value)}
+                            placeholder="https://www.ups.com/track?tracknum=…"
+                            style={{ padding: "10px 14px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "14px", fontFamily: "var(--font-jakarta)", width: "100%", maxWidth: "380px", boxSizing: "border-box" as const }}
+                          />
+                          <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Optional — the customer&apos;s shipped email gets a &quot;Track Your Shipment&quot; button linking here.</div>
                         </div>
                         <div>
                           <label style={LabelStyle}>Shipping Amount ($)</label>
