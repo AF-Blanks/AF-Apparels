@@ -20,6 +20,13 @@ interface PriceListResponse {
   discount_percent: number;
 }
 
+// Size column order — small first, then up (matches the ordering grid).
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL", "7XL"];
+function sizeRank(s: string): number {
+  const i = SIZE_ORDER.indexOf((s || "").toUpperCase().trim());
+  return i === -1 ? 900 : i;
+}
+
 export default function AccountPriceListPage() {
   const { isAuthenticated, isLoading } = useAuthStore();
   const hasLoaded = useRef(false);
@@ -28,6 +35,7 @@ export default function AccountPriceListPage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (isLoading) return;
@@ -73,16 +81,25 @@ export default function AccountPriceListPage() {
     URL.revokeObjectURL(url);
   }
 
-  // Group by product
-  const grouped = items.reduce(
+  // Build a color × size price matrix per product (sizes as columns, colors as
+  // rows) — same shape as the ordering grid, for a consistent view. Each cell
+  // holds this variant's retail + your price.
+  const productMatrix = items.reduce(
     (acc, item) => {
-      if (!acc[item.product_id]) {
-        acc[item.product_id] = { product_name: item.product_name, variants: [] };
+      let p = acc[item.product_id];
+      if (!p) {
+        p = { product_name: item.product_name, sizes: new Set<string>(), colors: [], cell: {} };
+        acc[item.product_id] = p;
       }
-      acc[item.product_id]!.variants.push(item);
+      p.sizes.add(item.size);
+      if (!p.cell[item.color]) {
+        p.cell[item.color] = {};
+        p.colors.push(item.color);
+      }
+      p.cell[item.color]![item.size] = { unit: item.unit_price, retail: item.retail_price };
       return acc;
     },
-    {} as Record<string, { product_name: string; variants: PriceItem[] }>
+    {} as Record<string, { product_name: string; sizes: Set<string>; colors: string[]; cell: Record<string, Record<string, { unit: number; retail: number }>> }>
   );
 
   return (
@@ -149,62 +166,73 @@ export default function AccountPriceListPage() {
         </div>
       )}
 
-      {/* Results table */}
+      {/* Results — one color × size price matrix per product (consistent view) */}
       {generated && items.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden" id="print-area">
-          <div className="hidden print:block px-5 py-4 border-b">
+        <div id="print-area" className="space-y-4">
+          <div className="hidden print:block mb-2">
             <h2 className="text-lg font-bold">AF Apparels — Price List</h2>
             <p className="text-sm text-gray-500">Generated: {new Date().toLocaleDateString()}</p>
           </div>
 
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: "480px" }}>
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Style (SKU)</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Color</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium text-xs uppercase">Size</th>
-                <th className="text-right px-4 py-3 text-gray-600 font-medium text-xs uppercase">Retail Price</th>
-                <th className="text-right px-4 py-3 text-gray-600 font-medium text-xs uppercase">Your Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(grouped).map(([productId, group]) => (
-                <React.Fragment key={productId}>
-                  <tr className="bg-blue-50 border-b border-blue-100">
-                    <td colSpan={5} className="px-4 py-2">
-                      <span className="font-semibold text-blue-800 text-sm">{group.product_name}</span>
-                    </td>
-                  </tr>
-                  {group.variants.map((item, idx) => (
-                    <tr
-                      key={`${item.sku}-${idx}`}
-                      className={`border-b border-gray-100 hover:bg-blue-50 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
-                    >
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{item.sku}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.color}</td>
-                      <td className="px-4 py-2.5 text-gray-700">{item.size}</td>
-                      <td className="px-4 py-2.5 text-right text-xs">
-                        {item.unit_price < item.retail_price ? (
-                          <span className="text-gray-400 line-through">${item.retail_price.toFixed(2)}</span>
-                        ) : (
-                          <span className="text-gray-400">${item.retail_price.toFixed(2)}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right font-semibold">
-                        {item.unit_price < item.retail_price ? (
-                          <span style={{ color: "#D01F2D", fontWeight: 700 }}>${item.unit_price.toFixed(2)}</span>
-                        ) : (
-                          <span className="text-gray-900">${item.unit_price.toFixed(2)}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-          </div>
+          {Object.entries(productMatrix).map(([productId, p]) => {
+            const orderedSizes = [...p.sizes].sort(
+              (a, b) => sizeRank(a) - sizeRank(b) || a.localeCompare(b)
+            );
+            const isCollapsed = collapsed[productId];
+            return (
+              <div key={productId} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setCollapsed((prev) => ({ ...prev, [productId]: !prev[productId] }))}
+                  className="w-full flex items-center justify-between px-5 py-3 bg-blue-50 border-b border-blue-100 hover:bg-blue-100 transition-colors text-left"
+                >
+                  <span className="font-semibold text-blue-800 text-sm flex items-center gap-2">
+                    <span className="text-blue-400 text-[10px]">{isCollapsed ? "▶" : "▼"}</span>
+                    {p.product_name}
+                  </span>
+                  <span className="text-xs text-gray-500 whitespace-nowrap ml-3">
+                    {p.colors.length} {p.colors.length === 1 ? "color" : "colors"}
+                  </span>
+                </button>
+
+                {!isCollapsed && (
+                  <div className="overflow-x-auto">
+                    <table className="text-sm" style={{ minWidth: `${160 + orderedSizes.length * 66}px`, width: "100%" }}>
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-4 py-2.5 text-gray-600 font-medium text-xs uppercase">Color</th>
+                          {orderedSizes.map((sz) => (
+                            <th key={sz} className="text-center px-3 py-2.5 text-gray-600 font-medium text-xs uppercase">{sz}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {p.colors.map((color, idx) => (
+                          <tr key={color} className={`border-b border-gray-100 ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                            <td className="px-4 py-2 text-gray-700 font-medium whitespace-nowrap">{color}</td>
+                            {orderedSizes.map((sz) => {
+                              const c = p.cell[color]?.[sz];
+                              if (!c) return <td key={sz} className="px-3 py-2 text-center text-gray-300">—</td>;
+                              const discounted = c.unit < c.retail;
+                              return (
+                                <td key={sz} className="px-3 py-2 text-center whitespace-nowrap">
+                                  <div className={discounted ? "font-bold" : "font-semibold text-gray-900"} style={discounted ? { color: "#D01F2D" } : undefined}>
+                                    ${c.unit.toFixed(2)}
+                                  </div>
+                                  {discounted && (
+                                    <div className="text-gray-400 line-through text-[10px]">${c.retail.toFixed(2)}</div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
