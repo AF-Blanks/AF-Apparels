@@ -15,6 +15,7 @@ interface Order {
   po_number: string | null;
   item_count: number;
   created_at: string;
+  return_status?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -148,12 +149,19 @@ export default function AccountOrdersPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{o.po_number ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[o.status] ?? "bg-gray-100 text-gray-600"
-                        }`}
-                    >
-                      {o.status}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[o.status] ?? "bg-gray-100 text-gray-600"
+                          }`}
+                      >
+                        {o.status}
+                      </span>
+                      {o.return_status && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
+                          {o.return_status === "refunded" ? "Refunded" : "Returned"}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right text-gray-500 text-xs">{o.item_count}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-800">

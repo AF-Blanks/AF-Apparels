@@ -17,6 +17,7 @@ interface AdminOrder {
   is_guest_order?: boolean;
   guest_email?: string | null;
   guest_name?: string | null;
+  return_status?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -203,6 +204,11 @@ export default function AdminOrdersPage() {
                     {o.payment_status !== "paid" && PAYMENT_COLORS[o.payment_status] && (
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${PAYMENT_COLORS[o.payment_status]}`}>
                         {o.payment_status}
+                      </span>
+                    )}
+                    {o.return_status && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
+                        {o.return_status === "refunded" ? "Refunded" : "Returned"}
                       </span>
                     )}
                   </div>

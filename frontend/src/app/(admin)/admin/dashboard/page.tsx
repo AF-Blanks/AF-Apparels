@@ -35,6 +35,9 @@ interface DashboardState {
   dailyCounts: number[];
   conversionRate: number;
   totalTaxCollected: number;
+  totalCustomers: number;
+  revenueChange: number | null;
+  ordersChange: number | null;
 }
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
@@ -184,8 +187,12 @@ export default function AdminDashboard() {
       }
 
       if (analyticsRes.status === "fulfilled") {
-        s.conversionRate = (analyticsRes.value as any)?.overview?.conversion_rate ?? 0;
-        s.totalTaxCollected = (analyticsRes.value as any)?.overview?.total_tax_collected ?? 0;
+        const ov = (analyticsRes.value as any)?.overview ?? {};
+        s.conversionRate = ov.conversion_rate ?? 0;
+        s.totalTaxCollected = ov.total_tax_collected ?? 0;
+        s.totalCustomers = ov.total_customers ?? 0;
+        s.revenueChange = ov.revenue_change_percent ?? null;
+        s.ordersChange = ov.orders_change_percent ?? null;
       }
 
       setState(s);
@@ -224,20 +231,25 @@ export default function AdminDashboard() {
 
   const dailyCounts = state.dailyCounts ?? [0, 0, 0, 0, 0, 0, 0];
 
+  // Format a real period-over-period % from analytics into a badge string.
+  // Empty string → the card renders no badge (never show fake movement).
+  const fmtPct = (v: number | null | undefined) =>
+    v === null || v === undefined ? "" : `${v >= 0 ? "+" : ""}${v}%`;
+
   const statCards = [
-    { label: "Sessions", value: "1,247", change: "+12%", up: true, sub: "past 7 days" },
+    { label: "Customers", value: String(state.totalCustomers ?? 0), change: "", up: true, sub: "active accounts" },
     {
       label: "Total Sales",
       value: `$${(state.totalRevenue ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-      change: "+24%",
-      up: true,
+      change: fmtPct(state.revenueChange),
+      up: (state.revenueChange ?? 0) >= 0,
       sub: `${state.totalOrders ?? 0} orders`,
     },
     {
       label: "Orders",
       value: String(state.totalOrders ?? 0),
-      change: "-3%",
-      up: false,
+      change: fmtPct(state.ordersChange),
+      up: (state.ordersChange ?? 0) >= 0,
       sub: `avg $${(state.avgOrderValue ?? 0).toFixed(0)}`,
     },
     { label: "Conversion Rate", value: `${(state.conversionRate ?? 0).toFixed(1)}%`, change: "", up: true, sub: "paid / total orders" },

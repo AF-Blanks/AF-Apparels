@@ -22,6 +22,7 @@ interface StatementData {
   summary: {
     total_charges: number;
     total_payments: number;
+    total_refunds?: number;
     current_balance: number;
   };
 }
@@ -182,7 +183,7 @@ export default function StatementsPage() {
 
       {/* Summary cards */}
       {data && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${(data.summary.total_refunds ?? 0) > 0 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
           <div className="bg-white border border-gray-200 rounded-lg p-5">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Charges</p>
             <p className="text-2xl font-bold text-red-600 mt-1">
@@ -195,6 +196,14 @@ export default function StatementsPage() {
               ${data.summary.total_payments.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </p>
           </div>
+          {(data.summary.total_refunds ?? 0) > 0 && (
+            <div className="bg-white border border-gray-200 rounded-lg p-5">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Refunds</p>
+              <p className="text-2xl font-bold text-orange-600 mt-1">
+                ${(data.summary.total_refunds ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          )}
           <div
             className={`border rounded-lg p-5 ${data.summary.current_balance > 0
                 ? "bg-orange-50 border-orange-200"
