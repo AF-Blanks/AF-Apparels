@@ -13,6 +13,7 @@ interface RecentOrder {
   status: string;
   created_at: string;
   items_count?: number;
+  return_status?: string | null;
 }
 
 interface Application {
@@ -168,6 +169,7 @@ export default function AdminDashboard() {
           status: o.status,
           created_at: o.created_at,
           items_count: o.items?.length ?? o.items_count,
+          return_status: o.return_status,
         }));
 
         // Build last-7-days sparkline from order created_at timestamps
@@ -380,7 +382,16 @@ export default function AdminDashboard() {
                   </td>
                   <td style={{ padding: "12px 16px", color: "#7A7880" }}>{order.items_count ?? "—"}</td>
                   <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#2A2830" }}>${Number(order.total).toFixed(2)}</td>
-                  <td style={{ padding: "12px 16px" }}><StatusBadge status={order.status} /></td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <StatusBadge status={order.status} />
+                      {order.return_status && (
+                        <span style={{ background: "rgba(234,88,12,.1)", color: "#EA580C", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700 }}>
+                          {order.return_status === "refunded" ? "Refunded" : "Returned"}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
