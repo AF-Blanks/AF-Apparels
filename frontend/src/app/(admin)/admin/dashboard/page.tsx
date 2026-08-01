@@ -111,10 +111,24 @@ function AlertCard({ icon, count, label, color, href }: { icon: React.ReactNode;
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const PERIODS: { id: string; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "7d", label: "7 Days" },
+  { id: "30d", label: "30 Days" },
+  { id: "90d", label: "90 Days" },
+  { id: "custom", label: "Custom" },
+];
+const PERIOD_SUBTITLE: Record<string, string> = {
+  today: "Today", "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days", custom: "Custom range",
+};
+
 export default function AdminDashboard() {
   const [state, setState] = useState<Partial<DashboardState>>({});
   const [loading, setLoading] = useState(true);
   const [showPasswordWarning, setShowPasswordWarning] = useState(false);
+  const [period, setPeriod] = useState("7d");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -122,23 +136,15 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  // Period-independent widgets (recent orders, sparkline, alerts) — fetch once.
   useEffect(() => {
     Promise.allSettled([
-      apiClient.get("/api/v1/admin/reports/sales?period=week"),
       apiClient.get("/api/v1/admin/wholesale-applications?status=pending"),
       apiClient.get("/api/v1/admin/reports/inventory?low_stock_only=true"),
       apiClient.get("/api/v1/admin/orders?page_size=10"),
       apiClient.get("/api/v1/admin/orders?status=pending&page_size=50"),
-      apiClient.get("/api/v1/admin/analytics?period=7d"),
-    ]).then(([salesRes, appsRes, stockRes, ordersRes, pendingRes, analyticsRes]) => {
+    ]).then(([appsRes, stockRes, ordersRes, pendingRes]) => {
       const s: Partial<DashboardState> = {};
-
-      if (salesRes.status === "fulfilled") {
-        const summary = (salesRes.value as any)?.summary;
-        s.totalRevenue = summary?.total_revenue ?? 0;
-        s.totalOrders = summary?.total_orders ?? 0;
-        s.avgOrderValue = summary?.avg_order_value ?? 0;
-      }
 
       if (appsRes.status === "fulfilled") {
         const list = appsRes.value as any[];
@@ -188,18 +194,32 @@ export default function AdminDashboard() {
         s.pendingOrders = items.length;
       }
 
-      if (analyticsRes.status === "fulfilled") {
-        const ov = (analyticsRes.value as any)?.overview ?? {};
-        s.conversionRate = ov.conversion_rate ?? 0;
-        s.totalTaxCollected = ov.total_tax_collected ?? 0;
-        s.totalCustomers = ov.total_customers ?? 0;
-        s.revenueChange = ov.revenue_change_percent ?? null;
-        s.ordersChange = ov.orders_change_percent ?? null;
-      }
-
-      setState(s);
+      setState(prev => ({ ...prev, ...s }));
     }).finally(() => setLoading(false));
   }, []);
+
+  // Period-scoped KPI cards (revenue, orders, conversion, tax, customers) —
+  // re-fetch whenever the date filter changes. Only touches the dashboard.
+  useEffect(() => {
+    if (period === "custom" && (!customStart || !customEnd)) return;
+    const qs = period === "custom"
+      ? `period=custom&start_date=${customStart}&end_date=${customEnd}`
+      : `period=${period}`;
+    apiClient.get(`/api/v1/admin/analytics?${qs}`).then((res) => {
+      const ov = (res as any)?.overview ?? {};
+      setState(prev => ({
+        ...prev,
+        totalRevenue: ov.total_revenue ?? 0,
+        totalOrders: ov.total_orders ?? 0,
+        avgOrderValue: ov.average_order_value ?? 0,
+        conversionRate: ov.conversion_rate ?? 0,
+        totalTaxCollected: ov.total_tax_collected ?? 0,
+        totalCustomers: ov.total_customers ?? 0,
+        revenueChange: ov.revenue_change_percent ?? null,
+        ordersChange: ov.orders_change_percent ?? null,
+      }));
+    }).catch(() => {});
+  }, [period, customStart, customEnd]);
 
   async function handleApprove(id: string) {
     try {
@@ -267,9 +287,40 @@ export default function AdminDashboard() {
   return (
     <div style={{ fontFamily: "var(--font-jakarta)", maxWidth: "1200px" }}>
       {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ fontFamily: "var(--font-bebas)", fontSize: "32px", color: "#2A2830", letterSpacing: ".03em", lineHeight: 1 }}>Dashboard</h1>
-        <p style={{ fontSize: "13px", color: "#7A7880", marginTop: "4px" }}>Last 7 days overview</p>
+      <div style={{ marginBottom: "28px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontFamily: "var(--font-bebas)", fontSize: "32px", color: "#2A2830", letterSpacing: ".03em", lineHeight: 1 }}>Dashboard</h1>
+          <p style={{ fontSize: "13px", color: "#7A7880", marginTop: "4px" }}>{PERIOD_SUBTITLE[period] ?? "Overview"} overview</p>
+        </div>
+
+        {/* Date period filter */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px" }}>
+          <div style={{ display: "inline-flex", background: "#fff", border: "1px solid #E2E0DA", borderRadius: "8px", overflow: "hidden" }}>
+            {PERIODS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPeriod(p.id)}
+                style={{
+                  padding: "7px 14px", fontSize: "12px", fontWeight: 700, cursor: "pointer", border: "none",
+                  borderLeft: p.id !== "today" ? "1px solid #E2E0DA" : "none",
+                  background: period === p.id ? "#1A5CFF" : "#fff",
+                  color: period === p.id ? "#fff" : "#7A7880",
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {period === "custom" && (
+            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
+                style={{ padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "12px", color: "#2A2830" }} />
+              <span style={{ fontSize: "12px", color: "#7A7880" }}>to</span>
+              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
+                style={{ padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "12px", color: "#2A2830" }} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Security warning banner */}
