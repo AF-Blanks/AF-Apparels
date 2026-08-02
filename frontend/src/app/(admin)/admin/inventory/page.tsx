@@ -71,10 +71,114 @@ function exportInventoryToCsv(rows: InventoryRow[]) {
   URL.revokeObjectURL(url);
 }
 
+type ProductGroup = {
+  product_name: string;
+  product_code: string | null;
+  gridSizes: string[];
+  gridColors: string[];
+  byColor: Map<string, InventoryRow[]>;
+};
+
+function BulkRestockModal({ group, warehouseId, warehouseName, onClose, onSaved }: {
+  group: ProductGroup;
+  warehouseId: string;
+  warehouseName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const allRows: InventoryRow[] = [];
+  for (const rows of group.byColor.values()) for (const r of rows) allRows.push(r);
+
+  const [qtys, setQtys] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const r of allRows) m[r.variant_id] = String(r.quantity);
+    return m;
+  });
+  const [fillAll, setFillAll] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function applyFill() {
+    if (fillAll.trim() === "") return;
+    setQtys(() => {
+      const m: Record<string, string> = {};
+      for (const r of allRows) m[r.variant_id] = fillAll;
+      return m;
+    });
+  }
+
+  const cell = (color: string, size: string) =>
+    (group.byColor.get(color) ?? []).find(r => (r.size ?? "").toUpperCase() === size.toUpperCase());
+
+  async function save() {
+    setSaving(true); setErr(null);
+    try {
+      const items = allRows
+        .map(r => ({ variant_id: r.variant_id, quantity: parseInt(qtys[r.variant_id] ?? "", 10) }))
+        .filter(i => !isNaN(i.quantity) && i.quantity >= 0);
+      await adminService.bulkAdjustInventory({ warehouse_id: warehouseId, mode: "set", items });
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to save");
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+      <div style={{ background: "#fff", borderRadius: "12px", width: "100%", maxWidth: "760px", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #E5E7EB", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: "15px", color: "#111827" }}>Bulk Restock — {group.product_name}</div>
+            <div style={{ fontSize: "12px", color: "#6B7280" }}>{warehouseName} · sets stock to the values you enter, then syncs to QuickBooks</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#6B7280", lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: "12px 20px", borderBottom: "1px solid #F3F4F6", display: "flex", gap: "8px", alignItems: "center" }}>
+          <span style={{ fontSize: "12px", color: "#6B7280" }}>Set all to</span>
+          <input type="number" min="0" value={fillAll} onChange={e => setFillAll(e.target.value)} placeholder="qty" style={{ width: "80px", padding: "6px 8px", border: "1px solid #E5E7EB", borderRadius: "6px", fontSize: "13px" }} />
+          <button onClick={applyFill} style={{ padding: "6px 12px", background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Apply to all</button>
+        </div>
+        <div style={{ padding: "12px 20px", overflow: "auto", flex: 1 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr style={{ background: "#F9FAFB" }}>
+                <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "11px", color: "#6B7280", fontWeight: 700 }}>COLOR</th>
+                {group.gridSizes.map(s => <th key={s} style={{ padding: "8px 6px", textAlign: "center", fontSize: "11px", color: "#6B7280", fontWeight: 700 }}>{s}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {group.gridColors.map(color => (
+                <tr key={color} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                  <td style={{ padding: "6px 10px", fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap" }}>{color}</td>
+                  {group.gridSizes.map(size => {
+                    const v = cell(color, size);
+                    if (!v) return <td key={size} style={{ padding: "6px", textAlign: "center", color: "#D1D5DB" }}>—</td>;
+                    return (
+                      <td key={size} style={{ padding: "6px", textAlign: "center" }}>
+                        <input type="number" min="0" value={qtys[v.variant_id] ?? ""} onChange={e => setQtys(prev => ({ ...prev, [v.variant_id]: e.target.value }))} style={{ width: "52px", padding: "5px 4px", border: "1px solid #E5E7EB", borderRadius: "5px", fontSize: "13px", textAlign: "center" }} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {err && <div style={{ color: "#DC2626", fontSize: "12px", marginTop: "10px" }}>{err}</div>}
+        </div>
+        <div style={{ padding: "14px 20px", borderTop: "1px solid #E5E7EB", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+          <button onClick={onClose} style={{ padding: "9px 18px", border: "1px solid #E5E7EB", borderRadius: "7px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: "9px 18px", border: "none", borderRadius: "7px", background: "#1A5CFF", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save & Sync to QuickBooks"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminInventoryPage() {
   const [rows, setRows] = useState<InventoryRow[]>([]);
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<InventoryRow | null>(null);
+  const [bulkTarget, setBulkTarget] = useState<ProductGroup | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [warehouseId, setWarehouseId] = useState<string>("");
@@ -138,7 +242,7 @@ export default function AdminInventoryPage() {
     }
     return order.map(key => {
       const productRows = byProduct.get(key)!;
-      const [product_name, product_code] = key.split("::");
+      const [product_name = "", product_code = ""] = key.split("::");
 
       const gridSizes: string[] = [];
       for (const s of SIZE_ORDER) {
@@ -229,6 +333,14 @@ export default function AdminInventoryPage() {
               {group.product_code && (
                 <span className="text-xs text-gray-400 font-mono">{group.product_code}</span>
               )}
+              {warehouseId !== "__all__" && (
+                <button
+                  onClick={() => setBulkTarget(group)}
+                  style={{ marginLeft: "auto", padding: "5px 12px", background: "#1A5CFF", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  Bulk Restock
+                </button>
+              )}
             </div>
 
             <div style={{ overflowX: "auto" }}>
@@ -307,6 +419,16 @@ export default function AdminInventoryPage() {
           warehouseId={adjustTarget.warehouse_id!}
           onClose={() => setAdjustTarget(null)}
           onSuccess={() => { setAdjustTarget(null); load(); }}
+        />
+      )}
+
+      {bulkTarget && warehouseId !== "__all__" && (
+        <BulkRestockModal
+          group={bulkTarget}
+          warehouseId={warehouseId}
+          warehouseName={warehouses.find(w => w.id === warehouseId)?.name ?? "Warehouse"}
+          onClose={() => setBulkTarget(null)}
+          onSaved={() => { setBulkTarget(null); load(); }}
         />
       )}
     </div>

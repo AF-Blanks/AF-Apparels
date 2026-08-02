@@ -162,6 +162,14 @@ export const adminService = {
     return apiClient.patch("/api/v1/admin/inventory/threshold", data);
   },
 
+  async bulkAdjustInventory(data: {
+    warehouse_id: string;
+    mode: "set" | "add";
+    items: { variant_id: string; quantity: number }[];
+  }) {
+    return apiClient.post("/api/v1/admin/inventory/bulk-adjust", data);
+  },
+
   async listWarehouses() {
     return apiClient.get("/api/v1/admin/warehouses");
   },
