@@ -62,6 +62,9 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   const [companyName, setCompanyName] = useState("");
   const [companySearch, setCompanySearch] = useState("");
   const [companyDiscount, setCompanyDiscount] = useState(0); // percent
+  const [companyZip, setCompanyZip] = useState("");
+  const [companyState, setCompanyState] = useState("");
+  const [companyTaxExempt, setCompanyTaxExempt] = useState(false);
 
   // Step 2
   const [products, setProducts] = useState<DraftProduct[]>([]);
@@ -74,6 +77,8 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   // Step 3
   const [poNumber, setPoNumber] = useState("");
   const [notes, setNotes] = useState("");
+  const [shippingCost, setShippingCost] = useState("");   // manual entry
+  const [taxAmount, setTaxAmount] = useState(0);           // auto-computed from company address
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,7 +129,25 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
     setSelectedProduct(null);
   }
 
-  const orderTotal = lineItems.reduce((s, l) => s + l.price * l.qty, 0);
+  const orderTotal = lineItems.reduce((s, l) => s + l.price * l.qty, 0); // subtotal
+  const shipNum = parseFloat(shippingCost) || 0;
+  const grandTotal = orderTotal + shipNum + taxAmount;
+
+  // Auto-compute tax from the company's address + tax-exempt status (same engine
+  // as checkout). Tax applies to the subtotal only — not shipping.
+  useEffect(() => {
+    if (companyTaxExempt || orderTotal <= 0 || !companyState) { setTaxAmount(0); return; }
+    let cancelled = false;
+    apiClient.post<{ tax_amount?: number }>("/api/v1/tax/calculate", {
+      subtotal: orderTotal,
+      zip_code: companyZip || "",
+      state: companyState.toUpperCase(),
+      discount: 0,
+    })
+      .then(r => { if (!cancelled) setTaxAmount(Number(r?.tax_amount ?? 0)); })
+      .catch(() => { if (!cancelled) setTaxAmount(0); });
+    return () => { cancelled = true; };
+  }, [orderTotal, companyZip, companyState, companyTaxExempt]);
 
   async function handleCreate() {
     if (!companyId) { setError("Please select a company."); return; }
@@ -140,6 +163,13 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
           variant_id: item.variantId,
           quantity: item.qty,
           unit_price: item.price,
+        });
+      }
+      // Save manual shipping + auto-computed tax; backend recomputes the grand total.
+      if (shipNum > 0 || taxAmount > 0) {
+        await apiClient.patch(`/api/v1/admin/orders/${draft.id}`, {
+          shipping_cost: shipNum,
+          tax_amount: taxAmount,
         });
       }
       onSuccess(draft.id);
@@ -191,9 +221,12 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                     <div key={c.id} onClick={async () => {
                       setCompanyId(c.id); setCompanyName(c.name); setCompanySearch(c.name); setCompanies([]);
                       try {
-                        const detail = await apiClient.get<{ discount_percent?: number | null }>(`/api/v1/admin/companies/${c.id}`);
+                        const detail = await apiClient.get<{ discount_percent?: number | null; postal_code?: string | null; state_province?: string | null; tax_exempt?: boolean }>(`/api/v1/admin/companies/${c.id}`);
                         setCompanyDiscount(detail?.discount_percent ?? 0);
-                      } catch { setCompanyDiscount(0); }
+                        setCompanyZip(detail?.postal_code ?? "");
+                        setCompanyState(detail?.state_province ?? "");
+                        setCompanyTaxExempt(!!detail?.tax_exempt);
+                      } catch { setCompanyDiscount(0); setCompanyZip(""); setCompanyState(""); setCompanyTaxExempt(false); }
                     }}
                       style={{ padding: "10px 12px", fontSize: "13px", cursor: "pointer", color: "#2A2830" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#F4F3EF")}
@@ -348,7 +381,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                 {lineItems.length > 0 && (
                   <div style={{ padding: "10px 14px", borderTop: "1px solid #E2E0DA", background: "#FAFAFA" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>
-                      <span>Total</span>
+                      <span>Subtotal</span>
                       <span>${orderTotal.toFixed(2)}</span>
                     </div>
                   </div>
@@ -387,9 +420,30 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                       ))}
                     </tbody>
                     <tfoot>
+                      <tr>
+                        <td colSpan={4} style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px", color: "#7A7880" }}>Subtotal</td>
+                        <td style={{ padding: "6px 12px", fontSize: "13px", color: "#2A2830" }}>${orderTotal.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={4} style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px", color: "#7A7880" }}>Shipping</td>
+                        <td style={{ padding: "6px 12px", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "3px" }}>$</span>
+                          <input type="number" min="0" step="0.01" placeholder="0.00"
+                            value={shippingCost}
+                            onChange={e => setShippingCost(e.target.value)}
+                            style={{ width: "78px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px" }}
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={4} style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px", color: "#7A7880" }}>
+                          Tax {companyTaxExempt ? "(exempt)" : companyState ? `(${companyState.toUpperCase()})` : ""}
+                        </td>
+                        <td style={{ padding: "6px 12px", fontSize: "13px", color: "#2A2830" }}>${taxAmount.toFixed(2)}</td>
+                      </tr>
                       <tr style={{ background: "#F4F3EF" }}>
                         <td colSpan={4} style={{ padding: "10px 12px", fontWeight: 700, textAlign: "right", fontSize: "13px" }}>Order Total</td>
-                        <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: "14px", color: "#1A5CFF" }}>${orderTotal.toFixed(2)}</td>
+                        <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: "14px", color: "#1A5CFF" }}>${grandTotal.toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   </table>
