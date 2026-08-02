@@ -289,6 +289,7 @@ export const adminService = {
     admin_notes?: string;
     tax_exempt?: boolean;
     tags?: string[];
+    send_setup_email?: boolean;
   }) {
     return apiClient.post("/api/v1/admin/companies", data);
   },

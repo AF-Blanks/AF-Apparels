@@ -47,6 +47,7 @@ function AddCustomerModal({ pricingTiers, discountGroups, onClose, onSuccess }: 
     pricing_tier_id: "", customer_tag: "", admin_notes: "",
   });
   const [taxExempt, setTaxExempt] = useState(false);
+  const [sendSetupEmail, setSendSetupEmail] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +78,7 @@ function AddCustomerModal({ pricingTiers, discountGroups, onClose, onSuccess }: 
         tags: form.customer_tag ? [form.customer_tag] : undefined,
         admin_notes: form.admin_notes || undefined,
         tax_exempt: taxExempt,
+        send_setup_email: form.contact_email.trim() ? sendSetupEmail : undefined,
       });
       onSuccess();
     } catch (err: unknown) {
@@ -180,6 +182,16 @@ function AddCustomerModal({ pricingTiers, discountGroups, onClose, onSuccess }: 
               <input style={inp} value={form.contact_phone} onChange={e => set("contact_phone", e.target.value)} />
             </div>
           </div>
+
+          {form.contact_email.trim() && (
+            <label style={{ marginTop: "14px", display: "flex", alignItems: "flex-start", gap: "9px", cursor: "pointer" }}>
+              <input type="checkbox" checked={sendSetupEmail} onChange={e => setSendSetupEmail(e.target.checked)} style={{ marginTop: "2px", width: "16px", height: "16px", cursor: "pointer", flexShrink: 0 }} />
+              <span style={{ fontSize: "13px", color: "#2A2830" }}>
+                <strong>Send login setup email</strong>
+                <span style={{ display: "block", fontSize: "11px", color: "#7A7880", marginTop: "2px" }}>Emails this customer a link to set their password so they can log in right away.</span>
+              </span>
+            </label>
+          )}
 
           <div style={{ marginTop: "16px", border: "1.5px solid #E2E0DA", borderRadius: "8px", padding: "12px 14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830", marginBottom: "4px" }}>Tax Exempt</div>
