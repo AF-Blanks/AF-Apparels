@@ -322,9 +322,9 @@ export default function DiscountGroupsPage() {
     }
   }
 
-  async function loadAllCustomers() {
+  async function loadAllCustomers(search?: string) {
     try {
-      const data = await adminService.listCompanies({ page_size: 200 }) as any;
+      const data = await adminService.listCompanies({ page_size: 200, q: search || undefined }) as any;
       const items: CustomerItem[] = data?.items ?? data ?? [];
       setAllCustomers(Array.isArray(items) ? items : []);
     } catch { /* non-fatal */ }
@@ -338,6 +338,16 @@ export default function DiscountGroupsPage() {
   useEffect(() => {
     if (activeTab === "variants" && vpProducts.length === 0) loadVariantPricing();
   }, [activeTab]); // eslint-disable-line
+
+  // Assign-customer picker: search companies server-side (by company name OR the
+  // contact person's name/email) so people whose company name differs (e.g.
+  // "Bradely Martin" at "Martin Marketing Specialties") are found, and results
+  // aren't capped to a first-200 slice.
+  useEffect(() => {
+    if (!showAddPanel) return;
+    const t = setTimeout(() => { loadAllCustomers(customerAssignSearch.trim() || undefined); }, 300);
+    return () => clearTimeout(t);
+  }, [customerAssignSearch, showAddPanel]); // eslint-disable-line
 
   // ── Discount Group helpers ────────────────────────────────────────────────
   function openCreateGroup() {
@@ -899,7 +909,7 @@ export default function DiscountGroupsPage() {
                       <input
                         value={customerAssignSearch}
                         onChange={e => setCustomerAssignSearch(e.target.value)}
-                        placeholder="Search by company name…"
+                        placeholder="Search by company or contact name…"
                         style={{ ...inputStyle, fontSize: "13px" }}
                         autoFocus
                       />
@@ -909,7 +919,10 @@ export default function DiscountGroupsPage() {
                         const unassigned = allCustomers.filter(c => {
                           if (groupCustomers.some(gc => gc.id === c.id)) return false;
                           if (!customerAssignSearch.trim()) return true;
-                          return c.name?.toLowerCase().includes(customerAssignSearch.toLowerCase());
+                          const s = customerAssignSearch.toLowerCase();
+                          return (c.name?.toLowerCase().includes(s))
+                            || ((c as any).contact_name?.toLowerCase?.().includes(s))
+                            || ((c as any).email?.toLowerCase?.().includes(s));
                         });
                         if (unassigned.length === 0) {
                           return (
@@ -920,7 +933,10 @@ export default function DiscountGroupsPage() {
                         }
                         return unassigned.slice(0, 20).map(c => (
                           <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", borderBottom: "1px solid #F4F3EF" }}>
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: "#2A2830" }}>{c.name}</span>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: "13px", fontWeight: 600, color: "#2A2830" }}>{c.name}</div>
+                              {(c as any).contact_name && <div style={{ fontSize: "11px", color: "#7A7880" }}>{(c as any).contact_name}</div>}
+                            </div>
                             <button
                               onClick={() => toggleCustomerAssignment(c, true)}
                               style={{ background: "rgba(26,92,255,.08)", border: "1px solid rgba(26,92,255,.2)", color: "#1A5CFF", padding: "4px 10px", borderRadius: "5px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
