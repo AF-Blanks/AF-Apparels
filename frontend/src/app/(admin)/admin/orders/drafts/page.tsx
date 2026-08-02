@@ -57,6 +57,10 @@ interface ShipCfg {
   ship_pallet_houston: number; ship_pallet_other: number;
 }
 
+interface LiveRate {
+  rate_id: string; carrier: string; service: string; cost: number; days: number | null;
+}
+
 // ── Create Draft Modal (3-step) ────────────────────────────────────────────────
 
 function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (id: string) => void }) {
@@ -76,6 +80,10 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   // Per-customer shipping config (the toggles admin set on the customer page)
   const [shipCfg, setShipCfg] = useState<ShipCfg | null>(null);
   const [shipMethod, setShipMethod] = useState<"standard" | "pickup" | "pallet" | "free">("standard");
+  // Live carrier rates for Standard Ground (fetched from the customer's address + cart)
+  const [liveRates, setLiveRates] = useState<LiveRate[]>([]);
+  const [liveRatesLoading, setLiveRatesLoading] = useState(false);
+  const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
   // Step 2
   const [products, setProducts] = useState<DraftProduct[]>([]);
@@ -171,6 +179,35 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
     const first = avail[0];
     if (first && !avail.includes(shipMethod)) setShipMethod(first);
   }, [shipCfg, orderTotal, companyCity, shipMethod, courierOn, pickupOn, palletOn, freeOn]);
+
+  // Standard Ground → fetch LIVE carrier rates (USPS/UPS/FedEx) from the
+  // customer's saved address + the cart, same as storefront checkout. Falls back
+  // to a manual rate box when the customer has no US address or no rates return.
+  useEffect(() => {
+    if (shipMethod !== "standard" || !companyZip.trim() || !companyState.trim() || lineItems.length === 0) {
+      setLiveRates([]); setSelectedRateId(null); return;
+    }
+    setLiveRatesLoading(true);
+    const t = setTimeout(() => {
+      apiClient.post<{ rates: LiveRate[]; error?: string }>("/api/v1/shipping/live-rates", {
+        to_zip: companyZip.trim(),
+        to_state: companyState.trim(),
+        to_city: companyCity || undefined,
+        cart_items: lineItems.map(l => ({ variant_id: l.variantId, quantity: l.qty })),
+      })
+        .then(r => {
+          const rates = r.rates || [];
+          setLiveRates(rates);
+          const first = rates[0];
+          if (first) { setSelectedRateId(first.rate_id); setShippingCost(String(first.cost)); }
+          else { setSelectedRateId(null); }
+        })
+        .catch(() => { setLiveRates([]); setSelectedRateId(null); })
+        .finally(() => setLiveRatesLoading(false));
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipMethod, companyZip, companyState, companyCity, lineItems]);
 
   // Auto-compute tax from the company's address + tax-exempt status (same engine
   // as checkout). Tax applies to the subtotal only — not shipping.
@@ -479,22 +516,41 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                             onChange={e => setShipMethod(e.target.value as typeof shipMethod)}
                             style={{ width: "100%", minWidth: "150px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px", marginBottom: "4px" }}
                           >
-                            {courierOn && <option value="standard">Standard Ground (enter rate)</option>}
+                            {courierOn && <option value="standard">Standard Ground (courier)</option>}
                             {freeOn && <option value="free">Free Shipping — $0</option>}
                             {palletOn && <option value="pallet">{`Pallet Freight (${palletRegion}) — $${(Number(palletRate) || 0).toFixed(2)}`}</option>}
                             {pickupOn && <option value="pickup">Free Pickup — $0</option>}
                           </select>
-                          {shipMethod === "standard" ? (
-                            <div style={{ whiteSpace: "nowrap" }}>
-                              <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "3px" }}>$</span>
-                              <input type="number" min="0" step="0.01" placeholder="0.00"
-                                value={shippingCost}
-                                onChange={e => setShippingCost(e.target.value)}
-                                style={{ width: "78px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px" }}
-                              />
+                          {shipMethod !== "standard" ? (
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>${shipNum.toFixed(2)}</div>
+                          ) : liveRatesLoading ? (
+                            <div style={{ fontSize: "12px", color: "#7A7880", padding: "4px 0" }}>Fetching live carrier rates…</div>
+                          ) : liveRates.length > 0 ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              {liveRates.map(rate => {
+                                const sel = selectedRateId === rate.rate_id;
+                                return (
+                                  <label key={rate.rate_id}
+                                    onClick={() => { setSelectedRateId(rate.rate_id); setShippingCost(String(rate.cost)); }}
+                                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "5px 8px", cursor: "pointer", border: `1px solid ${sel ? "#1A5CFF" : "#E2E0DA"}`, borderRadius: "5px", background: sel ? "rgba(26,92,255,.05)" : "#fff" }}>
+                                    <span style={{ fontSize: "11px", color: "#2A2830" }}><strong>{rate.carrier}</strong> {rate.service}{rate.days != null ? ` · ${rate.days}d` : ""}</span>
+                                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#2A2830" }}>${rate.cost.toFixed(2)}</span>
+                                  </label>
+                                );
+                              })}
                             </div>
                           ) : (
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>${shipNum.toFixed(2)}</div>
+                            <div>
+                              <div style={{ fontSize: "10px", color: "#9CA3AF", marginBottom: "2px" }}>No live rates for this address — enter manually:</div>
+                              <div style={{ whiteSpace: "nowrap" }}>
+                                <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "3px" }}>$</span>
+                                <input type="number" min="0" step="0.01" placeholder="0.00"
+                                  value={shippingCost}
+                                  onChange={e => setShippingCost(e.target.value)}
+                                  style={{ width: "78px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px" }}
+                                />
+                              </div>
+                            </div>
                           )}
                         </td>
                       </tr>
