@@ -265,13 +265,20 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                                     const v = cell[color]?.[size];
                                     if (!v) return <td key={size} style={{ padding: "6px 6px", textAlign: "center", color: "#ddd" }}>—</td>;
                                     const price = applyDiscount(parseFloat(v.retail_price));
+                                    const stock = v.stock_quantity ?? 0;
+                                    const enteredQty = parseInt(variantQtys[v.id] ?? "", 10) || 0;
+                                    const overStock = enteredQty > stock;
                                     return (
                                       <td key={size} style={{ padding: "6px 6px", textAlign: "center", verticalAlign: "top" }}>
-                                        <div style={{ fontSize: "10px", color: hasDiscount ? "#D01F2D" : "#7A7880", fontWeight: hasDiscount ? 700 : 400, marginBottom: "3px" }}>${price.toFixed(2)}</div>
+                                        <div style={{ fontSize: "10px", color: hasDiscount ? "#D01F2D" : "#7A7880", fontWeight: hasDiscount ? 700 : 400, marginBottom: "2px" }}>${price.toFixed(2)}</div>
+                                        <div style={{ fontSize: "9px", fontWeight: 700, color: stock > 0 ? "#059669" : "#D01F2D", marginBottom: "2px" }}>
+                                          {stock > 0 ? `${stock} avail` : "0 stock"}
+                                        </div>
                                         <input type="number" min="0" placeholder="0"
                                           value={variantQtys[v.id] ?? ""}
                                           onChange={e => setVariantQtys(prev => ({ ...prev, [v.id]: e.target.value }))}
-                                          style={{ width: "48px", padding: "4px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px", textAlign: "center" }}
+                                          title={overStock ? `Only ${stock} in stock — you are ordering more than available` : undefined}
+                                          style={{ width: "48px", padding: "4px", border: `1px solid ${overStock ? "#D01F2D" : "#E2E0DA"}`, borderRadius: "5px", fontSize: "12px", textAlign: "center", background: overStock ? "#FEF2F2" : "#fff" }}
                                         />
                                       </td>
                                     );
