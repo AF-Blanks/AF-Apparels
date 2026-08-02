@@ -90,6 +90,9 @@ export default function CheckoutReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [wholesaleEmailConflict, setWholesaleEmailConflict] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount_amount: number; discount_type: string } | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
   // Seed from checkout store; API fetch is a fallback in case user navigated directly here
   const [taxRate, setTaxRate] = useState<{ region: string; rate: number } | null>(
     storedTaxRate > 0 && storedTaxRegion ? { region: storedTaxRegion, rate: storedTaxRate } : null
@@ -175,6 +178,34 @@ export default function CheckoutReviewPage() {
       .join(", ");
   }
 
+  async function handleApplyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponLoading(true); setCouponError(null);
+    try {
+      const res = await apiClient.post<{ valid: boolean; message?: string; discount_amount?: number; discount_type?: string; code?: string }>(
+        "/api/v1/discounts/validate",
+        { code, cart_total: subtotal, customer_type: isGuest ? "guest" : "wholesale" }
+      );
+      if (!res.valid) {
+        setCouponError(res.message || "This discount code can't be applied.");
+        return;
+      }
+      const applied = { code: res.code || code, discount_amount: Number(res.discount_amount ?? 0), discount_type: res.discount_type || "" };
+      setAppliedCoupon(applied);
+      if (typeof window !== "undefined") localStorage.setItem("af_coupon", JSON.stringify(applied));
+      setCouponInput("");
+    } catch (e) {
+      setCouponError(e instanceof Error ? e.message : "Could not apply the code. Try again.");
+    } finally { setCouponLoading(false); }
+  }
+
+  function handleRemoveCoupon() {
+    setAppliedCoupon(null);
+    setCouponError(null);
+    if (typeof window !== "undefined") localStorage.removeItem("af_coupon");
+  }
+
   async function handlePlaceOrder() {
     if (!shippingAddress) return;
     setIsPlacing(true);
@@ -217,6 +248,7 @@ export default function CheckoutReviewPage() {
           ach_account_last4: paymentMethod === "ach" ? achAccountLast4 : undefined,
           ach_account_type: paymentMethod === "ach" ? achAccountType : undefined,
           order_notes: orderNotes || undefined,
+          discount_code: appliedCoupon?.code || undefined,
           tax_amount: taxAmount > 0 ? taxAmount : undefined,
           tax_rate: taxRate?.rate ?? undefined,
           tax_region: taxRate?.region ?? undefined,
@@ -366,7 +398,7 @@ export default function CheckoutReviewPage() {
     : freshTaxAmount > 0
       ? freshTaxAmount
       : (taxRate ? Math.round(Math.max(0, subtotal - couponDiscount) * taxRate.rate / 100 * 100) / 100 : 0); // shipping not taxed
-  const total = subtotal + shipping + taxAmount - (isGuest ? 0 : couponDiscount) + convenienceFee;
+  const total = subtotal + shipping + taxAmount - couponDiscount + convenienceFee;
   const shippingLabel = SHIPPING_LABELS[shippingMethod] ?? "Standard Ground";
 
   return (
@@ -622,10 +654,33 @@ export default function CheckoutReviewPage() {
                   <span style={{ fontWeight: 700 }}>&#10003; Included</span>
                 </div>
               )}
-              {appliedCoupon && (
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#059669", padding: "8px 0", borderBottom: "1px solid #E2E2DE" }}>
-                  <span style={{ fontWeight: 600 }}>Coupon ({appliedCoupon.code})</span>
+              {appliedCoupon ? (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", color: "#059669", padding: "8px 0", borderBottom: "1px solid #E2E2DE" }}>
+                  <span style={{ fontWeight: 600 }}>
+                    Coupon ({appliedCoupon.code})
+                    <button onClick={handleRemoveCoupon} style={{ marginLeft: "8px", background: "none", border: "none", color: "#B91C1C", fontSize: "11px", cursor: "pointer", textDecoration: "underline", padding: 0 }}>Remove</button>
+                  </span>
                   <span style={{ fontWeight: 700 }}>-{formatCurrency(couponDiscount)}</span>
+                </div>
+              ) : (
+                <div style={{ padding: "10px 0", borderBottom: "1px solid #E2E2DE" }}>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <input
+                      value={couponInput}
+                      onChange={e => { setCouponInput(e.target.value); setCouponError(null); }}
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleApplyCoupon(); } }}
+                      placeholder="Discount code"
+                      style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "1px solid #D6D6D0", borderRadius: "6px", fontSize: "13px", outline: "none" }}
+                    />
+                    <button
+                      onClick={handleApplyCoupon}
+                      disabled={couponLoading || !couponInput.trim()}
+                      style={{ padding: "8px 16px", background: (couponLoading || !couponInput.trim()) ? "#C7C7C0" : "#1B3A5C", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: (couponLoading || !couponInput.trim()) ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+                    >
+                      {couponLoading ? "…" : "Apply"}
+                    </button>
+                  </div>
+                  {couponError && <div style={{ color: "#B91C1C", fontSize: "12px", marginTop: "6px" }}>{couponError}</div>}
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6B6B6B", padding: "8px 0", borderBottom: "1px solid #E2E2DE" }}>
