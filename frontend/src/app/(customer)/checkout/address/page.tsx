@@ -19,6 +19,14 @@ interface LiveRate {
   days: number | null;
 }
 
+// Per-customer shipping options from /api/v1/shipping/options (Phase 2).
+interface ShipOptions {
+  courier_enabled: boolean;
+  pickup_enabled: boolean;
+  pallet: { enabled: boolean; qualifies: boolean; cost: number; region: string; pallets: number };
+  free: { enabled: boolean; qualifies: boolean; min: number; subtotal: number };
+}
+
 const CARRIER_LOGOS: Record<string, string> = {
   USPS: "https://shippo-static.s3.amazonaws.com/providers/75/USPS.png",
   UPS: "https://shippo-static.s3.amazonaws.com/providers/75/UPS.png",
@@ -114,6 +122,7 @@ export default function CheckoutAddressPage() {
   const [errors, setErrors] = useState<Partial<typeof form>>({});
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [shippingGateError, setShippingGateError] = useState(false);
+  const [shipOptions, setShipOptions] = useState<ShipOptions | null>(null);
 
   const handleAddressAutofill = useCallback((addr: { street: string; city: string; state: string; zipCode: string }) => {
     setForm(prev => ({
@@ -225,7 +234,8 @@ export default function CheckoutAddressPage() {
 
   // Compute the shipping cost for a given method
   function methodCost(method: ShippingMethod): number {
-    if (method === "will_call") return 0;
+    if (method === "will_call" || method === "free") return 0;
+    if (method === "pallet") return shipOptions?.pallet.cost ?? 0;
     if (shippingTypeForUser === "live_shippo" && method === "standard") {
       return selectedLiveRate ? selectedLiveRate.cost : 0;
     }
@@ -290,6 +300,41 @@ export default function CheckoutAddressPage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shippingTypeForUser, activeZip, activeState, activeCity]);
+
+  // Per-customer shipping options (pallet + free). Company-based, so guests skip
+  // it (backend returns courier + pickup only for no-company sessions anyway).
+  // City is passed so the pallet flat rate resolves to Dallas / Houston / Other.
+  useEffect(() => {
+    if (authIsLoading || isGuest) return;
+    const t = setTimeout(() => {
+      apiClient.post<ShipOptions>("/api/v1/shipping/options", {
+        city: activeCity || "",
+        state: activeState || "",
+      })
+        .then(r => setShipOptions(r))
+        .catch(() => setShipOptions(null));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [authIsLoading, isGuest, activeCity, activeState]);
+
+  // If the currently-selected method is no longer offered (e.g. courier disabled
+  // for this customer, or pallet no longer qualifies), fall back to the first
+  // available option so the selected cost always matches a visible choice.
+  useEffect(() => {
+    const courierOn = shipOptions ? shipOptions.courier_enabled : true;
+    const pickupOn = shipOptions ? shipOptions.pickup_enabled : true;
+    const palletOn = !!(shipOptions?.pallet?.enabled && shipOptions?.pallet?.qualifies);
+    const freeOn = !!(shipOptions?.free?.enabled && shipOptions?.free?.qualifies);
+    const ids: ShippingMethod[] = [];
+    if (courierOn) ids.push("standard");
+    if (freeOn) ids.push("free");
+    if (palletOn) ids.push("pallet");
+    if (pickupOn) ids.push("will_call");
+    const first = ids[0];
+    if (first && !ids.includes(shippingMethod)) {
+      setShippingMethod(first);
+    }
+  }, [shipOptions, shippingMethod, setShippingMethod]);
 
   useEffect(() => {
     if (!activeState) {
@@ -371,7 +416,7 @@ export default function CheckoutAddressPage() {
     console.log("[Address] shippingTypeForUser:", shippingTypeForUser, "selectedLiveRate:", selectedLiveRate);
     setShippingType(shippingTypeForUser);
     sessionStorage.setItem('checkout_shipping_type', shippingTypeForUser);
-    if (shippingTypeForUser === "live_shippo" && selectedLiveRate) {
+    if (shippingTypeForUser === "live_shippo" && shippingMethod === "standard" && selectedLiveRate) {
       const rateToSave = { rate_id: selectedLiveRate.rate_id, carrier: selectedLiveRate.carrier, service: selectedLiveRate.service, price: selectedLiveRate.cost };
       console.log("[Address] saving selectedRate:", rateToSave);
       setSelectedRate(rateToSave);
@@ -442,6 +487,18 @@ export default function CheckoutAddressPage() {
     if (method === "will_call") {
       return { price: "FREE", note: "Pick up from our warehouse — no shipping charge." };
     }
+    if (method === "free") {
+      return { price: "FREE", note: "Free shipping — your order qualifies." };
+    }
+    if (method === "pallet") {
+      const cost = shipOptions?.pallet.cost ?? 0;
+      const region = shipOptions?.pallet.region ?? "Other";
+      const pallets = shipOptions?.pallet.pallets ?? 0;
+      return {
+        price: formatCurrency(cost),
+        note: `Pallet freight (${region}) · ~${pallets} pallet${pallets === 1 ? "" : "s"} in cart · flat rate.`,
+      };
+    }
     // Live Shippo rates mode
     if (shippingTypeForUser === "live_shippo" && method === "standard") {
       if (liveRatesLoading) return { price: "Fetching rates…" };
@@ -470,9 +527,18 @@ export default function CheckoutAddressPage() {
     return { price: formatCurrency(tierShipping), note: "Rate based on your assigned shipping tier." };
   }
 
+  // Per-customer availability. Defaults (guest / options not loaded yet) show
+  // the standard courier + pickup so checkout never loses those baseline options.
+  const courierOn = shipOptions ? shipOptions.courier_enabled : true;
+  const pickupOn = shipOptions ? shipOptions.pickup_enabled : true;
+  const palletOn = !!(shipOptions?.pallet?.enabled && shipOptions?.pallet?.qualifies);
+  const freeOn = !!(shipOptions?.free?.enabled && shipOptions?.free?.qualifies);
+
   const SHIPPING_OPTIONS: { id: ShippingMethod; label: string; sub: string }[] = [
-    { id: "standard", label: "Standard Ground", sub: "3–5 business days · Ships from Dallas, TX" },
-    { id: "will_call", label: "Will Call Pickup", sub: "Pick up at our warehouse · 10719 Turbeville Rd, Dallas, TX 75243 · Orders before 12 PM → same-day pickup by 4 PM · After 12 PM → next business day by 12 PM · Sat/Sun: closed · No shipping fee" },
+    ...(courierOn ? [{ id: "standard" as ShippingMethod, label: "Standard Ground", sub: "3–5 business days · Ships from Dallas, TX" }] : []),
+    ...(freeOn ? [{ id: "free" as ShippingMethod, label: "Free Shipping", sub: "Complimentary shipping — your order qualifies" }] : []),
+    ...(palletOn ? [{ id: "pallet" as ShippingMethod, label: "Pallet Freight (Bulk)", sub: "Flat-rate freight for full-pallet bulk orders" }] : []),
+    ...(pickupOn ? [{ id: "will_call" as ShippingMethod, label: "Will Call Pickup", sub: "Pick up at our warehouse · 10719 Turbeville Rd, Dallas, TX 75243 · Orders before 12 PM → same-day pickup by 4 PM · After 12 PM → next business day by 12 PM · Sat/Sun: closed · No shipping fee" }] : []),
   ];
 
   return (

@@ -233,6 +233,8 @@ export default function CheckoutPaymentPage() {
     standard: "Standard Ground",
     expedited: "Expedited (2-Day)",
     will_call: "Will Call Pickup",
+    pallet: "Pallet Freight (Bulk)",
+    free: "Free Shipping",
   };
 
   return (

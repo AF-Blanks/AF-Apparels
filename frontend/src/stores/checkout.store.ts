@@ -10,7 +10,7 @@ interface ShippingAddress {
   country: string;
 }
 
-export type ShippingMethod = "standard" | "expedited" | "will_call";
+export type ShippingMethod = "standard" | "expedited" | "will_call" | "pallet" | "free";
 
 export interface SelectedLiveRate {
   rate_id: string;
