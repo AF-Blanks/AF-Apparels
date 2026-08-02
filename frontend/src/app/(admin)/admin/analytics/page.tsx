@@ -23,6 +23,8 @@ interface AnalyticsData {
     orders_change_percent: number;
     customers_change_percent: number;
     conversion_rate?: number;
+    total_tax_collected?: number;
+    total_refunds?: number;
   };
   revenue_chart: { date: string; revenue: number; orders: number }[];
   order_status_breakdown: { status: string; count: number; revenue: number }[];
@@ -259,6 +261,11 @@ export default function AnalyticsPage() {
               label="Conversion Rate"
               value={`${data.overview.conversion_rate ?? 0}%`}
               color="#06B6D4"
+            />
+            <StatCard
+              label="Refunds"
+              value={fmt(data.overview.total_refunds ?? 0)}
+              color="#E8242A"
             />
             {/* Guest vs Wholesale */}
             <div style={{ ...card }}>

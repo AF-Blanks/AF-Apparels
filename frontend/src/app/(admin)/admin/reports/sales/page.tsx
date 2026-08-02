@@ -18,7 +18,7 @@ const GROUP_OPTIONS = [
 ];
 
 interface SalesReport {
-  summary: { total_orders: number; total_revenue: number; avg_order_value: number };
+  summary: { total_orders: number; total_revenue: number; avg_order_value: number; total_refunds?: number; gross_revenue?: number };
   period_data: { period: string; order_count: number; revenue: number }[];
   by_category: { category: string; revenue: number; items_sold: number }[];
   top_products: { product_name: string; sku: string; units_sold: number; revenue: number }[];
@@ -95,10 +95,11 @@ export default function SalesReportPage() {
       ) : data ? (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: "Total Orders", value: data.summary.total_orders.toLocaleString() },
-              { label: "Total Revenue", value: `$${data.summary.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+              { label: "Net Revenue", value: `$${data.summary.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+              { label: "Refunds", value: `$${(data.summary.total_refunds ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
               { label: "Avg Order Value", value: `$${data.summary.avg_order_value.toFixed(2)}` },
             ].map((s) => (
               <div key={s.label} className="bg-white border border-gray-200 rounded-lg p-5">
