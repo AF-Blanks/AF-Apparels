@@ -50,6 +50,13 @@ interface DraftLineItem {
   color: string | null; size: string | null; price: number; qty: number;
 }
 
+interface ShipCfg {
+  ship_courier_enabled: boolean; ship_pickup_enabled: boolean;
+  ship_pallet_enabled: boolean; ship_free_enabled: boolean;
+  ship_free_min: number; ship_pallet_dallas: number;
+  ship_pallet_houston: number; ship_pallet_other: number;
+}
+
 // ── Create Draft Modal (3-step) ────────────────────────────────────────────────
 
 function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (id: string) => void }) {
@@ -64,7 +71,11 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   const [companyDiscount, setCompanyDiscount] = useState(0); // percent
   const [companyZip, setCompanyZip] = useState("");
   const [companyState, setCompanyState] = useState("");
+  const [companyCity, setCompanyCity] = useState("");
   const [companyTaxExempt, setCompanyTaxExempt] = useState(false);
+  // Per-customer shipping config (the toggles admin set on the customer page)
+  const [shipCfg, setShipCfg] = useState<ShipCfg | null>(null);
+  const [shipMethod, setShipMethod] = useState<"standard" | "pickup" | "pallet" | "free">("standard");
 
   // Step 2
   const [products, setProducts] = useState<DraftProduct[]>([]);
@@ -130,8 +141,36 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   }
 
   const orderTotal = lineItems.reduce((s, l) => s + l.price * l.qty, 0); // subtotal
-  const shipNum = parseFloat(shippingCost) || 0;
+
+  // Per-customer shipping: the same options the admin toggled on the customer
+  // page drive the draft. Pallet rate follows the customer's city (Dallas /
+  // Houston / Other). Defaults (no config yet) allow courier + pickup.
+  const palletRegion = /dallas/i.test(companyCity) ? "Dallas" : /houston/i.test(companyCity) ? "Houston" : "Other";
+  const palletRate = shipCfg
+    ? (palletRegion === "Dallas" ? shipCfg.ship_pallet_dallas : palletRegion === "Houston" ? shipCfg.ship_pallet_houston : shipCfg.ship_pallet_other)
+    : 0;
+  const courierOn = shipCfg ? shipCfg.ship_courier_enabled : true;
+  const pickupOn = shipCfg ? shipCfg.ship_pickup_enabled : true;
+  const palletOn = !!shipCfg?.ship_pallet_enabled;
+  const freeOn = !!(shipCfg?.ship_free_enabled && orderTotal >= (shipCfg?.ship_free_min ?? 0));
+
+  const shipNum =
+    shipMethod === "pickup" || shipMethod === "free" ? 0
+      : shipMethod === "pallet" ? (Number(palletRate) || 0)
+        : (parseFloat(shippingCost) || 0); // standard / courier = manual
   const grandTotal = orderTotal + shipNum + taxAmount;
+
+  // If the selected method isn't offered for this customer, fall back to the
+  // first available (so the shipping shown always matches an enabled option).
+  useEffect(() => {
+    const avail: Array<typeof shipMethod> = [];
+    if (courierOn) avail.push("standard");
+    if (freeOn) avail.push("free");
+    if (palletOn) avail.push("pallet");
+    if (pickupOn) avail.push("pickup");
+    const first = avail[0];
+    if (first && !avail.includes(shipMethod)) setShipMethod(first);
+  }, [shipCfg, orderTotal, companyCity, shipMethod, courierOn, pickupOn, palletOn, freeOn]);
 
   // Auto-compute tax from the company's address + tax-exempt status (same engine
   // as checkout). Tax applies to the subtotal only — not shipping.
@@ -165,13 +204,14 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
           unit_price: item.price,
         });
       }
-      // Save manual shipping + auto-computed tax; backend recomputes the grand total.
-      if (shipNum > 0 || taxAmount > 0) {
-        await apiClient.patch(`/api/v1/admin/orders/${draft.id}`, {
-          shipping_cost: shipNum,
-          tax_amount: taxAmount,
-        });
-      }
+      // Save the chosen shipping method + cost + auto-computed tax; backend
+      // recomputes the grand total. Map the picker to the order's method names.
+      const orderMethod = shipMethod === "pickup" ? "will_call" : shipMethod === "free" ? "free" : shipMethod === "pallet" ? "pallet" : "standard";
+      await apiClient.patch(`/api/v1/admin/orders/${draft.id}`, {
+        shipping_cost: shipNum,
+        tax_amount: taxAmount,
+        shipping_method: orderMethod,
+      });
       onSuccess(draft.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create draft order");
@@ -220,13 +260,20 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                   {companies.map(c => (
                     <div key={c.id} onClick={async () => {
                       setCompanyId(c.id); setCompanyName(c.name); setCompanySearch(c.name); setCompanies([]);
+                      setShipMethod("standard"); setShippingCost("");
                       try {
-                        const detail = await apiClient.get<{ discount_percent?: number | null; postal_code?: string | null; state_province?: string | null; tax_exempt?: boolean }>(`/api/v1/admin/companies/${c.id}`);
+                        const detail = await apiClient.get<{ discount_percent?: number | null; postal_code?: string | null; state_province?: string | null; city?: string | null; tax_exempt?: boolean }>(`/api/v1/admin/companies/${c.id}`);
                         setCompanyDiscount(detail?.discount_percent ?? 0);
                         setCompanyZip(detail?.postal_code ?? "");
                         setCompanyState(detail?.state_province ?? "");
+                        setCompanyCity(detail?.city ?? "");
                         setCompanyTaxExempt(!!detail?.tax_exempt);
-                      } catch { setCompanyDiscount(0); setCompanyZip(""); setCompanyState(""); setCompanyTaxExempt(false); }
+                      } catch { setCompanyDiscount(0); setCompanyZip(""); setCompanyState(""); setCompanyCity(""); setCompanyTaxExempt(false); }
+                      // Per-customer shipping options (the toggles set on the customer page)
+                      try {
+                        const cfg = await apiClient.get<ShipCfg>(`/api/v1/admin/companies/${c.id}/shipping-config`);
+                        setShipCfg(cfg);
+                      } catch { setShipCfg(null); }
                     }}
                       style={{ padding: "10px 12px", fontSize: "13px", cursor: "pointer", color: "#2A2830" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#F4F3EF")}
@@ -425,14 +472,30 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                         <td style={{ padding: "6px 12px", fontSize: "13px", color: "#2A2830" }}>${orderTotal.toFixed(2)}</td>
                       </tr>
                       <tr>
-                        <td colSpan={4} style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px", color: "#7A7880" }}>Shipping</td>
-                        <td style={{ padding: "6px 12px", whiteSpace: "nowrap" }}>
-                          <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "3px" }}>$</span>
-                          <input type="number" min="0" step="0.01" placeholder="0.00"
-                            value={shippingCost}
-                            onChange={e => setShippingCost(e.target.value)}
-                            style={{ width: "78px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px" }}
-                          />
+                        <td colSpan={4} style={{ padding: "6px 12px", textAlign: "right", fontSize: "12px", color: "#7A7880", verticalAlign: "top" }}>Shipping</td>
+                        <td style={{ padding: "6px 12px" }}>
+                          <select
+                            value={shipMethod}
+                            onChange={e => setShipMethod(e.target.value as typeof shipMethod)}
+                            style={{ width: "100%", minWidth: "150px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px", marginBottom: "4px" }}
+                          >
+                            {courierOn && <option value="standard">Standard Ground (enter rate)</option>}
+                            {freeOn && <option value="free">Free Shipping — $0</option>}
+                            {palletOn && <option value="pallet">{`Pallet Freight (${palletRegion}) — $${(Number(palletRate) || 0).toFixed(2)}`}</option>}
+                            {pickupOn && <option value="pickup">Free Pickup — $0</option>}
+                          </select>
+                          {shipMethod === "standard" ? (
+                            <div style={{ whiteSpace: "nowrap" }}>
+                              <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "3px" }}>$</span>
+                              <input type="number" min="0" step="0.01" placeholder="0.00"
+                                value={shippingCost}
+                                onChange={e => setShippingCost(e.target.value)}
+                                style={{ width: "78px", padding: "4px 6px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px" }}
+                              />
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>${shipNum.toFixed(2)}</div>
+                          )}
                         </td>
                       </tr>
                       <tr>
