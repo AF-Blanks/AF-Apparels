@@ -931,7 +931,8 @@ export default function AdminProductEditPage() {
 
                 {/* Variants table */}
                 {(expandAll || expandedGroups.includes(group.color)) && (
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", minWidth: "880px", borderCollapse: "collapse", fontSize: "13px" }}>
                     <thead>
                       <tr style={{ borderBottom: "1px solid #E2E0DA", background: "#FAFAFA" }}>
                         <th style={{ ...thStyle, width: "36px" }}>
@@ -1064,6 +1065,7 @@ export default function AdminProductEditPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             ))}
