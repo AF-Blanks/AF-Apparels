@@ -260,6 +260,7 @@ export default function AdminCustomersPage() {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<{ created: number; updated: number; skipped_duplicate: number; skipped_no_email: number; errors: string[] } | null>(null);
   const [pwSetupLoading, setPwSetupLoading] = useState(false);
+  const [backfillLoading, setBackfillLoading] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 50;
 
@@ -330,6 +331,32 @@ export default function AdminCustomersPage() {
     }
   }
 
+  // One-time fix: give a wholesale company to any customer login that has none,
+  // so they show in Customers and can place orders. Previews the count first,
+  // creates nothing until the admin confirms. Guests/retail/admins untouched.
+  async function handleBackfillCompanies() {
+    try {
+      const { count, sample } = await adminService.getCompanyLessUsers();
+      if (!count) { alert("All customers already have a wholesale account — nothing to fix ✅"); return; }
+      const names = sample.length
+        ? `\n\nFor example:\n• ${sample.slice(0, 8).join("\n• ")}${count > sample.length ? "\n…and more" : ""}`
+        : "";
+      if (!confirm(
+        `${count} customer login(s) have no wholesale account yet.\n\n` +
+        `Create a wholesale account (company) for each so they appear in Customers and can place orders? ` +
+        `Guests, retail buyers, and admins are NOT affected.${names}`
+      )) return;
+      setBackfillLoading(true);
+      const res = await adminService.backfillCompanies();
+      alert(`Done ✅  Created ${res.created} wholesale account(s). They now appear in Customers.`);
+      load();
+    } catch (err) {
+      alert(`Failed: ${err instanceof Error ? err.message : "Server error"}`);
+    } finally {
+      setBackfillLoading(false);
+    }
+  }
+
   async function handleImportFile(file: File) {
     setImportLoading(true);
     setImportResult(null);
@@ -380,6 +407,12 @@ export default function AdminCustomersPage() {
             onClick={() => importInputRef.current?.click()} disabled={importLoading}
             style={{ padding: "10px 18px", border: "1px solid #E2E0DA", borderRadius: "8px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: importLoading ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: importLoading ? .6 : 1 }}>
             {importLoading ? "Importing…" : "Import Customers"}
+          </button>
+          <button
+            onClick={handleBackfillCompanies} disabled={backfillLoading}
+            title="Create wholesale accounts for customer logins that have no company (shows count first)"
+            style={{ padding: "10px 18px", border: "1px solid #E2E0DA", borderRadius: "8px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: backfillLoading ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px", opacity: backfillLoading ? .6 : 1 }}>
+            {backfillLoading ? "Fixing…" : "Fix missing accounts"}
           </button>
           <button
             onClick={handleSendPasswordSetup} disabled={pwSetupLoading}

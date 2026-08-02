@@ -314,6 +314,14 @@ export const adminService = {
     return apiClient.post<{ queued: number }>("/api/v1/admin/customers/send-password-setup", {});
   },
 
+  async getCompanyLessUsers() {
+    return apiClient.get<{ count: number; sample: string[] }>("/api/v1/admin/companies/company-less-users");
+  },
+
+  async backfillCompanies() {
+    return apiClient.post<{ created: number }>("/api/v1/admin/companies/backfill-companies", {});
+  },
+
   // Orders
   async listOrders(params?: { q?: string; status?: string; page?: number | string; company_id?: string; page_size?: number; date_from?: string; date_to?: string; guest_only?: string }) {
     const query = new URLSearchParams();
