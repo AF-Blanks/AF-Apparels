@@ -9,6 +9,7 @@ import { useCheckoutStore, type ShippingMethod } from "@/stores/checkout.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { cartService } from "@/services/cart.service";
 import { formatCurrency } from "@/lib/utils";
+import CouponField from "@/components/checkout/CouponField";
 
 interface LiveRate {
   rate_id: string;
@@ -846,6 +847,7 @@ export default function CheckoutAddressPage() {
                 <span>Subtotal</span>
                 <span style={{ fontWeight: 600, color: "#1A1A1A" }}>{formatCurrency(subtotal)}</span>
               </div>
+              <CouponField subtotal={subtotal} isGuest={isGuest} onChange={setCouponDiscount} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#6B6B6B", padding: "8px 0", borderBottom: "1px solid #E2E2DE" }}>
                 <span>Shipping ({shippingTypeForUser === "live_shippo" && shippingMethod === "standard" && selectedLiveRate ? `${selectedLiveRate.carrier} ${selectedLiveRate.service}` : SHIPPING_OPTIONS.find(o => o.id === shippingMethod)?.label})</span>
                 <span style={{ fontWeight: 600, color: (shippingMethod === "will_call" || (tierShipping !== null && selectedCost === 0)) ? "#059669" : "#1A1A1A" }}>

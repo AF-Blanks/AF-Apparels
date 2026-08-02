@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { QBPaymentForm } from "@/components/checkout/QBPaymentForm";
+import CouponField from "@/components/checkout/CouponField";
 import { useCheckoutStore } from "@/stores/checkout.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { apiClient } from "@/lib/api-client";
@@ -226,7 +227,7 @@ export default function CheckoutPaymentPage() {
   const shipping = shippingCost;
   const taxAmountDisplay = storedTaxAmount > 0 ? storedTaxAmount : 0;
   const convenienceFee = (isWholesale && paymentType === "card") ? Math.round(subtotal * 0.03 * 100) / 100 : 0;
-  const total = subtotal + shipping + taxAmountDisplay - (isGuest ? 0 : couponDiscount) + convenienceFee;
+  const total = subtotal + shipping + taxAmountDisplay - couponDiscount + convenienceFee;
 
   const SHIPPING_LABELS: Record<string, string> = {
     standard: "Standard Ground",
@@ -618,6 +619,7 @@ export default function CheckoutPaymentPage() {
                   <span>Subtotal{cart ? ` (${cart.total_units} units)` : ""}</span>
                   <span style={{ fontWeight: 600, color: "#1A1A1A" }}>{formatCurrency(subtotal)}</span>
                 </div>
+                <CouponField subtotal={subtotal} isGuest={isGuest} onChange={setCouponDiscount} />
                 {cart && Number(cart.discount_percent) > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#059669", padding: "8px 0", borderBottom: "1px solid #E2E2DE" }}>
                     <span style={{ fontWeight: 600 }}>Tier Discount ({cart.discount_percent}% applied)</span>
