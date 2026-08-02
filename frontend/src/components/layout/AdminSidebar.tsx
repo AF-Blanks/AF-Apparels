@@ -290,7 +290,6 @@ export function AdminSidebar() {
 
       {settingsOpen && (
         <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
-          <SubLink href="/admin/settings/taxes" label="Taxes & Duties" />
           <SubLink href="/admin/analytics" label="Analytics" />
           <SubLink href="/admin/users" label="Users" />
           <SubLink href="/admin/settings/quickbooks" label="QuickBooks" />
