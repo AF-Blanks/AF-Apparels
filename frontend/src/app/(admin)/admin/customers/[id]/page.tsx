@@ -861,7 +861,7 @@ export default function CustomerDetailPage() {
             <div style={card}>
               <div style={sectionTitle}>Shipping Options</div>
               <p style={{ fontSize: "12px", color: "#7A7880", marginBottom: "12px", lineHeight: 1.5 }}>
-                Turn each shipping method on/off for this customer. Saved now; these will drive checkout shipping in the next update.
+                Turn each shipping method on/off for this customer. These control exactly what this customer sees at checkout — free shipping shows once their order total reaches the minimum below, and pallet freight shows when their cart fills a full pallet.
               </p>
               {[
                 { on: shipCfg.ship_courier_enabled, label: "Courier API (Standard) — live rates", toggle: () => setShipCfg(c => ({ ...c, ship_courier_enabled: !c.ship_courier_enabled })) },
