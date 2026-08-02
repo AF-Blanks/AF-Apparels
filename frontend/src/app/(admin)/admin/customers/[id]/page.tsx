@@ -162,6 +162,11 @@ export default function CustomerDetailPage() {
 
   // net 30
   const [net30Enabled, setNet30Enabled] = useState(false);
+  const [shipCfg, setShipCfg] = useState({
+    ship_courier_enabled: true, ship_pickup_enabled: true, ship_pallet_enabled: false, ship_free_enabled: false,
+    ship_free_min: 500, ship_pallet_dallas: 60, ship_pallet_houston: 125, ship_pallet_other: 275,
+  });
+  const [savingShip, setSavingShip] = useState(false);
   const [savingNet30, setSavingNet30] = useState(false);
 
   // feedback
@@ -185,6 +190,10 @@ export default function CustomerDetailPage() {
         setNoteText(co.admin_notes ?? "");
         setTaxExempt(co.tax_exempt ?? false);
         setNet30Enabled(co.net30_enabled ?? false);
+
+        apiClient.get<typeof shipCfg>(`/api/v1/admin/companies/${id}/shipping-config`)
+          .then(cfg => setShipCfg(prev => ({ ...prev, ...cfg })))
+          .catch(() => {});
 
         const groups = await apiClient.get<DiscountGroup[]>("/api/v1/admin/discount-groups").catch(() => []);
         setDiscountGroups(Array.isArray(groups) ? groups : []);
@@ -328,6 +337,18 @@ export default function CustomerDetailPage() {
       showToast("Failed to update Net 30 status", false);
     } finally {
       setSavingNet30(false);
+    }
+  }
+
+  async function handleSaveShipping() {
+    setSavingShip(true);
+    try {
+      await apiClient.patch(`/api/v1/admin/companies/${id}/shipping-config`, shipCfg);
+      showToast("Shipping options saved");
+    } catch {
+      showToast("Failed to save shipping options", false);
+    } finally {
+      setSavingShip(false);
     }
   }
 
@@ -832,6 +853,60 @@ export default function CustomerDetailPage() {
                   {savingNet30 ? "Saving…" : net30Enabled ? "Net 30 enabled — pay within 30 days" : "Net 30 disabled"}
                 </span>
               </label>
+            </div>
+          )}
+
+          {/* Shipping Options (per-customer) */}
+          {customer.status === "active" && (
+            <div style={card}>
+              <div style={sectionTitle}>Shipping Options</div>
+              <p style={{ fontSize: "12px", color: "#7A7880", marginBottom: "12px", lineHeight: 1.5 }}>
+                Turn each shipping method on/off for this customer. Saved now; these will drive checkout shipping in the next update.
+              </p>
+              {[
+                { on: shipCfg.ship_courier_enabled, label: "Courier API (Standard) — live rates", toggle: () => setShipCfg(c => ({ ...c, ship_courier_enabled: !c.ship_courier_enabled })) },
+                { on: shipCfg.ship_pickup_enabled, label: "Free Pickup — collect from warehouse", toggle: () => setShipCfg(c => ({ ...c, ship_pickup_enabled: !c.ship_pickup_enabled })) },
+                { on: shipCfg.ship_pallet_enabled, label: "Pallet Flat Rate — bulk orders", toggle: () => setShipCfg(c => ({ ...c, ship_pallet_enabled: !c.ship_pallet_enabled })) },
+                { on: shipCfg.ship_free_enabled, label: "Free Shipping — over a minimum", toggle: () => setShipCfg(c => ({ ...c, ship_free_enabled: !c.ship_free_enabled })) },
+              ].map((row, i) => (
+                <label key={i} onClick={row.toggle} style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", marginBottom: "10px" }}>
+                  <div style={{ position: "relative", width: "44px", height: "24px", borderRadius: "12px", background: row.on ? "#1A5CFF" : "#E2E0DA", flexShrink: 0 }}>
+                    <div style={{ position: "absolute", top: "3px", left: row.on ? "23px" : "3px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }} />
+                  </div>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: row.on ? "#2A2830" : "#7A7880" }}>{row.label}</span>
+                </label>
+              ))}
+
+              {shipCfg.ship_free_enabled && (
+                <div style={{ margin: "4px 0 10px", paddingLeft: "56px" }}>
+                  <label style={{ fontSize: "11px", color: "#7A7880", display: "block", marginBottom: "3px" }}>Free shipping when order ≥ ($)</label>
+                  <input type="number" min="0" value={shipCfg.ship_free_min} onChange={e => setShipCfg(c => ({ ...c, ship_free_min: Number(e.target.value) }))} style={{ width: "120px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} />
+                </div>
+              )}
+
+              {shipCfg.ship_pallet_enabled && (
+                <div style={{ margin: "4px 0 10px", paddingLeft: "56px" }}>
+                  <label style={{ fontSize: "11px", color: "#7A7880", display: "block", marginBottom: "4px" }}>Pallet flat rate ($) — per full pallet</label>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#aaa", marginBottom: "2px" }}>Dallas</div>
+                      <input type="number" min="0" value={shipCfg.ship_pallet_dallas} onChange={e => setShipCfg(c => ({ ...c, ship_pallet_dallas: Number(e.target.value) }))} style={{ width: "80px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#aaa", marginBottom: "2px" }}>Houston</div>
+                      <input type="number" min="0" value={shipCfg.ship_pallet_houston} onChange={e => setShipCfg(c => ({ ...c, ship_pallet_houston: Number(e.target.value) }))} style={{ width: "80px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "#aaa", marginBottom: "2px" }}>Other</div>
+                      <input type="number" min="0" value={shipCfg.ship_pallet_other} onChange={e => setShipCfg(c => ({ ...c, ship_pallet_other: Number(e.target.value) }))} style={{ width: "80px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={handleSaveShipping} disabled={savingShip} style={{ marginTop: "4px", padding: "8px 18px", background: "#1A5CFF", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: savingShip ? "not-allowed" : "pointer", opacity: savingShip ? 0.6 : 1 }}>
+                {savingShip ? "Saving…" : "Save Shipping Options"}
+              </button>
             </div>
           )}
 
