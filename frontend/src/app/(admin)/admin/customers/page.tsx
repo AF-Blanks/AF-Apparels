@@ -150,24 +150,16 @@ function AddCustomerModal({ pricingTiers, discountGroups, onClose, onSuccess }: 
               <input style={inp} value={form.postal_code} onChange={e => set("postal_code", e.target.value)} />
             </div>
             <div>
-              <label style={lbl}>Pricing Tier (flat %)</label>
-              <select style={inp} value={form.pricing_tier_id} onChange={e => set("pricing_tier_id", e.target.value)}>
+              <label style={lbl}>Customer Tier (discount group)</label>
+              <select style={inp} value={form.customer_tag} onChange={e => set("customer_tag", e.target.value)}>
                 <option value="">None</option>
-                {pricingTiers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {discountGroups.map(g => (
+                  <option key={g.id} value={g.customer_tag ?? ""}>{g.title}</option>
+                ))}
               </select>
             </div>
           </div>
-
-          <div style={{ marginTop: "14px" }}>
-            <label style={lbl}>Customer Tier (discount group)</label>
-            <select style={inp} value={form.customer_tag} onChange={e => set("customer_tag", e.target.value)}>
-              <option value="">None</option>
-              {discountGroups.map(g => (
-                <option key={g.id} value={g.customer_tag ?? ""}>{g.title}</option>
-              ))}
-            </select>
-            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Your tiers (Tier-1…5, Stephen-5, RAJ-6) — sets the customer&apos;s per-variant pricing.</div>
-          </div>
+          <div style={{ fontSize: "11px", color: "#aaa", marginTop: "6px" }}>Customer Tier = your Tier-1…5 / Stephen-5 / RAJ-6 groups — sets the customer&apos;s per-variant pricing.</div>
 
           <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#7A7880", marginTop: "20px", marginBottom: "12px" }}>Contact Person (optional)</div>
           <div className="checkout-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
