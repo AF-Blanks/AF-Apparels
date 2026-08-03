@@ -170,6 +170,14 @@ export const adminService = {
     return apiClient.post("/api/v1/admin/inventory/bulk-adjust", data);
   },
 
+  async importInventoryCsv(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    return apiClient.postForm<{ imported: number; skipped: number; errors: string[] }>(
+      "/api/v1/admin/inventory/import-csv", form
+    );
+  },
+
   async listWarehouses() {
     return apiClient.get("/api/v1/admin/warehouses");
   },

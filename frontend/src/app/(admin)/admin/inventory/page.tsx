@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { adminService } from "@/services/admin.service";
 import { StockAdjustmentModal } from "@/components/admin/StockAdjustmentModal";
 
@@ -182,6 +182,8 @@ export default function AdminInventoryPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [warehouseId, setWarehouseId] = useState<string>("");
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     setIsLoading(true);
@@ -190,6 +192,25 @@ export default function AdminInventoryPage() {
       setRows(data);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  // Bulk-set stock from a CSV (SKU + Quantity on hand). Overwrites each variant's
+  // stock and syncs the touched variants to QuickBooks in the background (batched).
+  async function handleImportFile(file: File) {
+    setImporting(true);
+    try {
+      const res = await adminService.importInventoryCsv(file);
+      const errPreview = res.errors.length
+        ? `\n\n${res.errors.length} row(s) skipped. First few:\n• ${res.errors.slice(0, 5).join("\n• ")}`
+        : "";
+      alert(`Done ✅\nImported: ${res.imported}\nSkipped: ${res.skipped}${errPreview}\n\nStock is syncing to QuickBooks in the background.`);
+      load();
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : "Server error"}`);
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = "";
     }
   }
 
@@ -274,11 +295,27 @@ export default function AdminInventoryPage() {
             {filtered.length} records{lowCount > 0 ? ` · ${lowCount} low stock` : ""}
           </p>
         </div>
-        <button
-          onClick={() => exportInventoryToCsv(filtered)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm hover:bg-gray-50">
-          Export CSV
-        </button>
+        <div className="flex gap-2">
+          <input
+            ref={importRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+          />
+          <button
+            onClick={() => importRef.current?.click()}
+            disabled={importing}
+            title="Upload a CSV with SKU + Quantity on hand to set stock in bulk"
+            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-60">
+            {importing ? "Importing…" : "Import Stock (CSV)"}
+          </button>
+          <button
+            onClick={() => exportInventoryToCsv(filtered)}
+            className="border border-gray-300 rounded-md px-3 py-1.5 text-sm hover:bg-gray-50">
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
