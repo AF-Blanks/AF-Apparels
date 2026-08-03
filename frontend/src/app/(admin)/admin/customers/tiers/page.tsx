@@ -228,6 +228,13 @@ export default function DiscountGroupsPage() {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [groupForm, setGroupForm] = useState({ ...EMPTY_GROUP_FORM });
   const [savingGroup, setSavingGroup] = useState(false);
+  // Per-customer shipping options applied to the whole group (bulk-apply)
+  const [groupShipCfg, setGroupShipCfg] = useState({
+    ship_courier_enabled: true, ship_pickup_enabled: true, ship_pallet_enabled: false, ship_free_enabled: false,
+    ship_free_min: 500, ship_pallet_dallas: 60, ship_pallet_houston: 125, ship_pallet_other: 275,
+  });
+  const [groupShipMembers, setGroupShipMembers] = useState(0);
+  const [applyingGroupShip, setApplyingGroupShip] = useState(false);
   const [groupSearch, setGroupSearch] = useState("");
 
   // ── Browse state (Applies To picker) ─────────────────────────────────────
@@ -389,6 +396,18 @@ export default function DiscountGroupsPage() {
     else setBrowseList([]);
     setShowGroupModal(true);
     loadAllCustomers();
+    // Load the group's per-customer shipping options (representative + member count)
+    apiClient.get<typeof groupShipCfg & { member_count?: number }>(`/api/v1/admin/discount-groups/${g.id}/shipping`)
+      .then(r => {
+        setGroupShipCfg({
+          ship_courier_enabled: r.ship_courier_enabled, ship_pickup_enabled: r.ship_pickup_enabled,
+          ship_pallet_enabled: r.ship_pallet_enabled, ship_free_enabled: r.ship_free_enabled,
+          ship_free_min: r.ship_free_min, ship_pallet_dallas: r.ship_pallet_dallas,
+          ship_pallet_houston: r.ship_pallet_houston, ship_pallet_other: r.ship_pallet_other,
+        });
+        setGroupShipMembers(r.member_count ?? 0);
+      })
+      .catch(() => setGroupShipMembers(0));
     if (g.customer_tag) {
       loadGroupCustomers(g.customer_tag);
     } else {
@@ -430,6 +449,21 @@ export default function DiscountGroupsPage() {
       showToast(assign ? "Customer assigned to group" : "Customer removed from group");
     } catch {
       showToast("Failed to update customer", false);
+    }
+  }
+
+  // Bulk-apply the 4 shipping options to every customer in this group.
+  async function handleApplyGroupShipping() {
+    if (!editingGroupId) { showToast("Save the group first", false); return; }
+    if (!confirm(`Apply these shipping options to all ${groupShipMembers} customer(s) in this group? This overwrites each customer's current shipping setup.`)) return;
+    setApplyingGroupShip(true);
+    try {
+      const res = await apiClient.post<{ applied: number }>(`/api/v1/admin/discount-groups/${editingGroupId}/apply-shipping`, groupShipCfg);
+      showToast(`Shipping applied to ${res.applied} customer(s) ✅`);
+    } catch {
+      showToast("Failed to apply shipping", false);
+    } finally {
+      setApplyingGroupShip(false);
     }
   }
 
@@ -1146,6 +1180,48 @@ export default function DiscountGroupsPage() {
 
               </div>
             </div>
+
+            {/* Per-customer shipping options — bulk-apply to every customer in this group */}
+            {editingGroupId && (
+              <div style={{ background: "#F4F3EF", borderRadius: "10px", padding: "16px 18px", marginBottom: "16px" }}>
+                <div style={{ fontFamily: "var(--font-bebas)", fontSize: "13px", letterSpacing: ".1em", color: "#7A7880", marginBottom: "6px" }}>PER-CUSTOMER SHIPPING OPTIONS</div>
+                <p style={{ fontSize: "12px", color: "#7A7880", marginBottom: "12px", lineHeight: 1.5 }}>
+                  The same 4 options as each customer&apos;s page. Set them here and apply to <strong>all {groupShipMembers} customer{groupShipMembers === 1 ? "" : "s"}</strong> in this group at once.
+                </p>
+                {[
+                  { on: groupShipCfg.ship_courier_enabled, label: "Courier API (Standard) — live rates", toggle: () => setGroupShipCfg(c => ({ ...c, ship_courier_enabled: !c.ship_courier_enabled })) },
+                  { on: groupShipCfg.ship_pickup_enabled, label: "Free Pickup — collect from warehouse", toggle: () => setGroupShipCfg(c => ({ ...c, ship_pickup_enabled: !c.ship_pickup_enabled })) },
+                  { on: groupShipCfg.ship_pallet_enabled, label: "Pallet Flat Rate — bulk orders", toggle: () => setGroupShipCfg(c => ({ ...c, ship_pallet_enabled: !c.ship_pallet_enabled })) },
+                  { on: groupShipCfg.ship_free_enabled, label: "Free Shipping — over a minimum", toggle: () => setGroupShipCfg(c => ({ ...c, ship_free_enabled: !c.ship_free_enabled })) },
+                ].map((row, i) => (
+                  <label key={i} onClick={row.toggle} style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", marginBottom: "10px" }}>
+                    <div style={{ position: "relative", width: "44px", height: "24px", borderRadius: "12px", background: row.on ? "#1A5CFF" : "#E2E0DA", flexShrink: 0 }}>
+                      <div style={{ position: "absolute", top: "3px", left: row.on ? "23px" : "3px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }} />
+                    </div>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: row.on ? "#2A2830" : "#7A7880" }}>{row.label}</span>
+                  </label>
+                ))}
+                {groupShipCfg.ship_free_enabled && (
+                  <div style={{ margin: "4px 0 10px", paddingLeft: "56px" }}>
+                    <label style={{ fontSize: "11px", color: "#7A7880", display: "block", marginBottom: "3px" }}>Free shipping when order ≥ ($)</label>
+                    <input type="number" min="0" value={groupShipCfg.ship_free_min} onChange={e => setGroupShipCfg(c => ({ ...c, ship_free_min: Number(e.target.value) }))} style={{ width: "120px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} />
+                  </div>
+                )}
+                {groupShipCfg.ship_pallet_enabled && (
+                  <div style={{ margin: "4px 0 10px", paddingLeft: "56px" }}>
+                    <label style={{ fontSize: "11px", color: "#7A7880", display: "block", marginBottom: "4px" }}>Pallet flat rate ($) — per full pallet</label>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <div><div style={{ fontSize: "10px", color: "#aaa", marginBottom: "2px" }}>Dallas</div><input type="number" min="0" value={groupShipCfg.ship_pallet_dallas} onChange={e => setGroupShipCfg(c => ({ ...c, ship_pallet_dallas: Number(e.target.value) }))} style={{ width: "80px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} /></div>
+                      <div><div style={{ fontSize: "10px", color: "#aaa", marginBottom: "2px" }}>Houston</div><input type="number" min="0" value={groupShipCfg.ship_pallet_houston} onChange={e => setGroupShipCfg(c => ({ ...c, ship_pallet_houston: Number(e.target.value) }))} style={{ width: "80px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} /></div>
+                      <div><div style={{ fontSize: "10px", color: "#aaa", marginBottom: "2px" }}>Other</div><input type="number" min="0" value={groupShipCfg.ship_pallet_other} onChange={e => setGroupShipCfg(c => ({ ...c, ship_pallet_other: Number(e.target.value) }))} style={{ width: "80px", padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px" }} /></div>
+                    </div>
+                  </div>
+                )}
+                <button onClick={handleApplyGroupShipping} disabled={applyingGroupShip || groupShipMembers === 0} style={{ marginTop: "4px", padding: "9px 18px", background: (applyingGroupShip || groupShipMembers === 0) ? "#aaa" : "#059669", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: (applyingGroupShip || groupShipMembers === 0) ? "not-allowed" : "pointer" }}>
+                  {applyingGroupShip ? "Applying…" : `Apply to all ${groupShipMembers} customer${groupShipMembers === 1 ? "" : "s"} in this group`}
+                </button>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button onClick={() => setShowGroupModal(false)} style={{ padding: "11px 22px", border: "1px solid #E2E0DA", borderRadius: "8px", background: "#fff", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>Cancel</button>
