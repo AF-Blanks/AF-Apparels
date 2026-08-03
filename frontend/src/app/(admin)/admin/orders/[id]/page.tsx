@@ -314,6 +314,7 @@ export default function AdminOrderDetailPage() {
   const [selectedVariant, setSelectedVariant] = useState<{ variant_id: string; sku: string; product_name: string; color: string | null; size: string | null; price: number } | null>(null);
   const [addQty, setAddQty] = useState(1);
   const [addItemMsg, setAddItemMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -425,6 +426,22 @@ export default function AdminOrderDetailPage() {
     } catch {
       setMsg({ text: "QB sync failed.", ok: false });
     } finally { setIsSyncing(false); }
+  }
+
+  async function handleDeleteOrder() {
+    if (!order) return;
+    const paidWarn = order.payment_status === "paid"
+      ? "\n\n⚠️ This order is marked PAID. Deleting it removes it from reports and voids its QuickBooks invoice."
+      : "";
+    if (!window.confirm(`Delete order ${order.order_number} permanently? This cannot be undone.${paidWarn}`)) return;
+    setDeleting(true); setMsg(null);
+    try {
+      await adminService.deleteOrder(order.id ?? id);
+      router.push("/admin/orders");
+    } catch (err: unknown) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to delete order.", ok: false });
+      setDeleting(false);
+    }
   }
 
   async function handleMarkShipped() {
@@ -666,18 +683,25 @@ export default function AdminOrderDetailPage() {
     if (!val.trim()) { setItemResults([]); return; }
     searchDebounce.current = setTimeout(async () => {
       try {
-        const data = await apiClient.get<{ id: string; name: string; variants: { id: string; sku: string; color: string | null; size: string | null; retail_price: number }[] }[]>(
+        const data = await apiClient.get<{ id: string; name: string; product_code?: string | null; variants: { id: string; sku: string; color: string | null; size: string | null; retail_price: number }[] }[]>(
           `/api/v1/admin/products?q=${encodeURIComponent(val)}&page_size=20`
         );
+        // Intelligent narrowing: every word the admin typed must appear somewhere
+        // in the variant (product name/code + color + size + sku). "1001 black" →
+        // only 1001 blacks; add "xl" → just the 1001 black XL.
+        const tokens = val.trim().toLowerCase().split(/\s+/).filter(Boolean);
         const results: typeof itemResults = [];
         for (const p of (Array.isArray(data) ? data : []) as typeof data) {
           for (const v of p.variants ?? []) {
-            results.push({ variant_id: v.id, sku: v.sku, product_name: p.name, color: v.color, size: v.size, price: Number(v.retail_price || 0) });
+            const hay = `${p.name} ${p.product_code ?? ""} ${v.color ?? ""} ${v.size ?? ""} ${v.sku ?? ""}`.toLowerCase();
+            if (tokens.every(t => hay.includes(t))) {
+              results.push({ variant_id: v.id, sku: v.sku, product_name: p.name, color: v.color, size: v.size, price: Number(v.retail_price || 0) });
+            }
           }
         }
-        setItemResults(results.slice(0, 30));
+        setItemResults(results.slice(0, 40));
       } catch { /* ignore */ }
-    }, 350);
+    }, 300);
   }
 
   async function handleAddItem() {
@@ -805,13 +829,22 @@ export default function AdminOrderDetailPage() {
             <StatusBadge status={order.payment_status} />
           </p>
         </div>
-        <button
-          onClick={() => window.print()}
-          style={{ display: "flex", alignItems: "center", gap: "6px", background: "#fff", border: "1.5px solid #E2E0DA", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#2A2830", cursor: "pointer" }}
-          className="no-print"
-        >
-          🖨️ Print
-        </button>
+        <div style={{ display: "flex", gap: "8px" }} className="no-print">
+          <button
+            onClick={() => window.print()}
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "#fff", border: "1.5px solid #E2E0DA", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#2A2830", cursor: "pointer" }}
+          >
+            🖨️ Print
+          </button>
+          <button
+            onClick={handleDeleteOrder}
+            disabled={deleting}
+            title="Permanently delete this order"
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "#fff", border: "1.5px solid rgba(232,36,42,.4)", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#E8242A", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}
+          >
+            🗑️ {deleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
       </div>
       <style>{`
         @media print {

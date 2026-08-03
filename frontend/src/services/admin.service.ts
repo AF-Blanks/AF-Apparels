@@ -359,6 +359,10 @@ export const adminService = {
     return apiClient.post(`/api/v1/admin/orders/${id}/cancel`, { reason });
   },
 
+  async deleteOrder(id: string) {
+    return apiClient.delete<{ message: string }>(`/api/v1/admin/orders/${id}`);
+  },
+
   async syncOrderToQb(id: string) {
     return apiClient.post(`/api/v1/admin/orders/${id}/sync-quickbooks`, {});
   },
