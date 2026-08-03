@@ -1092,7 +1092,7 @@ export default function DiscountGroupsPage() {
                   </div>
                 )}
                 <button onClick={handleApplyGroupShipping} disabled={applyingGroupShip || groupShipMembers === 0} style={{ marginTop: "4px", padding: "9px 18px", background: (applyingGroupShip || groupShipMembers === 0) ? "#aaa" : "#059669", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: (applyingGroupShip || groupShipMembers === 0) ? "not-allowed" : "pointer" }}>
-                  {applyingGroupShip ? "Applying…" : `Apply to all ${groupShipMembers} customer${groupShipMembers === 1 ? "" : "s"} in this group`}
+                  {applyingGroupShip ? "Applying…" : "Apply to all"}
                 </button>
               </div>
             )}
