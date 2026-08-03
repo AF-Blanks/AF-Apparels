@@ -40,6 +40,7 @@ function StatusBadge({ status }: { status: string }) {
 
 interface DraftProduct {
   id: string; name: string; slug: string;
+  product_type?: string | null;
   primary_image?: { url_medium?: string; url_thumbnail?: string } | null;
   variants?: { id: string; color: string | null; size: string | null; retail_price: string; stock_quantity?: number }[];
   categories?: { name: string }[];
@@ -47,6 +48,7 @@ interface DraftProduct {
 
 interface DraftLineItem {
   variantId: string; productId: string; productName: string;
+  productType: string | null;
   color: string | null; size: string | null; price: number; qty: number;
 }
 
@@ -140,7 +142,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
       if (existing >= 0) {
         setLineItems(prev => prev.map((l, i) => i === existing ? { ...l, qty: l.qty + qty } : l));
       } else {
-        toAdd.push({ variantId: vid, productId: selectedProduct.id, productName: selectedProduct.name, color: variant.color, size: variant.size, price: discountedPrice, qty });
+        toAdd.push({ variantId: vid, productId: selectedProduct.id, productName: selectedProduct.name, productType: selectedProduct.product_type ?? null, color: variant.color, size: variant.size, price: discountedPrice, qty });
       }
     }
     if (toAdd.length > 0) setLineItems(prev => [...prev, ...toAdd]);
@@ -157,6 +159,14 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   const palletRate = shipCfg
     ? (palletRegion === "Dallas" ? shipCfg.ship_pallet_dallas : palletRegion === "Houston" ? shipCfg.ship_pallet_houston : shipCfg.ship_pallet_other)
     : 0;
+  // Whole pallets in the cart (t-shirts 2592/pallet, everything else 864/pallet),
+  // rounded UP — a partial pallet still takes a full pallet slot. Cost = rate × count.
+  const _isTee = (pt: string | null) => { const s = (pt || "").toLowerCase(); return s.includes("t-shirt") || s.includes("t shirt") || s.includes("tee"); };
+  const _tshirtPcs = lineItems.reduce((s, l) => s + (_isTee(l.productType) ? l.qty : 0), 0);
+  const _otherPcs = lineItems.reduce((s, l) => s + (_isTee(l.productType) ? 0 : l.qty), 0);
+  const _palletFraction = _tshirtPcs / 2592 + _otherPcs / 864;
+  const palletCount = _palletFraction > 0 ? Math.ceil(_palletFraction) : 0;
+  const palletCost = (Number(palletRate) || 0) * palletCount;
   const courierOn = shipCfg ? shipCfg.ship_courier_enabled : true;
   const pickupOn = shipCfg ? shipCfg.ship_pickup_enabled : true;
   const palletOn = !!shipCfg?.ship_pallet_enabled;
@@ -164,7 +174,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
 
   const shipNum =
     shipMethod === "pickup" || shipMethod === "free" ? 0
-      : shipMethod === "pallet" ? (Number(palletRate) || 0)
+      : shipMethod === "pallet" ? palletCost
         : (parseFloat(shippingCost) || 0); // standard / courier = manual
   const grandTotal = orderTotal + shipNum + taxAmount;
 
@@ -518,7 +528,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                           >
                             {courierOn && <option value="standard">Standard Ground (courier)</option>}
                             {freeOn && <option value="free">Free Shipping — $0</option>}
-                            {palletOn && <option value="pallet">{`Pallet Freight (${palletRegion}) — $${(Number(palletRate) || 0).toFixed(2)}`}</option>}
+                            {palletOn && <option value="pallet">{`Pallet Freight (${palletRegion}) — ${palletCount} × $${(Number(palletRate) || 0).toFixed(2)} = $${palletCost.toFixed(2)}`}</option>}
                             {pickupOn && <option value="pickup">Free Pickup — $0</option>}
                           </select>
                           {shipMethod !== "standard" ? (

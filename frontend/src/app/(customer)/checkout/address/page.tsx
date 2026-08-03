@@ -23,7 +23,7 @@ interface LiveRate {
 interface ShipOptions {
   courier_enabled: boolean;
   pickup_enabled: boolean;
-  pallet: { enabled: boolean; qualifies: boolean; cost: number; region: string; pallets: number };
+  pallet: { enabled: boolean; qualifies: boolean; cost: number; rate: number; region: string; pallets: number };
   free: { enabled: boolean; qualifies: boolean; min: number; subtotal: number };
 }
 
@@ -492,11 +492,12 @@ export default function CheckoutAddressPage() {
     }
     if (method === "pallet") {
       const cost = shipOptions?.pallet.cost ?? 0;
+      const rate = shipOptions?.pallet.rate ?? 0;
       const region = shipOptions?.pallet.region ?? "Other";
       const pallets = shipOptions?.pallet.pallets ?? 0;
       return {
         price: formatCurrency(cost),
-        note: `Pallet freight (${region}) · ~${pallets} pallet${pallets === 1 ? "" : "s"} in cart · flat rate.`,
+        note: `Pallet freight (${region}) · ${pallets} pallet${pallets === 1 ? "" : "s"} × ${formatCurrency(rate)}.`,
       };
     }
     // Live Shippo rates mode
