@@ -975,6 +975,14 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                       const rowQty = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0), 0);
                       const rowTotal = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0) * Number(v.effective_price ?? v.retail_price ?? 0), 0);
                       const allRowOOS = group.variants.every(v => isOutOfStock(v.stock_quantity));
+                      // Total stock for this colour = sum across all its sizes.
+                      // 9999+ is the "untracked / unlimited" sentinel, so if any size
+                      // is untracked we show "In Stock" rather than a misleading sum.
+                      const rowUnlimited = group.variants.some(v => Number(v.stock_quantity ?? 0) >= 9999);
+                      const rowStock = group.variants.reduce((s, v) => {
+                        const n = Number(v.stock_quantity ?? 0);
+                        return s + (n >= 9999 || n < 0 ? 0 : n);
+                      }, 0);
                       return (
                         <div key={group.color}>
                           {/* Color header row */}
@@ -984,6 +992,9 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 500, color: "#1A1A1A" }}>{group.color}</span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: allRowOOS ? "#cc0000" : "#1A1A1A", whiteSpace: "nowrap" }}>
+                                {rowUnlimited ? "In Stock" : `${rowStock.toLocaleString()} in stock`}
+                              </span>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", color: "#6B6B6B", whiteSpace: "nowrap" }}>Qty: {rowQty}</span>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", color: "#6B6B6B", whiteSpace: "nowrap" }}>${rowTotal.toFixed(2)}</span>
                               <button
