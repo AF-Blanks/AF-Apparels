@@ -246,31 +246,33 @@ export default function VariantSalesPage() {
                       </td>
                     </tr>
 
-                    {/* Variant rows */}
-                    {isExp && product.variants.map((v, vi) => (
+                    {/* One row per colour — sizes shown as a compact matrix (size×units) */}
+                    {isExp && groupVariantsByColor(product.variants).map((cg) => (
                       <tr
-                        key={`${product.product_name}-${vi}`}
+                        key={`${product.product_name}-${cg.color}`}
                         className="border-b border-gray-50 bg-blue-50 hover:bg-blue-100"
                       >
-                        <td className="px-4 py-2" />
-                        <td className="py-2 text-sm" style={{ paddingLeft: "36px" }}>
-                          <span className="inline-flex items-center gap-2">
-                            {/* Color swatch */}
+                        <td className="px-4 py-2.5" />
+                        <td className="py-2.5 text-sm" style={{ paddingLeft: "36px" }}>
+                          <div className="inline-flex items-center gap-2 mb-1.5">
                             <span
                               className="inline-block w-3 h-3 rounded-full border border-gray-200 flex-shrink-0"
-                              style={{ background: colorToHex(v.color) }}
-                              title={v.color}
+                              style={{ background: colorToHex(cg.color) }}
+                              title={cg.color}
                             />
-                            <span className="text-gray-700 font-medium">{v.color}</span>
-                            <span className="text-gray-400">/</span>
-                            <span className="inline-flex items-center justify-center min-w-[28px] h-5 rounded bg-gray-200 text-gray-600 text-xs font-semibold px-1">
-                              {v.size}
-                            </span>
-                          </span>
+                            <span className="text-gray-800 font-semibold">{cg.color}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5" style={{ paddingLeft: "20px" }}>
+                            {cg.sizes.map(s => (
+                              <span key={s.size} className="inline-flex items-center gap-1 rounded bg-gray-100 text-gray-700 text-xs font-semibold px-2 py-0.5">
+                                {s.size}<span className="text-gray-400 font-normal">×</span>{s.units.toLocaleString()}
+                              </span>
+                            ))}
+                          </div>
                         </td>
-                        <td className="px-4 py-2 text-right text-gray-700 text-sm">{v.units_sold.toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right text-gray-700 text-sm">
-                          ${v.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td className="px-4 py-2.5 text-right text-gray-800 text-sm font-semibold align-top">{cg.totalUnits.toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-right text-gray-800 text-sm font-semibold align-top">
+                          ${cg.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     ))}
@@ -297,6 +299,27 @@ export default function VariantSalesPage() {
       </div>
     </div>
   );
+}
+
+// Group a product's variants by colour into a compact size run (one row per
+// colour) instead of one row per size — keeps every size's units, just tidier.
+const _VS_SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL", "6XL"];
+function groupVariantsByColor(variants: Variant[]) {
+  const rank = (s: string) => {
+    const i = _VS_SIZE_ORDER.indexOf((s ?? "").toUpperCase());
+    return i === -1 ? 999 : i;
+  };
+  const map = new Map<string, { color: string; sizes: { size: string; units: number }[]; totalUnits: number; totalRevenue: number }>();
+  for (const v of variants) {
+    let g = map.get(v.color);
+    if (!g) { g = { color: v.color, sizes: [], totalUnits: 0, totalRevenue: 0 }; map.set(v.color, g); }
+    g.sizes.push({ size: v.size, units: v.units_sold });
+    g.totalUnits += v.units_sold;
+    g.totalRevenue += v.revenue;
+  }
+  const arr = Array.from(map.values());
+  arr.forEach(g => g.sizes.sort((a, b) => rank(a.size) - rank(b.size)));
+  return arr.sort((a, b) => b.totalRevenue - a.totalRevenue);
 }
 
 // Best-effort color name → hex for swatch

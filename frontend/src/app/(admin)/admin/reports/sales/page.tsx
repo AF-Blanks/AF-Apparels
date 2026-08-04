@@ -21,7 +21,7 @@ interface SalesReport {
   summary: { total_orders: number; total_revenue: number; avg_order_value: number; total_refunds?: number; gross_revenue?: number };
   period_data: { period: string; order_count: number; revenue: number }[];
   by_category: { category: string; revenue: number; items_sold: number }[];
-  top_products: { product_name: string; sku: string; units_sold: number; revenue: number }[];
+  top_products: { product_name: string; variant_count: number; units_sold: number; revenue: number }[];
 }
 
 export default function SalesReportPage() {
@@ -174,7 +174,7 @@ export default function SalesReportPage() {
                   <tr>
                     <th className="px-6 py-3 text-left">#</th>
                     <th className="px-6 py-3 text-left">Product</th>
-                    <th className="px-6 py-3 text-left">SKU</th>
+                    <th className="px-6 py-3 text-left">Variants</th>
                     <th className="px-6 py-3 text-right">Units Sold</th>
                     <th className="px-6 py-3 text-right">Revenue</th>
                   </tr>
@@ -184,7 +184,7 @@ export default function SalesReportPage() {
                     <tr key={i} className="hover:bg-gray-50">
                       <td className="px-6 py-3 text-gray-400">{i + 1}</td>
                       <td className="px-6 py-3 font-medium">{row.product_name}</td>
-                      <td className="px-6 py-3 font-mono text-xs">{row.sku}</td>
+                      <td className="px-6 py-3 text-xs text-gray-500">{row.variant_count} variant{row.variant_count !== 1 ? "s" : ""}</td>
                       <td className="px-6 py-3 text-right">{row.units_sold}</td>
                       <td className="px-6 py-3 text-right">${row.revenue.toFixed(2)}</td>
                     </tr>
