@@ -147,6 +147,11 @@ export default function CustomerDetailPage() {
   const [editingNote, setEditingNote] = useState(false);
   const [savingNote, setSavingNote]   = useState(false);
 
+  // customer info edit
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [savingDetails, setSavingDetails]   = useState(false);
+  const [detailsForm, setDetailsForm]       = useState<Record<string, string>>({});
+
   // suspend
   const [showSuspend, setShowSuspend] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
@@ -269,6 +274,53 @@ export default function CustomerDetailPage() {
       showToast("Failed to save notes", false);
     } finally {
       setSavingNote(false);
+    }
+  }
+
+  // Editable customer-info fields (company record).
+  const DETAIL_FIELDS: { key: string; label: string }[] = [
+    { key: "name", label: "Company Name" },
+    { key: "company_email", label: "Co. Email" },
+    { key: "phone", label: "Phone" },
+    { key: "fax", label: "Fax" },
+    { key: "website", label: "Website" },
+    { key: "business_type", label: "Biz Type" },
+    { key: "secondary_business", label: "Secondary" },
+    { key: "tax_id", label: "Tax ID" },
+    { key: "estimated_annual_volume", label: "Est. Volume" },
+    { key: "address_line1", label: "Address 1" },
+    { key: "address_line2", label: "Address 2" },
+    { key: "city", label: "City" },
+    { key: "state_province", label: "State" },
+    { key: "postal_code", label: "Postal Code" },
+    { key: "country", label: "Country" },
+  ];
+
+  function startEditDetails() {
+    if (!customer) return;
+    const rec = customer as unknown as Record<string, unknown>;
+    const f: Record<string, string> = {};
+    for (const { key } of DETAIL_FIELDS) f[key] = (rec[key] as string) ?? "";
+    setDetailsForm(f);
+    setEditingDetails(true);
+  }
+
+  async function handleSaveDetails() {
+    if (!detailsForm.name?.trim()) { showToast("Company name can't be empty", false); return; }
+    setSavingDetails(true);
+    try {
+      // Send trimmed values; only these company fields change (server applies
+      // exclude_unset so nothing else is touched).
+      const payload: Record<string, string> = {};
+      for (const { key } of DETAIL_FIELDS) payload[key] = (detailsForm[key] ?? "").trim();
+      await adminService.updateCompany(id, payload);
+      setCustomer(prev => (prev ? ({ ...prev, ...payload } as typeof prev) : prev));
+      setEditingDetails(false);
+      showToast("Customer details saved");
+    } catch {
+      showToast("Failed to save details", false);
+    } finally {
+      setSavingDetails(false);
     }
   }
 
@@ -694,9 +746,38 @@ export default function CustomerDetailPage() {
 
           {/* Customer Details */}
           <div style={card}>
-            <div style={sectionTitle}>Customer Details</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={sectionTitle}>Customer Details</div>
+              {!editingDetails && (
+                <button onClick={startEditDetails} style={{ fontSize: "12px", fontWeight: 700, color: "#1A5CFF", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Edit</button>
+              )}
+            </div>
 
-            {/* Contact info */}
+            {editingDetails ? (
+              /* Edit form */
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
+                {DETAIL_FIELDS.map(f => (
+                  <div key={f.key} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <label style={{ minWidth: "96px", fontSize: "12px", color: "#7A7880", flexShrink: 0 }}>{f.label}</label>
+                    <input
+                      value={detailsForm[f.key] ?? ""}
+                      onChange={e => setDetailsForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      placeholder={f.label}
+                      style={{ flex: 1, minWidth: 0, padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "13px", fontFamily: "inherit", outline: "none", background: "#fff" }}
+                    />
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                  <button onClick={handleSaveDetails} disabled={savingDetails} style={{ padding: "7px 16px", background: "#1A5CFF", color: "#fff", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: savingDetails ? "not-allowed" : "pointer", opacity: savingDetails ? 0.6 : 1 }}>
+                    {savingDetails ? "Saving…" : "Save"}
+                  </button>
+                  <button onClick={() => setEditingDetails(false)} disabled={savingDetails} style={{ padding: "7px 16px", background: "#fff", color: "#7A7880", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+            /* Contact info (read-only) */
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
               {[
                 { icon: <MailIcon size={13} color="#7A7880" />, label: "Email",       val: customer.email },
@@ -749,6 +830,7 @@ export default function CustomerDetailPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Pricing & Shipping — Discount Group */}
             <div style={{ borderTop: "1px solid #F4F3EF", paddingTop: "14px" }}>
