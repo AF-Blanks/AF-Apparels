@@ -67,8 +67,9 @@ export default function CheckoutPaymentPage() {
   const isGuest = !isLoading && !isAuthenticated();
   const isWholesale = user?.account_type === "wholesale";
   const [couponDiscount, setCouponDiscount] = useState(0);
-  const [paymentType, setPaymentType] = useState<"card" | "ach" | "net_30">("card");
+  const [paymentType, setPaymentType] = useState<"card" | "ach" | "net_30" | "net_7">("card");
   const [net30Enabled, setNet30Enabled] = useState(false);
+  const [net7Enabled, setNet7Enabled] = useState(false);
 
   const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -141,9 +142,9 @@ export default function CheckoutPaymentPage() {
     // Check if Net 30 is enabled for this company
     if (isWholesale) {
       apiClient
-        .get<{ net30_enabled?: boolean }>("/api/v1/account/net30-status")
-        .then(r => setNet30Enabled(r.net30_enabled === true))
-        .catch(() => setNet30Enabled(false));
+        .get<{ net30_enabled?: boolean; net7_enabled?: boolean }>("/api/v1/account/net30-status")
+        .then(r => { setNet30Enabled(r.net30_enabled === true); setNet7Enabled(r.net7_enabled === true); })
+        .catch(() => { setNet30Enabled(false); setNet7Enabled(false); });
     }
   }, [isLoading, isGuest, isAuthenticated, isWholesale]);
 
@@ -215,6 +216,12 @@ export default function CheckoutPaymentPage() {
     router.push("/checkout/review");
   }
 
+  function handleNet7Continue() {
+    setConvenienceFee(0);
+    setPaymentMethod("net_7");
+    router.push("/checkout/review");
+  }
+
   if (loadingCards) {
     return (
       <div style={{ textAlign: "center", padding: "60px 0", color: "#6B6B6B", fontSize: "14px" }}>
@@ -279,6 +286,20 @@ export default function CheckoutPaymentPage() {
                       <div>
                         <div style={{ fontSize: "13px", fontWeight: 700, color: "#1A1A1A" }}>Net 30 — Pay by Invoice</div>
                         <div style={{ fontSize: "11px", color: "#6B6B6B", marginTop: "2px" }}>Invoice sent to your account; payment due within 30 days</div>
+                      </div>
+                    </label>
+                  );
+                })()}
+                {!isGuest && isWholesale && net7Enabled && (() => {
+                  const isSelected = paymentType === "net_7";
+                  return (
+                    <label onClick={() => setPaymentType("net_7")} style={{ flex: 1, display: "flex", alignItems: "center", gap: "12px", padding: "14px 18px", border: `1px solid ${isSelected ? "#1C3557" : "#E2E2DE"}`, background: isSelected ? "rgba(28,53,87,.04)" : "#FAFAF8", cursor: "pointer", transition: "all .15s" }}>
+                      <div style={{ width: "18px", height: "18px", borderRadius: "50%", flexShrink: 0, border: `2px solid ${isSelected ? "#1C3557" : "#E2E2DE"}`, background: isSelected ? "#1C3557" : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {isSelected && <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#fff" }} />}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "#1A1A1A" }}>Net 7 — Pay by Invoice</div>
+                        <div style={{ fontSize: "11px", color: "#6B6B6B", marginTop: "2px" }}>Invoice sent to your account; payment due within 7 days</div>
                       </div>
                     </label>
                   );
@@ -439,6 +460,35 @@ export default function CheckoutPaymentPage() {
                     ← Back to Shipping
                   </a>
                   <button type="button" onClick={handleNet30Continue} style={{ flex: 1, padding: "14px", background: "#1C3557", color: "#fff", border: "none", fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500, cursor: "pointer", transition: "opacity .15s" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+                  >
+                    Continue to Review →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Net 7 section ── */}
+            {paymentType === "net_7" && (
+              <div style={{ marginBottom: "32px" }}>
+                <div style={sectionLabelStyle}>Net 7 — Pay by Invoice</div>
+                <div style={{ fontSize: "13px", color: "#1A1A1A", lineHeight: 1.7, marginBottom: "14px" }}>
+                  Your order will be processed immediately. An invoice will be emailed to your account within 1 business day. Payment is due within 7 days of the invoice date.
+                </div>
+                <div style={{ padding: "12px 14px", background: "rgba(217,119,6,.08)", fontSize: "12px", color: "#D97706", fontWeight: 600, marginBottom: "16px" }}>
+                  Net 7 terms are subject to your approved credit limit. Overdue balances may affect future orders.
+                </div>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <a
+                    href="/checkout/address"
+                    style={{ display: "inline-block", fontSize: "13px", color: "#6B6B6B", textDecoration: "none", fontFamily: "'DM Sans', sans-serif", padding: "14px 0" }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#1C3557"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#6B6B6B"; }}
+                  >
+                    ← Back to Shipping
+                  </a>
+                  <button type="button" onClick={handleNet7Continue} style={{ flex: 1, padding: "14px", background: "#1C3557", color: "#fff", border: "none", fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500, cursor: "pointer", transition: "opacity .15s" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
                   >

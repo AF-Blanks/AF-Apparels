@@ -204,7 +204,7 @@ export default function OrderDetailPage() {
 
   async function downloadPdf(type: "confirmation" | "invoice" | "ship-confirmation" | "pack-slip") {
     try {
-      const session = sessionStorage.getItem("af_session");
+      const session = localStorage.getItem("af_session");
       const token = session ? JSON.parse(session).token : null;
       if (!token) return;
 

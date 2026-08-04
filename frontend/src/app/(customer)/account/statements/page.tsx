@@ -92,7 +92,7 @@ export default function StatementsPage() {
 
   async function downloadPDF() {
     try {
-      const session = sessionStorage.getItem("af_session");
+      const session = localStorage.getItem("af_session");
       const token = session ? JSON.parse(session).token : null;
       if (!token) return;
 

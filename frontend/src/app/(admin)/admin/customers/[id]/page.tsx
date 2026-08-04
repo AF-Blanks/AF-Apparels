@@ -43,6 +43,7 @@ interface Customer {
   tags: string[];
   tax_exempt: boolean;
   net30_enabled: boolean;
+  net7_enabled: boolean;
   created_at: string;
   updated_at: string;
   // enriched (may be missing)
@@ -165,8 +166,10 @@ export default function CustomerDetailPage() {
   const [taxExempt, setTaxExempt] = useState(false);
   const [savingTaxExempt, setSavingTaxExempt] = useState(false);
 
-  // net 30
+  // credit terms (net 30 / net 7 — mutually exclusive)
   const [net30Enabled, setNet30Enabled] = useState(false);
+  const [net7Enabled, setNet7Enabled]   = useState(false);
+  const [savingNet7, setSavingNet7]     = useState(false);
   const [shipCfg, setShipCfg] = useState({
     ship_courier_enabled: true, ship_pickup_enabled: true, ship_pallet_enabled: false, ship_free_enabled: false,
     ship_free_min: 500, ship_pallet_dallas: 60, ship_pallet_houston: 125, ship_pallet_other: 275,
@@ -195,6 +198,7 @@ export default function CustomerDetailPage() {
         setNoteText(co.admin_notes ?? "");
         setTaxExempt(co.tax_exempt ?? false);
         setNet30Enabled(co.net30_enabled ?? false);
+        setNet7Enabled(co.net7_enabled ?? false);
 
         apiClient.get<typeof shipCfg>(`/api/v1/admin/companies/${id}/shipping-config`)
           .then(cfg => setShipCfg(prev => ({ ...prev, ...cfg })))
@@ -381,14 +385,36 @@ export default function CustomerDetailPage() {
     const newValue = !net30Enabled;
     setSavingNet30(true);
     try {
-      await apiClient.patch(`/api/v1/admin/companies/${id}/net30`, { net30_enabled: newValue });
-      setNet30Enabled(newValue);
-      setCustomer(c => c ? { ...c, net30_enabled: newValue } : c);
-      showToast(newValue ? "Net 30 enabled — customer can pay within 30 days" : "Net 30 disabled");
+      // Server enforces mutual exclusivity and returns both flags.
+      const r = await apiClient.patch<{ net30_enabled: boolean; net7_enabled: boolean }>(
+        `/api/v1/admin/companies/${id}/net30`, { net30_enabled: newValue }
+      );
+      setNet30Enabled(r.net30_enabled);
+      setNet7Enabled(r.net7_enabled);
+      setCustomer(c => c ? { ...c, net30_enabled: r.net30_enabled, net7_enabled: r.net7_enabled } : c);
+      showToast(r.net30_enabled ? "Net 30 enabled — pay within 30 days (Net 7 turned off)" : "Net 30 disabled");
     } catch {
       showToast("Failed to update Net 30 status", false);
     } finally {
       setSavingNet30(false);
+    }
+  }
+
+  async function handleToggleNet7() {
+    const newValue = !net7Enabled;
+    setSavingNet7(true);
+    try {
+      const r = await apiClient.patch<{ net30_enabled: boolean; net7_enabled: boolean }>(
+        `/api/v1/admin/companies/${id}/net7`, { net7_enabled: newValue }
+      );
+      setNet7Enabled(r.net7_enabled);
+      setNet30Enabled(r.net30_enabled);
+      setCustomer(c => c ? { ...c, net7_enabled: r.net7_enabled, net30_enabled: r.net30_enabled } : c);
+      showToast(r.net7_enabled ? "Net 7 enabled — pay within 7 days (Net 30 turned off)" : "Net 7 disabled");
+    } catch {
+      showToast("Failed to update Net 7 status", false);
+    } finally {
+      setSavingNet7(false);
     }
   }
 
@@ -899,40 +925,40 @@ export default function CustomerDetailPage() {
             </label>
           </div>
 
-          {/* Net 30 — only show for active (approved wholesale) companies */}
+          {/* Credit Terms — Net 30 / Net 7 (mutually exclusive) */}
           {customer.status === "active" && (
             <div style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                <div style={sectionTitle}>Net 30 Payment Terms</div>
-                {net30Enabled && (
-                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: "rgba(26,92,255,.1)", color: "#1A5CFF" }}>
-                    ACTIVE
+                <div style={sectionTitle}>Credit Terms</div>
+                {(net30Enabled || net7Enabled) && (
+                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: net7Enabled ? "rgba(5,150,105,.12)" : "rgba(26,92,255,.1)", color: net7Enabled ? "#059669" : "#1A5CFF" }}>
+                    {net30Enabled ? "NET 30" : "NET 7"}
                   </span>
                 )}
               </div>
               <p style={{ fontSize: "12px", color: "#7A7880", marginBottom: "12px", lineHeight: 1.5 }}>
-                When enabled, this wholesale customer can place orders and pay within 30 days.<br />
-                Only available for approved wholesale accounts.
+                Let this wholesale customer pay by invoice. <strong>Net 30 and Net 7 are mutually exclusive</strong> — turning one on turns the other off. Only for approved wholesale accounts.
               </p>
-              <label
-                onClick={!savingNet30 ? handleToggleNet30 : undefined}
-                style={{ display: "flex", alignItems: "center", gap: "12px", cursor: savingNet30 ? "not-allowed" : "pointer", opacity: savingNet30 ? 0.6 : 1 }}
-              >
-                <div style={{
-                  position: "relative", width: "44px", height: "24px", borderRadius: "12px",
-                  background: net30Enabled ? "#1A5CFF" : "#E2E0DA",
-                  transition: "background .2s", flexShrink: 0,
-                }}>
-                  <div style={{
-                    position: "absolute", top: "3px",
-                    left: net30Enabled ? "23px" : "3px",
-                    width: "18px", height: "18px", borderRadius: "50%",
-                    background: "#fff", transition: "left .2s",
-                    boxShadow: "0 1px 4px rgba(0,0,0,.2)",
-                  }} />
+
+              {/* Net 30 toggle */}
+              <label onClick={!savingNet30 ? handleToggleNet30 : undefined}
+                style={{ display: "flex", alignItems: "center", gap: "12px", cursor: savingNet30 ? "not-allowed" : "pointer", opacity: savingNet30 ? 0.6 : 1, marginBottom: "10px" }}>
+                <div style={{ position: "relative", width: "44px", height: "24px", borderRadius: "12px", background: net30Enabled ? "#1A5CFF" : "#E2E0DA", transition: "background .2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: "3px", left: net30Enabled ? "23px" : "3px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }} />
                 </div>
                 <span style={{ fontSize: "13px", fontWeight: 600, color: net30Enabled ? "#1A5CFF" : "#7A7880" }}>
-                  {savingNet30 ? "Saving…" : net30Enabled ? "Net 30 enabled — pay within 30 days" : "Net 30 disabled"}
+                  {savingNet30 ? "Saving…" : net30Enabled ? "Net 30 — pay within 30 days" : "Net 30 — off"}
+                </span>
+              </label>
+
+              {/* Net 7 toggle */}
+              <label onClick={!savingNet7 ? handleToggleNet7 : undefined}
+                style={{ display: "flex", alignItems: "center", gap: "12px", cursor: savingNet7 ? "not-allowed" : "pointer", opacity: savingNet7 ? 0.6 : 1 }}>
+                <div style={{ position: "relative", width: "44px", height: "24px", borderRadius: "12px", background: net7Enabled ? "#059669" : "#E2E0DA", transition: "background .2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: "3px", left: net7Enabled ? "23px" : "3px", width: "18px", height: "18px", borderRadius: "50%", background: "#fff", transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }} />
+                </div>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: net7Enabled ? "#059669" : "#7A7880" }}>
+                  {savingNet7 ? "Saving…" : net7Enabled ? "Net 7 — pay within 7 days" : "Net 7 — off"}
                 </span>
               </label>
             </div>
