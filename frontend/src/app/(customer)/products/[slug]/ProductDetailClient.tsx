@@ -962,9 +962,9 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                     {/* Size headers — shown once */}
                     <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, 1fr) 80px 90px`, gap: "4px", borderBottom: "1px solid #E2E2DE" }}>
                       {uniqueSizes.map(size => (
-                        <div key={size} style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#6B6B6B", fontWeight: 500, padding: "6px 8px" }}>{size}</div>
+                        <div key={size} style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "6px 8px" }}>{size}</div>
                       ))}
-                      <div style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#6B6B6B", fontWeight: 500, padding: "6px 8px" }}>Total</div>
+                      <div style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "6px 8px" }}>Total</div>
                       <div />
                     </div>
 
@@ -989,14 +989,14 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0 8px", borderTop: groupIdx === 0 ? "none" : "1px solid #E2E2DE", flexWrap: "wrap", gap: "8px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               <div style={{ width: "14px", height: "14px", borderRadius: "50%", background: hex, border: isLight ? "1px solid #E2E2DE" : "1px solid rgba(0,0,0,.08)", flexShrink: 0 }} />
-                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 500, color: "#1A1A1A" }}>{group.color}</span>
+                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", fontWeight: 700, color: "#1A1A1A" }}>{group.color}</span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: allRowOOS ? "#cc0000" : "#1A1A1A", whiteSpace: "nowrap" }}>
                                 {rowUnlimited ? "In Stock" : `${rowStock.toLocaleString()} in stock`}
                               </span>
-                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", color: "#6B6B6B", whiteSpace: "nowrap" }}>Qty: {rowQty}</span>
-                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", color: "#6B6B6B", whiteSpace: "nowrap" }}>${rowTotal.toFixed(2)}</span>
+                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>Qty: {rowQty}</span>
+                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>${rowTotal.toFixed(2)}</span>
                               <button
                                 onClick={() => handleRowAddToCart(group)}
                                 disabled={rowQty === 0 || allRowOOS}
@@ -1027,8 +1027,8 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
                                 <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: isOOS ? "#fafafa" : "transparent" }}>
-                                  <span style={{ display: "block", fontSize: "11px", color: isOOS ? "#cc0000" : "#6B6B6B", fontWeight: isOOS ? 500 : 400, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
-                                  <span style={{ display: "block", fontSize: "11px", color: isOOS ? "#aaaaaa" : "#6B6B6B", fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
+                                  <span style={{ display: "block", fontSize: "11px", color: isOOS ? "#cc0000" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
+                                  <span style={{ display: "block", fontSize: "12px", color: isOOS ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
                                   <input
                                     type="number"
                                     min={0}
@@ -1061,10 +1061,10 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
                 {/* Grand total row */}
                 <div className="pdp-grand-total" style={{ display: "flex", alignItems: "center", gap: "24px", padding: "16px 0 12px", borderTop: "1px solid #E2E2DE", marginTop: "8px" }}>
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", color: "#6B6B6B" }}>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", fontWeight: 700, color: "#1A1A1A" }}>
                     Grand Total Qty: <strong style={{ color: "#1A1A1A" }}>{totalUnits}</strong>
                   </span>
-                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", color: "#6B6B6B" }}>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: "#1A1A1A" }}>
                     Grand Total Price: <strong style={{ color: "#1A1A1A" }}>${orderTotal.toFixed(2)}</strong>
                   </span>
                 </div>
