@@ -17,6 +17,38 @@ interface OrderItem {
   line_total: string;
 }
 
+// Group order lines by product + colour into a compact size run so the same
+// colour's sizes render as one row (a matrix) instead of a long list of rows.
+const _ORDER_SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL", "6XL"];
+function groupOrderItems(items: OrderItem[]) {
+  const rank = (s: string | null) => {
+    const i = _ORDER_SIZE_ORDER.indexOf((s ?? "").toUpperCase());
+    return i === -1 ? 999 : i;
+  };
+  const map = new Map<string, {
+    key: string; product_name: string; product_code?: string | null; color: string | null;
+    sizes: { id: string; size: string | null; quantity: number; line_total: number }[];
+    totalQty: number; totalPrice: number; minPrice: number; maxPrice: number;
+  }>();
+  for (const it of items ?? []) {
+    const key = `${it.product_name}||${it.color ?? ""}`;
+    let g = map.get(key);
+    if (!g) {
+      g = { key, product_name: it.product_name, product_code: it.product_code, color: it.color, sizes: [], totalQty: 0, totalPrice: 0, minPrice: Infinity, maxPrice: 0 };
+      map.set(key, g);
+    }
+    const up = Number(it.unit_price);
+    g.sizes.push({ id: it.id, size: it.size, quantity: it.quantity, line_total: Number(it.line_total) });
+    g.totalQty += it.quantity;
+    g.totalPrice += Number(it.line_total);
+    g.minPrice = Math.min(g.minPrice, up);
+    g.maxPrice = Math.max(g.maxPrice, up);
+  }
+  const arr = Array.from(map.values());
+  arr.forEach(g => g.sizes.sort((a, b) => rank(a.size) - rank(b.size)));
+  return arr;
+}
+
 interface ShippingAddress {
   full_name?: string;
   address_line1?: string;
@@ -1408,34 +1440,40 @@ export default function AdminOrderDetailPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "2px solid #E2E0DA" }}>
-                  {["Product", "Product Code", "Color / Size", "Qty", "Unit Price", "Total", ""].map(h => (
+                  {["Product", "Product Code", "Color / Sizes", "Qty", "Unit Price", "Total", ""].map(h => (
                     <th key={h} style={{ textAlign: (h === "Qty" || h === "Unit Price" || h === "Total") ? "right" as const : "left" as const, padding: "10px 12px", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: ".06em", color: "#7A7880" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {order.items.map((item, i) => (
-                  <tr key={item.id} style={{ borderBottom: i < order.items.length - 1 ? "1px solid #F4F3EF" : "none" }}>
-                    <td style={{ padding: "14px 12px", fontWeight: 700, fontSize: "14px", color: "#2A2830" }}>{item.product_name}</td>
-                    <td style={{ padding: "14px 12px", fontSize: "12px", color: "#7A7880", fontFamily: "monospace" }}>{item.product_code ?? "—"}</td>
-                    <td style={{ padding: "14px 12px" }}>
-                      {item.color && <span style={{ fontSize: "13px", color: "#2A2830", marginRight: "6px" }}>{item.color}</span>}
-                      {item.size && <span style={{ background: "#F4F3EF", padding: "2px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, color: "#2A2830" }}>{item.size}</span>}
-                      {!item.color && !item.size && <span style={{ color: "#aaa" }}>—</span>}
+                {groupOrderItems(order.items).map((g, i, arr) => (
+                  <tr key={g.key} style={{ borderBottom: i < arr.length - 1 ? "1px solid #F4F3EF" : "none" }}>
+                    <td style={{ padding: "14px 12px", fontWeight: 700, fontSize: "14px", color: "#2A2830", verticalAlign: "top" as const }}>{g.product_name}</td>
+                    <td style={{ padding: "14px 12px", fontSize: "12px", color: "#7A7880", fontFamily: "monospace", verticalAlign: "top" as const }}>{g.product_code ?? "—"}</td>
+                    <td style={{ padding: "14px 12px", verticalAlign: "top" as const }}>
+                      {g.color && <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830", marginBottom: "6px" }}>{g.color}</div>}
+                      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "6px" }}>
+                        {g.sizes.map(s => (
+                          <span key={s.id} style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "#F4F3EF", padding: "3px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, color: "#2A2830" }}>
+                            {s.size ?? "—"}<span style={{ color: "#7A7880", fontWeight: 400 }}>×</span>{s.quantity}
+                            {editingItems && (
+                              <button
+                                onClick={() => handleRemoveItem(s.id, String(s.line_total))}
+                                title="Remove this size"
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "#E8242A", fontSize: "12px", fontWeight: 700, padding: 0, marginLeft: "2px", lineHeight: 1 }}>
+                                ✕
+                              </button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
                     </td>
-                    <td style={{ padding: "14px 12px", textAlign: "right" as const, fontWeight: 700, color: "#2A2830" }}>{item.quantity}</td>
-                    <td style={{ padding: "14px 12px", textAlign: "right" as const, color: "#7A7880" }}>${Number(item.unit_price).toFixed(2)}</td>
-                    <td style={{ padding: "14px 12px", textAlign: "right" as const, fontWeight: 700, fontFamily: "var(--font-bebas)", fontSize: "16px", color: "#2A2830" }}>${Number(item.line_total).toFixed(2)}</td>
-                    <td style={{ padding: "14px 12px", textAlign: "right" as const }}>
-                      {editingItems && (
-                        <button
-                          onClick={() => handleRemoveItem(item.id, item.line_total)}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#E8242A", fontSize: "14px", fontWeight: 700, padding: "2px 6px" }}
-                          title="Remove item">
-                          ✕
-                        </button>
-                      )}
+                    <td style={{ padding: "14px 12px", textAlign: "right" as const, fontWeight: 700, color: "#2A2830", verticalAlign: "top" as const }}>{g.totalQty}</td>
+                    <td style={{ padding: "14px 12px", textAlign: "right" as const, color: "#7A7880", verticalAlign: "top" as const, whiteSpace: "nowrap" as const }}>
+                      {g.minPrice === g.maxPrice ? `$${g.minPrice.toFixed(2)}` : `$${g.minPrice.toFixed(2)}–$${g.maxPrice.toFixed(2)}`}
                     </td>
+                    <td style={{ padding: "14px 12px", textAlign: "right" as const, fontWeight: 700, fontFamily: "var(--font-bebas)", fontSize: "16px", color: "#2A2830", verticalAlign: "top" as const }}>${g.totalPrice.toFixed(2)}</td>
+                    <td />
                   </tr>
                 ))}
               </tbody>
