@@ -708,10 +708,14 @@ export default function AdminOrderDetailPage() {
     if (!selectedVariant || addQty < 1) return;
     setAddingItem(true); setAddItemMsg(null);
     try {
-      const result = await apiClient.post<{ subtotal: number; total: number }>(
+      const result = await apiClient.post<{ subtotal: number; total: number; unit_price?: number; line_total?: number }>(
         `/api/v1/admin/orders/${order?.id ?? id}/items`,
-        { variant_id: selectedVariant.variant_id, quantity: addQty, unit_price: selectedVariant.price }
+        { variant_id: selectedVariant.variant_id, quantity: addQty }
       );
+      // Backend prices the line for THIS customer (tier / discount-group), so use
+      // the returned unit price — not the catalog price shown in the picker.
+      const appliedPrice = result.unit_price ?? selectedVariant.price;
+      const appliedLine = result.line_total ?? appliedPrice * addQty;
       setOrder(prev => prev ? {
         ...prev,
         subtotal: String(result.subtotal),
@@ -724,11 +728,14 @@ export default function AdminOrderDetailPage() {
           color: selectedVariant.color,
           size: selectedVariant.size,
           quantity: addQty,
-          unit_price: String(selectedVariant.price),
-          line_total: String(selectedVariant.price * addQty),
+          unit_price: String(appliedPrice),
+          line_total: String(appliedLine),
         }],
       } : prev);
-      setAddItemMsg({ text: `Added ${addQty}x ${selectedVariant.product_name}`, ok: true });
+      const _priceNote = appliedPrice < selectedVariant.price
+        ? ` @ $${appliedPrice.toFixed(2)} (customer price)`
+        : "";
+      setAddItemMsg({ text: `Added ${addQty}x ${selectedVariant.product_name}${_priceNote}`, ok: true });
       setSelectedVariant(null); setItemSearch(""); setItemResults([]); setAddQty(1);
     } catch (err: unknown) {
       setAddItemMsg({ text: err instanceof Error ? err.message : "Failed to add item", ok: false });
