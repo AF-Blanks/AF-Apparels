@@ -111,7 +111,7 @@ export default function CheckoutReviewPage() {
   useEffect(() => {
     if (!shippingAddress) {
       router.replace("/checkout/address");
-    } else if (!savedCardId && !qbToken && paymentMethod !== "ach" && paymentMethod !== "net_30") {
+    } else if (!savedCardId && !qbToken && paymentMethod !== "ach" && paymentMethod !== "net_30" && paymentMethod !== "net_7") {
       router.replace("/checkout/payment");
     }
   }, [shippingAddress, savedCardId, qbToken, paymentMethod, router]);
@@ -337,10 +337,10 @@ export default function CheckoutReviewPage() {
               ach_account_last4: achAccountLast4 || undefined,
               ach_account_type: achAccountType || undefined,
             }
-          : paymentMethod === "net_30"
+          : (paymentMethod === "net_30" || paymentMethod === "net_7")
           ? {
               ...basePayload,
-              payment_method: "net_30",
+              payment_method: paymentMethod,
             }
           : {
               ...basePayload,
@@ -388,6 +388,8 @@ export default function CheckoutReviewPage() {
     ? `ACH / Bank Transfer${achAccountLast4 ? ` — ****${achAccountLast4}` : ""}`
     : paymentMethod === "net_30"
     ? "Net 30 — Pay by Invoice"
+    : paymentMethod === "net_7"
+    ? "Net 7 — Pay by Invoice"
     : selectedCard
     ? `${brandDisplayName(selectedCard.brand)} •••• ${selectedCard.last4}`
     : qbToken
@@ -459,6 +461,13 @@ export default function CheckoutReviewPage() {
                   <div style={{ fontWeight: 700, marginBottom: "6px" }}>Net 30 — Pay by Invoice</div>
                   <div style={{ marginTop: "8px", padding: "8px 12px", background: "rgba(217,119,6,.08)", fontSize: "12px", color: "#D97706", fontWeight: 600 }}>
                     An invoice will be sent to your account. Payment due within 30 days.
+                  </div>
+                </div>
+              ) : paymentMethod === "net_7" ? (
+                <div style={{ fontSize: "13px", color: "#1A1A1A", lineHeight: 1.8 }}>
+                  <div style={{ fontWeight: 700, marginBottom: "6px" }}>Net 7 — Pay by Invoice</div>
+                  <div style={{ marginTop: "8px", padding: "8px 12px", background: "rgba(217,119,6,.08)", fontSize: "12px", color: "#D97706", fontWeight: 600 }}>
+                    An invoice will be sent to your account. Payment due within 7 days.
                   </div>
                 </div>
               ) : (
