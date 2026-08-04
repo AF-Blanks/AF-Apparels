@@ -242,8 +242,8 @@ export default function CustomerDetailPage() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  async function handleAddTag() {
-    const t = tagInput.trim();
+  async function handleAddTag(value?: string) {
+    const t = (value ?? tagInput).trim();
     if (!t || tags.includes(t)) { setTagInput(""); return; }
     const next = [...tags, t];
     setSavingTags(true);
@@ -1055,16 +1055,36 @@ export default function CustomerDetailPage() {
                 </span>
               ))}
             </div>
+            {/* Suggestions from your discount-group tags — click to add (no typos/mismatch) */}
+            {(() => {
+              const groupTags = Array.from(new Set(discountGroups.map(g => g.customer_tag).filter(Boolean)));
+              const q = tagInput.trim().toLowerCase();
+              const suggestions = groupTags.filter(gt => !tags.includes(gt) && (!q || gt.toLowerCase().includes(q)));
+              if (suggestions.length === 0) return null;
+              return (
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "11px", color: "#7A7880", marginBottom: "6px", fontWeight: 600 }}>Discount-group tags — click to add:</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {suggestions.map(gt => (
+                      <button key={gt} onClick={() => handleAddTag(gt)} disabled={savingTags}
+                        style={{ padding: "3px 10px", background: "#fff", color: "#1A5CFF", border: "1px solid rgba(26,92,255,.35)", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: savingTags ? "default" : "pointer" }}>
+                        + {gt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", gap: "6px" }}>
               <input
                 value={tagInput}
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleAddTag(); } }}
-                placeholder="Add tag… (Enter to save)"
+                placeholder="Search or add a tag… (Enter to save)"
                 style={{ ...inp, flex: 1 }}
               />
               <button
-                onClick={handleAddTag}
+                onClick={() => handleAddTag()}
                 disabled={savingTags || !tagInput.trim()}
                 style={{ padding: "8px 13px", background: "#1A5CFF", color: "#fff", border: "none", borderRadius: "7px", fontSize: "16px", fontWeight: 700, cursor: !tagInput.trim() ? "not-allowed" : "pointer", opacity: !tagInput.trim() ? 0.4 : 1 }}>
                 +
