@@ -1020,7 +1020,9 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               const qty = quantities[variant.id] ?? 0;
                               const isOOS = isOutOfStock(variant.stock_quantity);
                               const stockNum = variant.stock_quantity as number;
-                              const stockLabel = isOOS ? "Out of Stock" : stockNum >= 9999 ? "In Stock" : `${stockNum} in stock`;
+                              // Live remaining: what's left after the qty typed for this size.
+                              const remaining = Math.max(0, stockNum - qty);
+                              const stockLabel = isOOS ? "Out of Stock" : stockNum >= 9999 ? "In Stock" : `${remaining.toLocaleString()} in stock`;
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
                                 <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: isOOS ? "#fafafa" : "transparent" }}>
@@ -1050,7 +1052,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                             {/* Total column: this colour's combined stock across all sizes */}
                             <div style={{ gridColumn: "span 2", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "8px" }}>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 700, color: allRowOOS ? "#cc0000" : "#1A1A1A", whiteSpace: "nowrap" }}>
-                                {rowUnlimited ? "In Stock" : `${rowStock.toLocaleString()} in stock`}
+                                {rowUnlimited ? "In Stock" : `${Math.max(0, rowStock - rowQty).toLocaleString()} in stock`}
                               </span>
                             </div>
                           </div>
