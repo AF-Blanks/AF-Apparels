@@ -992,9 +992,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px", fontWeight: 700, color: "#1A1A1A" }}>{group.color}</span>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: allRowOOS ? "#cc0000" : "#1A1A1A", whiteSpace: "nowrap" }}>
-                                {rowUnlimited ? "In Stock" : `${rowStock.toLocaleString()} in stock`}
-                              </span>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>Qty: {rowQty}</span>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>${rowTotal.toFixed(2)}</span>
                               <button
@@ -1050,8 +1047,12 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                 </div>
                               );
                             })}
-                            <div />
-                            <div />
+                            {/* Total column: this colour's combined stock across all sizes */}
+                            <div style={{ gridColumn: "span 2", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "8px" }}>
+                              <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 700, color: allRowOOS ? "#cc0000" : "#1A1A1A", whiteSpace: "nowrap" }}>
+                                {rowUnlimited ? "In Stock" : `${rowStock.toLocaleString()} in stock`}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
