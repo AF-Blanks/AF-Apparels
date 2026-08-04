@@ -322,7 +322,12 @@ export default function AdminCustomersPage() {
       )) return;
       setPwSetupLoading(true);
       const res = await adminService.sendPasswordSetupToAll();
-      alert(`Done ✅  A "Set Your Password" email has been queued for ${res.queued} customers. They'll receive it shortly.`);
+      const mins = Math.max(1, Math.ceil(res.queued / 2 / 60));
+      alert(
+        `Done ✅  "Set Your Password" email queued for ${res.queued} customers.\n\n` +
+        `They send gradually (~2/sec) over about ${mins} min so none get rate-limited.\n\n` +
+        `To watch them go out and see delivered/bounced status, open your Resend dashboard → Emails (Logs).`
+      );
     } catch (err) {
       alert(`Failed to send: ${err instanceof Error ? err.message : "Server error"}`);
     } finally {
