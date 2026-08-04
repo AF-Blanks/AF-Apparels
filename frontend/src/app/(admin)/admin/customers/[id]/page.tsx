@@ -151,6 +151,7 @@ export default function CustomerDetailPage() {
   // customer info edit
   const [editingDetails, setEditingDetails] = useState(false);
   const [savingDetails, setSavingDetails]   = useState(false);
+  const [sendingReset, setSendingReset]     = useState(false);
   const [detailsForm, setDetailsForm]       = useState<Record<string, string>>({});
 
   // suspend
@@ -325,6 +326,21 @@ export default function CustomerDetailPage() {
       showToast("Failed to save details", false);
     } finally {
       setSavingDetails(false);
+    }
+  }
+
+  async function handleSendPasswordReset() {
+    if (!customer) return;
+    const who = customer.company_email || customer.email || "this customer";
+    if (!confirm(`Send a "Set / Reset Your Password" email to ${who}?`)) return;
+    setSendingReset(true);
+    try {
+      const r = await adminService.sendCustomerPasswordReset(id);
+      showToast(`Password reset sent to ${r.email}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to send reset email", false);
+    } finally {
+      setSendingReset(false);
     }
   }
 
@@ -775,7 +791,12 @@ export default function CustomerDetailPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={sectionTitle}>Customer Details</div>
               {!editingDetails && (
-                <button onClick={startEditDetails} style={{ fontSize: "12px", fontWeight: 700, color: "#1A5CFF", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Edit</button>
+                <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
+                  <button onClick={handleSendPasswordReset} disabled={sendingReset} title="Email a password-reset link to this customer" style={{ fontSize: "12px", fontWeight: 700, color: sendingReset ? "#aaa" : "#059669", background: "none", border: "none", cursor: sendingReset ? "default" : "pointer", padding: 0 }}>
+                    {sendingReset ? "Sending…" : "✉ Send Password Reset"}
+                  </button>
+                  <button onClick={startEditDetails} style={{ fontSize: "12px", fontWeight: 700, color: "#1A5CFF", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Edit</button>
+                </div>
               )}
             </div>
 

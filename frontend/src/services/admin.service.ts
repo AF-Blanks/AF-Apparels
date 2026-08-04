@@ -322,6 +322,12 @@ export const adminService = {
     return apiClient.post<{ queued: number }>("/api/v1/admin/customers/send-password-setup", {});
   },
 
+  async sendCustomerPasswordReset(companyId: string) {
+    return apiClient.post<{ sent: boolean; email: string }>(
+      `/api/v1/admin/customers/${companyId}/send-password-reset`, {}
+    );
+  },
+
   // Orders
   async listOrders(params?: { q?: string; status?: string; page?: number | string; company_id?: string; page_size?: number; date_from?: string; date_to?: string; guest_only?: string }) {
     const query = new URLSearchParams();
