@@ -309,10 +309,10 @@ export default function AdminOrderDetailPage() {
 
   // Add item state
   const [itemSearch, setItemSearch] = useState("");
-  const [itemResults, setItemResults] = useState<{ variant_id: string; sku: string; product_name: string; color: string | null; size: string | null; price: number }[]>([]);
-  const [addingItem, setAddingItem] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState<{ variant_id: string; sku: string; product_name: string; color: string | null; size: string | null; price: number } | null>(null);
-  const [addQty, setAddQty] = useState(1);
+  const [itemResults, setItemResults] = useState<{ variant_id: string; product_id: string; sku: string; product_name: string; color: string | null; size: string | null; price: number }[]>([]);
+  const [itemRawData, setItemRawData] = useState<{ id: string; name: string; variants: { id: string; sku: string; color: string | null; size: string | null; retail_price: number }[] }[]>([]);
+  const [sizeGrid, setSizeGrid] = useState<{ productName: string; color: string | null; rows: { variant_id: string; size: string | null; sku: string; price: number; qty: number }[] } | null>(null);
+  const [bulkAdding, setBulkAdding] = useState(false);
   const [addItemMsg, setAddItemMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -678,25 +678,32 @@ export default function AdminOrderDetailPage() {
 
   function handleItemSearchChange(val: string) {
     setItemSearch(val);
-    setSelectedVariant(null);
+    setSizeGrid(null);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    if (!val.trim()) { setItemResults([]); return; }
+    if (!val.trim()) { setItemResults([]); setItemRawData([]); return; }
     searchDebounce.current = setTimeout(async () => {
       try {
         const data = await apiClient.get<{ id: string; name: string; product_code?: string | null; variants: { id: string; sku: string; color: string | null; size: string | null; retail_price: number }[] }[]>(
           `/api/v1/admin/products?q=${encodeURIComponent(val)}&page_size=20`
         );
+        const raw = Array.isArray(data) ? data : [];
+        setItemRawData(raw);
         // Intelligent narrowing: every word the admin typed must appear somewhere
         // in the variant (product name/code + color + size + sku). "1001 black" →
-        // only 1001 blacks; add "xl" → just the 1001 black XL.
+        // only 1001 blacks; add "xl" → just the 1001 black XL. We de-dupe to one
+        // row per product+color so the dropdown lists colors, then the size grid
+        // opens all that color's sizes to fill quantities.
         const tokens = val.trim().toLowerCase().split(/\s+/).filter(Boolean);
         const results: typeof itemResults = [];
-        for (const p of (Array.isArray(data) ? data : []) as typeof data) {
+        const seen = new Set<string>();
+        for (const p of raw) {
           for (const v of p.variants ?? []) {
             const hay = `${p.name} ${p.product_code ?? ""} ${v.color ?? ""} ${v.size ?? ""} ${v.sku ?? ""}`.toLowerCase();
-            if (tokens.every(t => hay.includes(t))) {
-              results.push({ variant_id: v.id, sku: v.sku, product_name: p.name, color: v.color, size: v.size, price: Number(v.retail_price || 0) });
-            }
+            if (!tokens.every(t => hay.includes(t))) continue;
+            const key = `${p.id}|${v.color ?? ""}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            results.push({ variant_id: v.id, product_id: p.id, sku: v.sku, product_name: p.name, color: v.color, size: v.size, price: Number(v.retail_price || 0) });
           }
         }
         setItemResults(results.slice(0, 40));
@@ -704,43 +711,71 @@ export default function AdminOrderDetailPage() {
     }, 300);
   }
 
-  async function handleAddItem() {
-    if (!selectedVariant || addQty < 1) return;
-    setAddingItem(true); setAddItemMsg(null);
+  // Canonical apparel size order so the grid reads XS → S → M → L → XL → 2XL …
+  const SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL", "6XL"];
+  const sizeRank = (s: string | null) => {
+    const i = SIZE_ORDER.indexOf((s ?? "").toUpperCase());
+    return i === -1 ? 999 : i;
+  };
+
+  // Clicking a color opens every size of that product+color with a qty box each.
+  async function openSizeGrid(picked: { product_id: string; product_name: string; color: string | null }) {
+    const prod = itemRawData.find(p => p.id === picked.product_id);
+    const rows = (prod?.variants ?? [])
+      .filter(x => (x.color ?? "") === (picked.color ?? ""))
+      .map(x => ({ variant_id: x.id, size: x.size, sku: x.sku, price: Number(x.retail_price || 0), qty: 0 }))
+      .sort((a, b) => sizeRank(a.size) - sizeRank(b.size));
+    setSizeGrid({ productName: picked.product_name, color: picked.color, rows });
+    setItemResults([]);
+    setItemSearch(`${picked.product_name} — ${picked.color ?? ""}`);
+    // Fetch the customer's price for this size run (small set → cheap) so the grid
+    // shows discounted pricing, not catalog. Falls back to catalog on failure.
     try {
-      const result = await apiClient.post<{ subtotal: number; total: number; unit_price?: number; line_total?: number }>(
-        `/api/v1/admin/orders/${order?.id ?? id}/items`,
-        { variant_id: selectedVariant.variant_id, quantity: addQty }
+      const res = await apiClient.post<{ prices: Record<string, number> }>(
+        `/api/v1/admin/orders/${order?.id ?? id}/price-variants`,
+        { variant_ids: rows.map(r => r.variant_id) }
       );
-      // Backend prices the line for THIS customer (tier / discount-group), so use
-      // the returned unit price — not the catalog price shown in the picker.
-      const appliedPrice = result.unit_price ?? selectedVariant.price;
-      const appliedLine = result.line_total ?? appliedPrice * addQty;
+      setSizeGrid(g => g ? { ...g, rows: g.rows.map(r => ({ ...r, price: res.prices[r.variant_id] ?? r.price })) } : g);
+    } catch { /* keep catalog price */ }
+  }
+
+  function setGridQty(variant_id: string, qty: number) {
+    setSizeGrid(g => g ? { ...g, rows: g.rows.map(r => r.variant_id === variant_id ? { ...r, qty: Math.max(0, Math.floor(qty || 0)) } : r) } : g);
+  }
+
+  async function handleBulkAdd() {
+    if (!sizeGrid) return;
+    const items = sizeGrid.rows.filter(r => r.qty > 0).map(r => ({ variant_id: r.variant_id, quantity: r.qty }));
+    if (!items.length) { setAddItemMsg({ text: "Enter a quantity for at least one size.", ok: false }); return; }
+    setBulkAdding(true); setAddItemMsg(null);
+    try {
+      const result = await apiClient.post<{ items: { item_id: string; sku: string; product_name: string; color: string | null; size: string | null; quantity: number; unit_price: number; line_total: number }[]; subtotal: number; total: number }>(
+        `/api/v1/admin/orders/${order?.id ?? id}/items/bulk`,
+        { items }
+      );
       setOrder(prev => prev ? {
         ...prev,
         subtotal: String(result.subtotal),
         total: String(result.total),
         items_edited: true,
-        items: [...prev.items, {
-          id: crypto.randomUUID(),
-          sku: selectedVariant.sku,
-          product_name: selectedVariant.product_name,
-          color: selectedVariant.color,
-          size: selectedVariant.size,
-          quantity: addQty,
-          unit_price: String(appliedPrice),
-          line_total: String(appliedLine),
-        }],
+        items: [...prev.items, ...result.items.map(it => ({
+          id: it.item_id,
+          sku: it.sku,
+          product_name: it.product_name,
+          color: it.color,
+          size: it.size,
+          quantity: it.quantity,
+          unit_price: String(it.unit_price),
+          line_total: String(it.line_total),
+        }))],
       } : prev);
-      const _priceNote = appliedPrice < selectedVariant.price
-        ? ` @ $${appliedPrice.toFixed(2)} (customer price)`
-        : "";
-      setAddItemMsg({ text: `Added ${addQty}x ${selectedVariant.product_name}${_priceNote}`, ok: true });
-      setSelectedVariant(null); setItemSearch(""); setItemResults([]); setAddQty(1);
+      const pieces = items.reduce((s, i) => s + i.quantity, 0);
+      setAddItemMsg({ text: `Added ${result.items.length} size(s) · ${pieces} pcs — ${sizeGrid.productName} ${sizeGrid.color ?? ""}`, ok: true });
+      setSizeGrid(null); setItemSearch(""); setItemResults([]); setItemRawData([]);
     } catch (err: unknown) {
-      setAddItemMsg({ text: err instanceof Error ? err.message : "Failed to add item", ok: false });
+      setAddItemMsg({ text: err instanceof Error ? err.message : "Failed to add items", ok: false });
     } finally {
-      setAddingItem(false);
+      setBulkAdding(false);
     }
   }
 
@@ -1297,54 +1332,72 @@ export default function AdminOrderDetailPage() {
             {editingItems && (
               <div style={{ background: "#F4F3EF", borderRadius: "8px", padding: "16px", marginBottom: "20px" }}>
                 <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#7A7880", marginBottom: "10px" }}>Add Product</div>
-                <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-                  <div style={{ flex: 1, position: "relative" }}>
+                <div style={{ marginBottom: "8px" }}>
+                  <div style={{ position: "relative" }}>
                     <input
                       value={itemSearch}
                       onChange={e => handleItemSearchChange(e.target.value)}
-                      placeholder="Search product by name or SKU…"
+                      placeholder="Search product by name, SKU, or color…"
                       style={{ width: "100%", padding: "9px 12px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", fontFamily: "var(--font-jakarta)", outline: "none", boxSizing: "border-box" as const, background: "#fff" }}
                     />
-                    {itemResults.length > 0 && !selectedVariant && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #E2E0DA", borderRadius: "6px", boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 50, maxHeight: "200px", overflowY: "auto" as const }}>
+                    {itemResults.length > 0 && !sizeGrid && (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #E2E0DA", borderRadius: "6px", boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 50, maxHeight: "220px", overflowY: "auto" as const }}>
                         {itemResults.map(v => (
                           <div
-                            key={v.variant_id}
-                            onClick={() => { setSelectedVariant(v); setItemSearch(`${v.product_name} — ${[v.color, v.size].filter(Boolean).join(" / ")}`); setItemResults([]); }}
+                            key={`${v.product_id}-${v.color ?? ""}`}
+                            onClick={() => openSizeGrid(v)}
                             style={{ padding: "9px 12px", fontSize: "13px", cursor: "pointer", borderBottom: "1px solid #F4F3EF" }}
                             onMouseEnter={e => (e.currentTarget.style.background = "#F4F3EF")}
                             onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
                           >
                             <span style={{ fontWeight: 600, color: "#2A2830" }}>{v.product_name}</span>
-                            <span style={{ color: "#7A7880", marginLeft: "8px" }}>
-                              {[v.color, v.size].filter(Boolean).join(" / ")}
-                            </span>
-                            <span style={{ color: "#1A5CFF", marginLeft: "8px", fontFamily: "monospace", fontSize: "11px" }}>{v.sku}</span>
-                            <span style={{ color: "#059669", marginLeft: "8px", fontWeight: 700 }}>${v.price.toFixed(2)}</span>
+                            <span style={{ color: "#7A7880", marginLeft: "8px" }}>{v.color || "—"}</span>
+                            <span style={{ color: "#1A5CFF", marginLeft: "8px", fontSize: "11px" }}>· pick sizes →</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                  <input
-                    type="number"
-                    min={1}
-                    value={addQty}
-                    onChange={e => setAddQty(Math.max(1, Number(e.target.value)))}
-                    placeholder="Qty"
-                    style={{ width: "72px", padding: "9px 8px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", textAlign: "center" as const, background: "#fff" }}
-                  />
-                  <button
-                    onClick={handleAddItem}
-                    disabled={!selectedVariant || addingItem}
-                    style={{ background: selectedVariant && !addingItem ? "#059669" : "#E2E0DA", color: selectedVariant && !addingItem ? "#fff" : "#aaa", border: "none", padding: "9px 18px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: selectedVariant && !addingItem ? "pointer" : "not-allowed", whiteSpace: "nowrap" as const }}>
-                    {addingItem ? "Adding…" : "+ Add"}
-                  </button>
                 </div>
-                {selectedVariant && (
-                  <div style={{ fontSize: "12px", color: "#059669", fontWeight: 600 }}>
-                    Selected: {selectedVariant.product_name} — {[selectedVariant.color, selectedVariant.size].filter(Boolean).join(" / ")} @ ${selectedVariant.price.toFixed(2)}/unit
-                    <button onClick={() => { setSelectedVariant(null); setItemSearch(""); }} style={{ marginLeft: "8px", fontSize: "11px", color: "#E8242A", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                {sizeGrid && (
+                  <div style={{ background: "#fff", border: "1.5px solid #E2E0DA", borderRadius: "8px", padding: "12px", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>
+                        {sizeGrid.productName} <span style={{ color: "#7A7880", fontWeight: 600 }}>· {sizeGrid.color || "—"}</span>
+                      </div>
+                      <button onClick={() => { setSizeGrid(null); setItemSearch(""); }} style={{ fontSize: "12px", color: "#E8242A", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>✕ Close</button>
+                    </div>
+                    {sizeGrid.rows.length === 0 ? (
+                      <div style={{ fontSize: "12px", color: "#7A7880" }}>No sizes found for this color.</div>
+                    ) : (
+                      <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "8px" }}>
+                        {sizeGrid.rows.map(r => (
+                          <div key={r.variant_id} style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: "3px", border: "1px solid #E2E0DA", borderRadius: "6px", padding: "7px 8px", minWidth: "60px" }}>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: "#2A2830" }}>{r.size || "—"}</div>
+                            <div style={{ fontSize: "10.5px", color: "#059669", fontWeight: 600 }}>${r.price.toFixed(2)}</div>
+                            <input
+                              type="number"
+                              min={0}
+                              value={r.qty || ""}
+                              placeholder="0"
+                              onChange={e => setGridQty(r.variant_id, Number(e.target.value))}
+                              style={{ width: "50px", padding: "5px 4px", border: "1.5px solid #E2E0DA", borderRadius: "5px", fontSize: "13px", textAlign: "center" as const, background: "#fff" }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", gap: "8px", flexWrap: "wrap" as const }}>
+                      <div style={{ fontSize: "12px", color: "#7A7880", fontWeight: 600 }}>
+                        {sizeGrid.rows.reduce((s, r) => s + (r.qty || 0), 0)} pcs · ${sizeGrid.rows.reduce((s, r) => s + (r.qty || 0) * r.price, 0).toFixed(2)}
+                      </div>
+                      <button
+                        onClick={handleBulkAdd}
+                        disabled={bulkAdding || !sizeGrid.rows.some(r => r.qty > 0)}
+                        style={{ background: (!bulkAdding && sizeGrid.rows.some(r => r.qty > 0)) ? "#059669" : "#E2E0DA", color: (!bulkAdding && sizeGrid.rows.some(r => r.qty > 0)) ? "#fff" : "#aaa", border: "none", padding: "9px 18px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: (!bulkAdding && sizeGrid.rows.some(r => r.qty > 0)) ? "pointer" : "not-allowed", whiteSpace: "nowrap" as const }}>
+                        {bulkAdding ? "Adding…" : "+ Add to order"}
+                      </button>
+                    </div>
                   </div>
                 )}
                 {addItemMsg && (
