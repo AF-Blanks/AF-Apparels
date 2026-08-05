@@ -16,7 +16,7 @@ interface CustomerReport {
   status_breakdown: Record<string, number>;
   registrations_trend: { day: string; count: number }[];
   aov_by_tier: { pricing_tier_id: string | null; avg_order_value: number; order_count: number }[];
-  top_customers: { company_name: string; order_count: number; total_spend: number }[];
+  top_customers: { company_name: string; order_count: number; total_spend: number; total_paid: number; outstanding_balance: number }[];
 }
 
 export default function CustomerReportPage() {
@@ -165,7 +165,9 @@ export default function CustomerReportPage() {
                     <th className="px-6 py-3 text-left">#</th>
                     <th className="px-6 py-3 text-left">Company</th>
                     <th className="px-6 py-3 text-right">Orders</th>
-                    <th className="px-6 py-3 text-right">Total Spend</th>
+                    <th className="px-6 py-3 text-right">Total Purchased</th>
+                    <th className="px-6 py-3 text-right">Paid</th>
+                    <th className="px-6 py-3 text-right">Outstanding</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -176,6 +178,12 @@ export default function CustomerReportPage() {
                       <td className="px-6 py-3 text-right">{row.order_count}</td>
                       <td className="px-6 py-3 text-right font-semibold">
                         ${row.total_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-6 py-3 text-right text-green-700">
+                        ${row.total_paid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-6 py-3 text-right font-semibold" style={{ color: row.outstanding_balance > 0.005 ? "#E8242A" : "#059669" }}>
+                        ${row.outstanding_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   ))}

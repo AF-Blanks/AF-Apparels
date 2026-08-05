@@ -420,6 +420,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   // ── Order state ────────────────────────────────────────────────────────────
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [hoverColor, setHoverColor] = useState<string | null>(null);
   const [expandedColors, setExpandedColors] = useState<string[]>([]);
   const [showAllColors, setShowAllColors] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -932,6 +933,11 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
               <>
                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#6B6B6B", fontWeight: 600, marginBottom: "10px" }}>
                   Color
+                  {(hoverColor ?? selectedColor) && (
+                    <span style={{ letterSpacing: 0, textTransform: "none", color: "#1A1A1A", fontWeight: 700, marginLeft: "8px", fontSize: "13px" }}>
+                      — {hoverColor ?? selectedColor}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "28px" }}>
                   {colorGroups.map(group => {
@@ -942,7 +948,10 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                       <button
                         key={group.color}
                         onClick={() => { setSelectedColor(selectedColor === group.color ? null : group.color); setActiveImageIdx(0); }}
+                        onMouseEnter={() => setHoverColor(group.color)}
+                        onMouseLeave={() => setHoverColor(null)}
                         title={group.color}
+                        aria-label={group.color}
                         style={{ width: "24px", height: "24px", borderRadius: "50%", background: hex, border: isLight ? "1px solid #E2E2DE" : "1px solid rgba(0,0,0,.08)", cursor: "pointer", outline: isSel ? "2px solid #1C3557" : "none", outlineOffset: "2px", flexShrink: 0, padding: 0, display: "block" }}
                       />
                     );

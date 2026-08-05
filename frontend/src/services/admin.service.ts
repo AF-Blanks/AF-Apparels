@@ -253,6 +253,16 @@ export const adminService = {
     return apiClient.get(`/api/v1/admin/companies/${id}/qb-balance`);
   },
 
+  /** The real sendable email address(es) on file for one customer. */
+  async getCustomerEmailRecipients(id: string) {
+    return apiClient.get(`/api/v1/admin/companies/${id}/email-recipients`);
+  },
+
+  /** Send a one-off email to a single specific customer. */
+  async sendCustomerEmail(id: string, subject: string, body_html: string) {
+    return apiClient.post(`/api/v1/admin/companies/${id}/send-email`, { subject, body_html });
+  },
+
   async updateCompany(id: string, data: object) {
     return apiClient.patch(`/api/v1/admin/companies/${id}`, data);
   },

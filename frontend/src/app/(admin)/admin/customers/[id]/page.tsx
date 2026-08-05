@@ -167,6 +167,13 @@ export default function CustomerDetailPage() {
   const [sendingReset, setSendingReset]     = useState(false);
   const [detailsForm, setDetailsForm]       = useState<Record<string, string>>({});
 
+  // per-customer email (send to this one customer only)
+  const [showEmail, setShowEmail]           = useState(false);
+  const [emailSubject, setEmailSubject]     = useState("");
+  const [emailBody, setEmailBody]           = useState("");
+  const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
+  const [sendingEmail, setSendingEmail]     = useState(false);
+
   // suspend
   const [showSuspend, setShowSuspend] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
@@ -384,6 +391,38 @@ export default function CustomerDetailPage() {
     }
   }
 
+  async function openEmailComposer() {
+    setEmailSubject("");
+    setEmailBody("");
+    setEmailRecipients([]);
+    setShowEmail(true);
+    try {
+      const r = await adminService.getCustomerEmailRecipients(id) as { emails: string[] };
+      setEmailRecipients(r.emails ?? []);
+    } catch {
+      setEmailRecipients([]);
+    }
+  }
+
+  async function handleSendEmail() {
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      showToast("Add a subject and a message first", false);
+      return;
+    }
+    setSendingEmail(true);
+    try {
+      // Preserve the admin's line breaks as HTML.
+      const html = emailBody.trim().replace(/\n/g, "<br>");
+      const r = await adminService.sendCustomerEmail(id, emailSubject.trim(), html) as { count: number; sent_to: string[] };
+      showToast(`Email sent to ${r.sent_to.join(", ")}`);
+      setShowEmail(false);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to send email", false);
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
   async function handleSuspend() {
     if (!suspendReason.trim()) return;
     setSuspending(true);
@@ -520,6 +559,54 @@ export default function CustomerDetailPage() {
           boxShadow: "0 4px 16px rgba(0,0,0,.15)", transition: "opacity .2s",
         }}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* ── Per-customer email composer ─────────────────────────────────── */}
+      {showEmail && (
+        <div
+          onClick={() => !sendingEmail && setShowEmail(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: "560px", background: "#fff", borderRadius: "12px", padding: "22px 24px", boxShadow: "0 12px 40px rgba(0,0,0,.25)" }}>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#1B3A5C", marginBottom: "4px" }}>Send Email</div>
+            <div style={{ fontSize: "12px", color: "#7A7880", marginBottom: "16px" }}>
+              To: {emailRecipients.length > 0
+                ? <b style={{ color: "#2A2830" }}>{emailRecipients.join(", ")}</b>
+                : <span style={{ color: "#E8242A" }}>no valid email on file for this customer</span>}
+            </div>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#7A7880", marginBottom: "5px" }}>Subject</label>
+            <input
+              value={emailSubject}
+              onChange={e => setEmailSubject(e.target.value)}
+              placeholder="e.g. New stock just arrived"
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E0DA", borderRadius: "7px", fontSize: "13px", marginBottom: "14px", boxSizing: "border-box" }} />
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#7A7880", marginBottom: "5px" }}>Message</label>
+            <textarea
+              rows={9}
+              value={emailBody}
+              onChange={e => setEmailBody(e.target.value)}
+              placeholder={"Hi {{first_name}},\n\nWrite your message here…"}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid #E2E0DA", borderRadius: "7px", fontSize: "13px", lineHeight: 1.6, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }} />
+            <div style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "6px" }}>
+              Tip: type <code>{"{{first_name}}"}</code> and it&rsquo;s replaced with the customer&rsquo;s name.
+            </div>
+            <div style={{ display: "flex", gap: "8px", marginTop: "18px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowEmail(false)}
+                disabled={sendingEmail}
+                style={{ padding: "9px 16px", border: "1px solid #E2E0DA", borderRadius: "7px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleSendEmail}
+                disabled={sendingEmail || emailRecipients.length === 0 || !emailSubject.trim() || !emailBody.trim()}
+                style={{ padding: "9px 20px", background: (sendingEmail || emailRecipients.length === 0 || !emailSubject.trim() || !emailBody.trim()) ? "#9CA3AF" : "#1B3A5C", color: "#fff", border: "none", borderRadius: "7px", fontSize: "13px", fontWeight: 700, cursor: (sendingEmail || emailRecipients.length === 0) ? "not-allowed" : "pointer" }}>
+                {sendingEmail ? "Sending…" : "Send Email"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -888,6 +975,9 @@ export default function CustomerDetailPage() {
               <div style={sectionTitle}>Customer Details</div>
               {!editingDetails && (
                 <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
+                  <button onClick={openEmailComposer} title="Write and send a one-off email to this customer only" style={{ fontSize: "12px", fontWeight: 700, color: "#1B3A5C", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    ✉ Send Email
+                  </button>
                   <button onClick={handleSendPasswordReset} disabled={sendingReset} title="Email a password-reset link to this customer" style={{ fontSize: "12px", fontWeight: 700, color: sendingReset ? "#aaa" : "#059669", background: "none", border: "none", cursor: sendingReset ? "default" : "pointer", padding: 0 }}>
                     {sendingReset ? "Sending…" : "✉ Send Password Reset"}
                   </button>
