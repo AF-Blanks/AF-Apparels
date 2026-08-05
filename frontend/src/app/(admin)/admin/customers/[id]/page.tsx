@@ -51,6 +51,14 @@ interface Customer {
   email?: string;
 }
 
+interface CustomerStats {
+  total_orders: number;
+  total_spent: number;       // lifetime purchased
+  total_paid: number;        // paid to date
+  outstanding_balance: number; // still owed (accounts receivable)
+  last_order_date: string | null;
+}
+
 interface OrderRow {
   id: string;
   order_number: string;
@@ -136,6 +144,11 @@ export default function CustomerDetailPage() {
   const [orders, setOrders]               = useState<OrderRow[]>([]);
   const [discountGroups, setDiscountGroups] = useState<DiscountGroup[]>([]);
   const [loading, setLoading]             = useState(true);
+
+  // account / balance — lifetime figures across ALL orders (not just the 50 loaded)
+  const [stats, setStats] = useState<CustomerStats | null>(null);
+  const [qbBalance, setQbBalance] = useState<{ synced: boolean; qb_balance?: number; reason?: string } | null>(null);
+  const [refreshingQb, setRefreshingQb] = useState(false);
 
   // tags
   const [tags, setTags]       = useState<string[]>([]);
@@ -227,16 +240,43 @@ export default function CustomerDetailPage() {
     if (id) loadOrders();
   }, [id]);
 
+  // Lifetime account figures (across ALL orders, computed server-side)
+  useEffect(() => {
+    if (!id) return;
+    adminService.getCustomerStats(id)
+      .then((s) => setStats(s as CustomerStats))
+      .catch(() => {});
+  }, [id]);
+
+  async function handleRefreshQb() {
+    setRefreshingQb(true);
+    try {
+      const r = await adminService.getCustomerQbBalance(id) as { synced: boolean; qb_balance?: number; reason?: string };
+      setQbBalance(r);
+      if (r.synced) showToast("Balance refreshed from QuickBooks");
+      else showToast(r.reason || "QuickBooks not available", false);
+    } catch {
+      showToast("Couldn't reach QuickBooks", false);
+    } finally {
+      setRefreshingQb(false);
+    }
+  }
+
   // ── Derived ──────────────────────────────────────────────────────────────
 
+  // Prefer server-computed lifetime figures; fall back to the loaded orders.
   const totalSpend = useMemo(
-    () => orders.reduce((s, o) => s + Number(o.total || 0), 0),
-    [orders]
+    () => stats ? stats.total_spent : orders.reduce((s, o) => s + Number(o.total || 0), 0),
+    [stats, orders]
   );
 
+  const totalOrders = stats ? stats.total_orders : orders.length;
+  const outstanding = stats?.outstanding_balance ?? 0;
+  const totalPaid = stats?.total_paid ?? 0;
+
   const lastOrderDate = useMemo(
-    () => orders.length > 0 && orders[0] ? orders[0].created_at : null,
-    [orders]
+    () => stats?.last_order_date ?? (orders.length > 0 && orders[0] ? orders[0].created_at : null),
+    [stats, orders]
   );
 
 
@@ -608,7 +648,7 @@ export default function CustomerDetailPage() {
         <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", padding: "16px 18px" }}>
           <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#1A5CFF", marginBottom: "6px" }}>Total Orders</div>
           <div style={{ fontFamily: "var(--font-bebas)", fontSize: "28px", color: "#1A5CFF", lineHeight: 1 }}>
-            {orders.length}
+            {totalOrders}
           </div>
         </div>
         <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", padding: "16px 18px" }}>
@@ -623,6 +663,62 @@ export default function CustomerDetailPage() {
             {lastOrderDate ? new Date(lastOrderDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
           </div>
         </div>
+      </div>
+
+      {/* ── ACCOUNT SUMMARY (what they owe / bought / paid) ──────────────── */}
+      <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", padding: "18px 20px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 800, color: "#1B3A5C", letterSpacing: ".02em" }}>Account Summary</div>
+          <button
+            onClick={handleRefreshQb}
+            disabled={refreshingQb}
+            style={{ padding: "6px 14px", border: "1px solid #1B3A5C", borderRadius: "7px", background: refreshingQb ? "#F3F4F6" : "#fff", color: "#1B3A5C", fontSize: "12px", fontWeight: 700, cursor: refreshingQb ? "wait" : "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            {refreshingQb ? "Refreshing…" : "↻ Refresh from QuickBooks"}
+          </button>
+        </div>
+        <div className="admin-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px" }}>
+          {/* Outstanding — the hero figure */}
+          <div style={{ background: outstanding > 0.005 ? "rgba(232,36,42,.06)" : "rgba(5,150,105,.06)", border: `1px solid ${outstanding > 0.005 ? "rgba(232,36,42,.28)" : "rgba(5,150,105,.28)"}`, borderRadius: "9px", padding: "14px 16px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: outstanding > 0.005 ? "#E8242A" : "#059669", marginBottom: "6px" }}>Outstanding Balance</div>
+            <div style={{ fontFamily: "var(--font-bebas)", fontSize: "34px", color: outstanding > 0.005 ? "#E8242A" : "#059669", lineHeight: 1 }}>
+              ${outstanding.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "5px" }}>{outstanding > 0.005 ? "Owed by customer" : "Paid in full"}</div>
+          </div>
+          {/* Total purchased (lifetime) */}
+          <div style={{ padding: "14px 16px", border: "1px solid #E2E0DA", borderRadius: "9px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#2A2830", marginBottom: "6px" }}>Total Purchased</div>
+            <div style={{ fontFamily: "var(--font-bebas)", fontSize: "34px", color: "#2A2830", lineHeight: 1 }}>
+              ${totalSpend.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "5px" }}>Lifetime · {totalOrders} order{totalOrders !== 1 ? "s" : ""}</div>
+          </div>
+          {/* Paid to date */}
+          <div style={{ padding: "14px 16px", border: "1px solid #E2E0DA", borderRadius: "9px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#059669", marginBottom: "6px" }}>Paid to Date</div>
+            <div style={{ fontFamily: "var(--font-bebas)", fontSize: "34px", color: "#059669", lineHeight: 1 }}>
+              ${totalPaid.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "5px" }}>Received so far</div>
+          </div>
+        </div>
+        {qbBalance && (
+          <div style={{ marginTop: "12px", fontSize: "12px", color: qbBalance.synced ? "#1B3A5C" : "#7A7880", background: "#F7F6F3", border: "1px solid #E2E0DA", borderRadius: "8px", padding: "9px 12px" }}>
+            {qbBalance.synced ? (
+              <>
+                QuickBooks open balance:{" "}
+                <b style={{ fontVariantNumeric: "tabular-nums" }}>
+                  ${(qbBalance.qb_balance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </b>
+                {Math.abs((qbBalance.qb_balance ?? 0) - outstanding) > 0.01 && (
+                  <span style={{ color: "#E8242A" }}> — differs from the app total; a payment may have been recorded directly in QuickBooks.</span>
+                )}
+              </>
+            ) : (
+              qbBalance.reason
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── 2-COLUMN LAYOUT ─────────────────────────────────────────────── */}

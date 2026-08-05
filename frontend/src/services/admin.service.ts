@@ -242,6 +242,17 @@ export const adminService = {
     return apiClient.get(`/api/v1/admin/companies/${id}`);
   },
 
+  /** Lifetime account figures across ALL of this customer's orders:
+   *  total_spent (purchased), total_paid, outstanding_balance (owed). */
+  async getCustomerStats(id: string) {
+    return apiClient.get(`/api/v1/admin/companies/${id}/stats`);
+  },
+
+  /** On-demand live open balance pulled straight from QuickBooks. */
+  async getCustomerQbBalance(id: string) {
+    return apiClient.get(`/api/v1/admin/companies/${id}/qb-balance`);
+  },
+
   async updateCompany(id: string, data: object) {
     return apiClient.patch(`/api/v1/admin/companies/${id}`, data);
   },
