@@ -151,6 +151,11 @@ export default function PODetailPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {["draft", "sent"].includes(po.status) && po.total_received === 0 && (
+            <Link href={`/admin/purchase-orders/${po.id}/edit`} style={{ padding: "9px 18px", borderRadius: "8px", border: "1px solid #1B3A5C", background: "#fff", color: "#1B3A5C", textDecoration: "none", fontSize: "13px", fontWeight: 600 }}>
+              ✎ Edit
+            </Link>
+          )}
           {po.status === "draft" && (
             <>
               <button onClick={handleSendEmail} disabled={emailSending} style={{ padding: "9px 18px", borderRadius: "8px", background: "#1D4ED8", color: "#fff", border: "none", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
