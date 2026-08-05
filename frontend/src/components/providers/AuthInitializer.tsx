@@ -62,5 +62,41 @@ export function AuthInitializer() {
     }
   }, []);
 
+  // ── 3-hour inactivity auto-logout ──────────────────────────────────────────
+  // The session token itself is long-lived (so a brief idle never drops it), but
+  // for security we log the user out after 3 hours of NO activity. Last-activity
+  // is stored in localStorage so it's shared across tabs — activity in any tab
+  // keeps them all signed in; only a full 3-hour lull logs out.
+  useEffect(() => {
+    const IDLE_KEY = "af_last_activity";
+    const IDLE_MS = 3 * 60 * 60 * 1000; // 3 hours
+    const bump = () => { try { localStorage.setItem(IDLE_KEY, String(Date.now())); } catch {} };
+    bump();
+
+    let lastBump = Date.now();
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastBump > 10000) { lastBump = now; bump(); } // throttle writes to ~every 10s
+    };
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"];
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+
+    const interval = setInterval(() => {
+      const store = useAuthStore.getState();
+      if (!store.accessToken) return; // only auto-logout a signed-in user
+      let last = 0;
+      try { last = Number(localStorage.getItem(IDLE_KEY) || "0"); } catch {}
+      if (last && Date.now() - last > IDLE_MS) {
+        store.clearAuth();
+        window.location.href = "/login";
+      }
+    }, 60 * 1000); // check once a minute
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, onActivity));
+      clearInterval(interval);
+    };
+  }, []);
+
   return null;
 }
