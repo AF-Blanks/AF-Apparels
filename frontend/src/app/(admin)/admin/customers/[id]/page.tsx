@@ -974,15 +974,7 @@ export default function CustomerDetailPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={sectionTitle}>Customer Details</div>
               {!editingDetails && (
-                <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
-                  <button onClick={openEmailComposer} title="Write and send a one-off email to this customer only" style={{ fontSize: "12px", fontWeight: 700, color: "#1B3A5C", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                    ✉ Send Email
-                  </button>
-                  <button onClick={handleSendPasswordReset} disabled={sendingReset} title="Email a password-reset link to this customer" style={{ fontSize: "12px", fontWeight: 700, color: sendingReset ? "#aaa" : "#059669", background: "none", border: "none", cursor: sendingReset ? "default" : "pointer", padding: 0 }}>
-                    {sendingReset ? "Sending…" : "✉ Send Password Reset"}
-                  </button>
-                  <button onClick={startEditDetails} style={{ fontSize: "12px", fontWeight: 700, color: "#1A5CFF", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Edit</button>
-                </div>
+                <button onClick={startEditDetails} style={{ fontSize: "12px", fontWeight: 700, color: "#1A5CFF", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Edit</button>
               )}
             </div>
 
@@ -1062,6 +1054,23 @@ export default function CustomerDetailPage() {
                   {customer.how_heard && <span>Heard via: <strong style={{ color: "#2A2830" }}>{customer.how_heard}</strong></span>}
                 </div>
               )}
+
+              {/* Contact actions — email this customer / send them a password reset */}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px", paddingTop: "14px", borderTop: "1px solid #F4F3EF" }}>
+                <button
+                  onClick={openEmailComposer}
+                  title="Write and send a one-off email to this customer only"
+                  style={{ flex: 1, minWidth: "140px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "9px 12px", border: "1px solid #1B3A5C", borderRadius: "8px", background: "#fff", color: "#1B3A5C", fontSize: "12.5px", fontWeight: 700, cursor: "pointer" }}>
+                  <MailIcon size={14} color="#1B3A5C" /> Send Email
+                </button>
+                <button
+                  onClick={handleSendPasswordReset}
+                  disabled={sendingReset}
+                  title="Email a password-reset link to this customer"
+                  style={{ flex: 1, minWidth: "140px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "9px 12px", border: `1px solid ${sendingReset ? "#ccc" : "#059669"}`, borderRadius: "8px", background: "#fff", color: sendingReset ? "#aaa" : "#059669", fontSize: "12.5px", fontWeight: 700, cursor: sendingReset ? "default" : "pointer" }}>
+                  <MailIcon size={14} color={sendingReset ? "#aaa" : "#059669"} /> {sendingReset ? "Sending…" : "Send Password Reset"}
+                </button>
+              </div>
             </div>
             )}
 
