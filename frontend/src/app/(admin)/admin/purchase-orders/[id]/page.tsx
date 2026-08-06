@@ -253,7 +253,9 @@ export default function PODetailPage() {
               <td style={{ padding: "14px 16px", fontSize: "14px", fontWeight: 800, color: "#1B3A5C" }}>
                 {po.line_items.reduce((s, li) => s + (li.qty_ordered || 0), 0)} pcs
               </td>
-              <td />
+              <td style={{ padding: "14px 16px", fontSize: "14px", fontWeight: 800, color: "#1B3A5C" }}>
+                {fmt(po.line_items.reduce((s, li) => s + (li.unit_cost_expected || 0), 0))}
+              </td>
               <td style={{ padding: "14px 16px", fontSize: "15px", fontWeight: 800, color: "#1B3A5C" }}>
                 {fmt(po.line_items.reduce((s, li) => s + (li.total_expected || 0), 0))}
               </td>
