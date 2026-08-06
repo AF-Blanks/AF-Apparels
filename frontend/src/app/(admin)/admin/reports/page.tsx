@@ -17,6 +17,12 @@ const REPORT_CARDS = [
     icon: <PackageIcon size={36} color="#1A5CFF" />,
   },
   {
+    href: "/reports/inventory-value",
+    title: "Inventory Value",
+    description: "Total worth of stock on hand — quantity × unit cost",
+    icon: <PackageIcon size={36} color="#16a34a" />,
+  },
+  {
     href: "/reports/variant-sales",
     title: "Variant Sales",
     description: "Color & size breakdown of sold variants by period",
