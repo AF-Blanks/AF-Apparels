@@ -378,6 +378,11 @@ export const adminService = {
     return apiClient.get(`/api/v1/admin/orders/${id}`);
   },
 
+  /** Download an order's invoice as a PDF (QuickBooks PDF if synced, else local). */
+  async downloadOrderInvoice(id: string, orderNumber: string) {
+    return downloadCsv(`/api/v1/admin/orders/${id}/invoice-pdf`, `invoice-${orderNumber}.pdf`);
+  },
+
   async updateOrder(id: string, data: object) {
     return apiClient.patch(`/api/v1/admin/orders/${id}`, data);
   },

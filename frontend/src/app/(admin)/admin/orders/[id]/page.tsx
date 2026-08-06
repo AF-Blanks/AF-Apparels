@@ -347,6 +347,7 @@ export default function AdminOrderDetailPage() {
   const [bulkAdding, setBulkAdding] = useState(false);
   const [addItemMsg, setAddItemMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -473,6 +474,18 @@ export default function AdminOrderDetailPage() {
     } catch (err: unknown) {
       setMsg({ text: err instanceof Error ? err.message : "Failed to delete order.", ok: false });
       setDeleting(false);
+    }
+  }
+
+  async function handleDownloadInvoice() {
+    if (!order) return;
+    setDownloadingInvoice(true); setMsg(null);
+    try {
+      await adminService.downloadOrderInvoice(order.id ?? id, order.order_number);
+    } catch {
+      setMsg({ text: "Couldn't generate the invoice PDF. Please try again.", ok: false });
+    } finally {
+      setDownloadingInvoice(false);
     }
   }
 
@@ -904,6 +917,14 @@ export default function AdminOrderDetailPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }} className="no-print">
+          <button
+            onClick={handleDownloadInvoice}
+            disabled={downloadingInvoice}
+            title="Download this order's invoice as a PDF"
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "#1B3A5C", border: "1.5px solid #1B3A5C", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#fff", cursor: downloadingInvoice ? "default" : "pointer", opacity: downloadingInvoice ? 0.7 : 1 }}
+          >
+            📄 {downloadingInvoice ? "Preparing…" : "Invoice PDF"}
+          </button>
           <button
             onClick={() => window.print()}
             style={{ display: "flex", alignItems: "center", gap: "6px", background: "#fff", border: "1.5px solid #E2E0DA", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#2A2830", cursor: "pointer" }}
