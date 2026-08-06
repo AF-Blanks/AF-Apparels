@@ -247,6 +247,18 @@ export default function PODetailPage() {
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "2px solid #E5E7EB", background: "#F9FAFB" }}>
+              <td colSpan={4} style={{ padding: "14px 16px", fontSize: "13px", fontWeight: 800, color: "#1B3A5C", letterSpacing: ".04em" }}>TOTAL</td>
+              <td style={{ padding: "14px 16px", fontSize: "14px", fontWeight: 800, color: "#1B3A5C" }}>
+                {po.line_items.reduce((s, li) => s + (li.qty_ordered || 0), 0)} pcs
+              </td>
+              <td />
+              <td style={{ padding: "14px 16px", fontSize: "15px", fontWeight: 800, color: "#1B3A5C" }}>
+                {fmt(po.line_items.reduce((s, li) => s + (li.total_expected || 0), 0))}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 

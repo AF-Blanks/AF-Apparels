@@ -348,6 +348,17 @@ export default function AdminOrderDetailPage() {
   const [addItemMsg, setAddItemMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+  // per-order email (send to this order's customer)
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  // change shipping method (customer changed their mind after ordering)
+  const [editingShipping, setEditingShipping] = useState(false);
+  const [shipMethodEdit, setShipMethodEdit] = useState("");
+  const [shipCostEdit, setShipCostEdit] = useState("");
+  const [savingShipping, setSavingShipping] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -474,6 +485,65 @@ export default function AdminOrderDetailPage() {
     } catch (err: unknown) {
       setMsg({ text: err instanceof Error ? err.message : "Failed to delete order.", ok: false });
       setDeleting(false);
+    }
+  }
+
+  async function openEmailComposer() {
+    if (!order?.company_id) { setMsg({ text: "This order has no company on file to email.", ok: false }); return; }
+    setEmailSubject(""); setEmailBody(""); setEmailRecipients([]); setShowEmail(true);
+    try {
+      const r = await adminService.getCustomerEmailRecipients(order.company_id) as { emails: string[] };
+      setEmailRecipients(r.emails ?? []);
+    } catch { setEmailRecipients([]); }
+  }
+
+  async function handleSendEmail() {
+    if (!order?.company_id) return;
+    if (!emailSubject.trim() || !emailBody.trim()) { setMsg({ text: "Add a subject and a message first", ok: false }); return; }
+    setSendingEmail(true);
+    try {
+      const html = emailBody.trim().replace(/\n/g, "<br>");
+      const r = await adminService.sendCustomerEmail(order.company_id, emailSubject.trim(), html) as { count: number; sent_to: string[] };
+      setMsg({ text: `Email sent to ${r.sent_to.join(", ")}`, ok: true });
+      setShowEmail(false);
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to send email", ok: false });
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
+  const SHIP_METHODS = [
+    { value: "will_call", label: "Will Call Pickup", zeroCost: true },
+    { value: "free", label: "Free Shipping", zeroCost: true },
+    { value: "standard", label: "Standard / Courier", zeroCost: false },
+    { value: "pallet", label: "Pallet", zeroCost: false },
+  ];
+
+  function openShippingEditor() {
+    if (!order) return;
+    setShipMethodEdit(order.shipping_method || "standard");
+    setShipCostEdit(order.shipping_cost ? String(Number(order.shipping_cost)) : "0");
+    setEditingShipping(true);
+  }
+
+  async function handleSaveShipping() {
+    if (!order) return;
+    const method = shipMethodEdit;
+    const zero = SHIP_METHODS.find(m => m.value === method)?.zeroCost;
+    const cost = zero ? 0 : (parseFloat(shipCostEdit) || 0);
+    setSavingShipping(true); setMsg(null);
+    try {
+      await adminService.updateOrder(order.id ?? id, { shipping_method: method, shipping_cost: cost });
+      // Reload so the recomputed total + shipping display refresh everywhere.
+      const fresh = await adminService.getOrder(order.id ?? id) as AdminOrder;
+      setOrder(fresh);
+      setEditingShipping(false);
+      setMsg({ text: "Shipping updated — invoice total recalculated.", ok: true });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to update shipping", ok: false });
+    } finally {
+      setSavingShipping(false);
     }
   }
 
@@ -896,6 +966,37 @@ export default function AdminOrderDetailPage() {
 
   return (
     <div style={{ fontFamily: "var(--font-jakarta)", maxWidth: "1200px" }}>
+      {/* ── Email composer (send to this order's customer) ────────────────── */}
+      {showEmail && (
+        <div onClick={() => !sendingEmail && setShowEmail(false)} className="no-print"
+          style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: "560px", background: "#fff", borderRadius: "12px", padding: "22px 24px", boxShadow: "0 12px 40px rgba(0,0,0,.25)" }}>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#1B3A5C", marginBottom: "4px" }}>Email Customer</div>
+            <div style={{ fontSize: "12px", color: "#7A7880", marginBottom: "16px" }}>
+              To: {emailRecipients.length > 0
+                ? <b style={{ color: "#2A2830" }}>{emailRecipients.join(", ")}</b>
+                : <span style={{ color: "#E8242A" }}>no valid email on file for this customer</span>}
+            </div>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#7A7880", marginBottom: "5px" }}>Subject</label>
+            <input value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder={`Regarding your order ${order.order_number}`}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E0DA", borderRadius: "7px", fontSize: "13px", marginBottom: "14px", boxSizing: "border-box" }} />
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#7A7880", marginBottom: "5px" }}>Message</label>
+            <textarea rows={8} value={emailBody} onChange={e => setEmailBody(e.target.value)} placeholder={"Hi {{first_name}},\n\nWrite your message here…"}
+              style={{ width: "100%", padding: "10px 12px", border: "1px solid #E2E0DA", borderRadius: "7px", fontSize: "13px", lineHeight: 1.6, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }} />
+            <div style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "6px" }}>Tip: type <code>{"{{first_name}}"}</code> for the customer&rsquo;s name.</div>
+            <div style={{ display: "flex", gap: "8px", marginTop: "18px", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowEmail(false)} disabled={sendingEmail}
+                style={{ padding: "9px 16px", border: "1px solid #E2E0DA", borderRadius: "7px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleSendEmail} disabled={sendingEmail || emailRecipients.length === 0 || !emailSubject.trim() || !emailBody.trim()}
+                style={{ padding: "9px 20px", background: (sendingEmail || emailRecipients.length === 0 || !emailSubject.trim() || !emailBody.trim()) ? "#9CA3AF" : "#1B3A5C", color: "#fff", border: "none", borderRadius: "7px", fontSize: "13px", fontWeight: 700, cursor: (sendingEmail || emailRecipients.length === 0) ? "not-allowed" : "pointer" }}>
+                {sendingEmail ? "Sending…" : "Send Email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Back */}
       <button onClick={() => router.back()} style={{ background: "none", border: "none", color: "#1A5CFF", cursor: "pointer", fontSize: "13px", fontWeight: 700, padding: 0, marginBottom: "20px", display: "flex", alignItems: "center", gap: "6px" }}>
         ← Back to Orders
@@ -917,6 +1018,13 @@ export default function AdminOrderDetailPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px" }} className="no-print">
+          <button
+            onClick={openEmailComposer}
+            title="Write and send an email to this order's customer"
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "#fff", border: "1.5px solid #1B3A5C", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#1B3A5C", cursor: "pointer" }}
+          >
+            ✉️ Email
+          </button>
           <button
             onClick={handleDownloadInvoice}
             disabled={downloadingInvoice}
@@ -979,7 +1087,54 @@ export default function AdminOrderDetailPage() {
         <div>
           {/* SHIPPING & COURIER — always shown; content varies by order type */}
           <div style={{ ...CardStyle, padding: "24px" }}>
-            <h3 style={{ ...SectionHead, fontSize: "18px", letterSpacing: ".05em", marginBottom: "14px" }}>SHIPPING & COURIER</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <h3 style={{ ...SectionHead, fontSize: "18px", letterSpacing: ".05em", margin: 0 }}>SHIPPING & COURIER</h3>
+              {!editingShipping && (
+                <button onClick={openShippingEditor} className="no-print"
+                  style={{ fontSize: "12px", fontWeight: 700, color: "#1A5CFF", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  ✎ Change shipping
+                </button>
+              )}
+            </div>
+
+            {/* Change-shipping editor (customer changed their mind → pickup / self-collect / etc.) */}
+            {editingShipping && (
+              <div className="no-print" style={{ background: "#F7F6F3", border: "1px solid #E2E0DA", borderRadius: "10px", padding: "16px", marginBottom: "16px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#1B3A5C", marginBottom: "10px" }}>Change Shipping Method</div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <label style={{ display: "block", fontSize: "11px", color: "#7A7880", marginBottom: "4px", fontWeight: 600 }}>Method</label>
+                    <select value={shipMethodEdit} onChange={e => {
+                        const m = e.target.value; setShipMethodEdit(m);
+                        if (SHIP_METHODS.find(x => x.value === m)?.zeroCost) setShipCostEdit("0");
+                      }}
+                      style={{ width: "100%", padding: "8px 10px", border: "1px solid #D1D5DB", borderRadius: "6px", fontSize: "13px", background: "#fff" }}>
+                      {SHIP_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ flex: "0 0 120px" }}>
+                    <label style={{ display: "block", fontSize: "11px", color: "#7A7880", marginBottom: "4px", fontWeight: 600 }}>Shipping Cost ($)</label>
+                    <input type="number" min={0} step="0.01" value={shipCostEdit}
+                      disabled={SHIP_METHODS.find(m => m.value === shipMethodEdit)?.zeroCost}
+                      onChange={e => setShipCostEdit(e.target.value)}
+                      style={{ width: "100%", padding: "8px 10px", border: "1px solid #D1D5DB", borderRadius: "6px", fontSize: "13px", background: SHIP_METHODS.find(m => m.value === shipMethodEdit)?.zeroCost ? "#F3F4F6" : "#fff" }} />
+                  </div>
+                </div>
+                <div style={{ fontSize: "11px", color: "#9CA3AF", marginTop: "8px" }}>
+                  Pickup &amp; Free are $0. The order total updates automatically. Re-download the invoice PDF to get the updated copy.
+                </div>
+                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <button onClick={handleSaveShipping} disabled={savingShipping}
+                    style={{ padding: "8px 18px", background: savingShipping ? "#9CA3AF" : "#1B3A5C", color: "#fff", border: "none", borderRadius: "7px", fontSize: "13px", fontWeight: 700, cursor: savingShipping ? "default" : "pointer" }}>
+                    {savingShipping ? "Saving…" : "Save Shipping"}
+                  </button>
+                  <button onClick={() => setEditingShipping(false)} disabled={savingShipping}
+                    style={{ padding: "8px 14px", border: "1px solid #E2E0DA", borderRadius: "7px", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Already-shipped summary */}
             {order.status === "shipped" && order.courier && (
