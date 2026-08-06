@@ -348,6 +348,7 @@ export default function AdminOrderDetailPage() {
   const [addItemMsg, setAddItemMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+  const [recreatingInvoice, setRecreatingInvoice] = useState(false);
   // per-order email (send to this order's customer)
   const [showEmail, setShowEmail] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
@@ -544,6 +545,20 @@ export default function AdminOrderDetailPage() {
       setMsg({ text: err instanceof Error ? err.message : "Failed to update shipping", ok: false });
     } finally {
       setSavingShipping(false);
+    }
+  }
+
+  async function handleRecreateInvoice() {
+    if (!order) return;
+    if (!window.confirm(`Recreate the QuickBooks invoice for order ${order.order_number}? A fresh invoice will be created in QuickBooks and emailed to the customer. Use this if its invoice was deleted.`)) return;
+    setRecreatingInvoice(true); setMsg(null);
+    try {
+      const r = await adminService.recreateQbInvoice(order.id ?? id) as { message: string };
+      setMsg({ text: r.message || "Recreating invoice in QuickBooks…", ok: true });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to recreate invoice", ok: false });
+    } finally {
+      setRecreatingInvoice(false);
     }
   }
 
@@ -1032,6 +1047,14 @@ export default function AdminOrderDetailPage() {
             style={{ display: "flex", alignItems: "center", gap: "6px", background: "#1B3A5C", border: "1.5px solid #1B3A5C", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#fff", cursor: downloadingInvoice ? "default" : "pointer", opacity: downloadingInvoice ? 0.7 : 1 }}
           >
             📄 {downloadingInvoice ? "Preparing…" : "Invoice PDF"}
+          </button>
+          <button
+            onClick={handleRecreateInvoice}
+            disabled={recreatingInvoice}
+            title="Recreate this order's invoice in QuickBooks (if it was deleted) and email it to the customer"
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "#fff", border: "1.5px solid #059669", borderRadius: "8px", padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#059669", cursor: recreatingInvoice ? "default" : "pointer", opacity: recreatingInvoice ? 0.6 : 1 }}
+          >
+            ↻ {recreatingInvoice ? "Working…" : "Recreate QB Invoice"}
           </button>
           <button
             onClick={() => window.print()}

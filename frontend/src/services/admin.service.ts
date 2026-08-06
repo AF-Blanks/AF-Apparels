@@ -383,6 +383,11 @@ export const adminService = {
     return downloadCsv(`/api/v1/admin/orders/${id}/invoice-pdf`, `invoice-${orderNumber}.pdf`);
   },
 
+  /** Recreate this order's invoice in QuickBooks (for deleted/missing invoices) + email it. */
+  async recreateQbInvoice(id: string) {
+    return apiClient.post(`/api/v1/admin/orders/${id}/recreate-qb-invoice`);
+  },
+
   async updateOrder(id: string, data: object) {
     return apiClient.patch(`/api/v1/admin/orders/${id}`, data);
   },
