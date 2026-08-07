@@ -123,6 +123,7 @@ interface BoxSummary {
   total_weight_lbs: number;
   weight_per_box_lbs: number;
   boxes: { box_number: number; weight_lbs: number }[];
+  manual_box_count?: number | null;
 }
 
 interface BoxLabel {
@@ -559,6 +560,18 @@ export default function AdminOrderDetailPage() {
       setMsg({ text: err instanceof Error ? err.message : "Failed to recreate invoice", ok: false });
     } finally {
       setRecreatingInvoice(false);
+    }
+  }
+
+  async function handleSetBoxCount(n: number | null) {
+    if (!order) return;
+    const oid = order.id ?? id;
+    try {
+      await apiClient.patch(`/api/v1/admin/orders/${oid}/box-count`, { box_count: n });
+      const bs = await apiClient.get<BoxSummary>(`/api/v1/admin/orders/${oid}/box-summary`);
+      if (bs) setBoxSummary(bs);
+    } catch {
+      setMsg({ text: "Couldn't update box count", ok: false });
     }
   }
 
@@ -1211,15 +1224,40 @@ export default function AdminOrderDetailPage() {
                       <>
                         {/* Box summary banner */}
                         {boxSummary && (
-                          <div style={{ background: "rgba(99,102,241,.06)", border: "1px solid rgba(99,102,241,.2)", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{ fontSize: "18px" }}>📦</span>
-                            <div>
-                              <div style={{ fontSize: "13px", fontWeight: 700, color: "#6366F1" }}>
-                                {boxSummary.num_boxes} box{boxSummary.num_boxes !== 1 ? "es" : ""} required
+                          <div style={{ background: "rgba(99,102,241,.06)", border: "1px solid rgba(99,102,241,.2)", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" as const }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <span style={{ fontSize: "18px" }}>📦</span>
+                              <div>
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: "#6366F1" }}>
+                                  {boxSummary.num_boxes} box{boxSummary.num_boxes !== 1 ? "es" : ""}
+                                  {boxSummary.manual_box_count != null
+                                    ? <span style={{ fontSize: "11px", fontWeight: 600, color: "#7A7880" }}> (set manually)</span>
+                                    : <span style={{ fontSize: "11px", fontWeight: 600, color: "#7A7880" }}> (auto)</span>}
+                                </div>
+                                <div style={{ fontSize: "12px", color: "#7A7880" }}>
+                                  {boxSummary.weight_per_box_lbs} lbs per box · {boxSummary.total_weight_lbs} lbs total
+                                </div>
                               </div>
-                              <div style={{ fontSize: "12px", color: "#7A7880" }}>
-                                {boxSummary.weight_per_box_lbs} lbs per box · {boxSummary.total_weight_lbs} lbs total
-                              </div>
+                            </div>
+                            {/* Adjust how many boxes the order was actually packed in */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }} className="no-print">
+                              <span style={{ fontSize: "11px", color: "#7A7880", fontWeight: 600 }}>Boxes:</span>
+                              <button
+                                onClick={() => handleSetBoxCount(Math.max(1, boxSummary.num_boxes - 1))}
+                                disabled={boxSummary.num_boxes <= 1}
+                                title="One fewer box"
+                                style={{ width: "26px", height: "26px", borderRadius: "6px", border: "1px solid #C7C9F5", background: "#fff", color: "#6366F1", fontSize: "16px", fontWeight: 700, cursor: boxSummary.num_boxes <= 1 ? "not-allowed" : "pointer", lineHeight: 1, opacity: boxSummary.num_boxes <= 1 ? 0.4 : 1 }}>−</button>
+                              <span style={{ minWidth: "20px", textAlign: "center", fontSize: "14px", fontWeight: 800, color: "#6366F1" }}>{boxSummary.num_boxes}</span>
+                              <button
+                                onClick={() => handleSetBoxCount(boxSummary.num_boxes + 1)}
+                                title="One more box"
+                                style={{ width: "26px", height: "26px", borderRadius: "6px", border: "1px solid #C7C9F5", background: "#fff", color: "#6366F1", fontSize: "16px", fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>+</button>
+                              {boxSummary.manual_box_count != null && (
+                                <button
+                                  onClick={() => handleSetBoxCount(null)}
+                                  title="Back to automatic box count"
+                                  style={{ marginLeft: "4px", padding: "4px 8px", borderRadius: "6px", border: "1px solid #E2E0DA", background: "#fff", color: "#7A7880", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}>↺ Auto</button>
+                              )}
                             </div>
                           </div>
                         )}
