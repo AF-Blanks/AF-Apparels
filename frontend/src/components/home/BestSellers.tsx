@@ -60,7 +60,7 @@ const COLOR_MAP: Record<string, string> = {
   "Lime Green": "#32CD32",
   "Rust": "#B7410E",
   "Peach": "#FFDAB9",
-  "Pacific Blue": "#1CA9C9",
+  "Pacific Blue": "#A3D3DC",
   "Dust": "#ebdcc8",
   "Military Green": "#4B5320",
   "Neon Yellow": "#FFFF33",
