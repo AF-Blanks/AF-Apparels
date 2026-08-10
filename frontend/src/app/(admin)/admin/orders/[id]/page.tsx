@@ -339,6 +339,9 @@ export default function AdminOrderDetailPage() {
 
   // Order items edit mode
   const [editingItems, setEditingItems] = useState(false);
+  // manual price override while editing an order's items
+  const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
+  const [savingPriceKey, setSavingPriceKey] = useState<string | null>(null);
 
   // Add item state
   const [itemSearch, setItemSearch] = useState("");
@@ -919,6 +922,34 @@ export default function AdminOrderDetailPage() {
       setAddItemMsg({ text: err instanceof Error ? err.message : "Failed to add items", ok: false });
     } finally {
       setBulkAdding(false);
+    }
+  }
+
+  /** Apply a manually agreed unit price to every size in one product/colour row. */
+  async function handleApplyGroupPrice(groupKey: string, itemIds: string[]) {
+    const raw = (priceEdits[groupKey] ?? "").trim();
+    if (raw === "") return;
+    const price = parseFloat(raw);
+    if (!Number.isFinite(price) || price < 0) {
+      setMsg({ text: "Enter a valid price.", ok: false });
+      return;
+    }
+    setSavingPriceKey(groupKey);
+    try {
+      const oid = order?.id ?? id;
+      for (const itemId of itemIds) {
+        await apiClient.patch(`/api/v1/admin/orders/${oid}/items/${itemId}`, { unit_price: price });
+      }
+      // Reload from the server so line totals, subtotal and total are exactly
+      // what the backend computed — never a locally-guessed number.
+      const fresh = await adminService.getOrder(oid) as AdminOrder;
+      setOrder(fresh);
+      setPriceEdits(prev => { const n = { ...prev }; delete n[groupKey]; return n; });
+      setMsg({ text: `Price updated to $${price.toFixed(2)}`, ok: true });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to update price", ok: false });
+    } finally {
+      setSavingPriceKey(null);
     }
   }
 
@@ -1707,7 +1738,29 @@ export default function AdminOrderDetailPage() {
                     </td>
                     <td style={{ padding: "14px 12px", textAlign: "right" as const, fontWeight: 700, color: "#2A2830", verticalAlign: "top" as const }}>{g.totalQty}</td>
                     <td style={{ padding: "14px 12px", textAlign: "right" as const, color: "#7A7880", verticalAlign: "top" as const, whiteSpace: "nowrap" as const }}>
-                      {g.minPrice === g.maxPrice ? `$${g.minPrice.toFixed(2)}` : `$${g.minPrice.toFixed(2)}–$${g.maxPrice.toFixed(2)}`}
+                      {editingItems ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "4px" }}>
+                          <span style={{ fontSize: "13px", color: "#7A7880" }}>$</span>
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={priceEdits[g.key] ?? (g.minPrice === g.maxPrice ? g.minPrice.toFixed(2) : "")}
+                            placeholder={g.minPrice === g.maxPrice ? undefined : `${g.minPrice.toFixed(2)}–${g.maxPrice.toFixed(2)}`}
+                            onChange={e => setPriceEdits(prev => ({ ...prev, [g.key]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") handleApplyGroupPrice(g.key, g.sizes.map(s => s.id)); }}
+                            title="Set a manual price for every size in this row"
+                            style={{ width: "78px", padding: "6px 8px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", textAlign: "right", fontFamily: "var(--font-jakarta)" }}
+                          />
+                          <button
+                            onClick={() => handleApplyGroupPrice(g.key, g.sizes.map(s => s.id))}
+                            disabled={savingPriceKey === g.key}
+                            title="Apply this price"
+                            style={{ padding: "6px 9px", border: "none", borderRadius: "6px", background: savingPriceKey === g.key ? "#9CA3AF" : "#059669", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: savingPriceKey === g.key ? "default" : "pointer", lineHeight: 1 }}>
+                            {savingPriceKey === g.key ? "…" : "✓"}
+                          </button>
+                        </div>
+                      ) : (
+                        g.minPrice === g.maxPrice ? `$${g.minPrice.toFixed(2)}` : `$${g.minPrice.toFixed(2)}–$${g.maxPrice.toFixed(2)}`
+                      )}
                     </td>
                     <td style={{ padding: "14px 12px", textAlign: "right" as const, fontWeight: 700, fontFamily: "var(--font-bebas)", fontSize: "16px", color: "#2A2830", verticalAlign: "top" as const }}>${g.totalPrice.toFixed(2)}</td>
                     <td />
