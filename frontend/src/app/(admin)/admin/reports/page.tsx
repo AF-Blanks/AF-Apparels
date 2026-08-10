@@ -35,6 +35,12 @@ const REPORT_CARDS = [
     icon: <UsersIcon size={36} color="#1A5CFF" />,
   },
   {
+    href: "/reports/outstanding",
+    title: "Outstanding Balances",
+    description: "Who owes money, how much, and how long it's been due",
+    icon: <UsersIcon size={36} color="#E8242A" />,
+  },
+  {
     href: "/reports/purchase-history",
     title: "Customer Purchase History",
     description: "Per-customer order history by product or line-item price",
