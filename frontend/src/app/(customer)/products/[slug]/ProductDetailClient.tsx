@@ -969,13 +969,9 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                   <div style={{ minWidth: `${uniqueSizes.length * 80 + 170}px` }}>
 
                     {/* Size headers — shown once */}
-                    <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, 1fr) 80px 90px`, gap: "4px", borderBottom: "1px solid #E2E2DE" }}>
-                      {uniqueSizes.map(size => (
-                        <div key={size} style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "6px 8px" }}>{size}</div>
-                      ))}
-                      <div style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "6px 8px" }}>Total</div>
-                      <div />
-                    </div>
+                    {/* Size headers repeat above every colour (below) rather than
+                        once at the top — on a long list you'd otherwise scroll past
+                        them and lose track of which box is which size. */}
 
                     {/* One section per color */}
                     {colorGroups.map((group, groupIdx) => {
@@ -1011,6 +1007,16 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                 Add to Cart
                               </button>
                             </div>
+                          </div>
+
+                          {/* Size headers — repeated for this colour so they stay
+                              visible however far down the list you scroll. */}
+                          <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, 1fr) 80px 90px`, gap: "4px", background: "#F5F4F1", borderTop: "1px solid #E2E2DE", borderBottom: "1px solid #E2E2DE" }}>
+                            {uniqueSizes.map(size => (
+                              <div key={size} style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "5px 8px", letterSpacing: ".02em" }}>{size}</div>
+                            ))}
+                            <div style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "5px 8px" }}>Total</div>
+                            <div />
                           </div>
 
                           {/* Size inputs row */}
