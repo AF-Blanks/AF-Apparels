@@ -5,6 +5,7 @@ import { apiClient } from "@/lib/api-client";
 import { adminService } from "@/services/admin.service";
 
 const PERIODS = [
+  { value: "today", label: "Today" },
   { value: "week", label: "Last 7 Days" },
   { value: "month", label: "Last 30 Days" },
   { value: "quarter", label: "Last 90 Days" },
@@ -15,6 +16,7 @@ const GROUP_OPTIONS = [
   { value: "day", label: "Daily" },
   { value: "week", label: "Weekly" },
   { value: "month", label: "Monthly" },
+  { value: "year", label: "Yearly" },
 ];
 
 interface SalesReport {
@@ -27,16 +29,24 @@ interface SalesReport {
 export default function SalesReportPage() {
   const [period, setPeriod] = useState("month");
   const [groupBy, setGroupBy] = useState("day");
+  // Exact date range — when set it overrides the rolling period on the server.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [data, setData] = useState<SalesReport | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const usingCustomRange = Boolean(dateFrom || dateTo);
+
   useEffect(() => {
     setLoading(true);
+    const qs = new URLSearchParams({ period, group_by: groupBy });
+    if (dateFrom) qs.set("date_from", dateFrom);
+    if (dateTo) qs.set("date_to", dateTo);
     apiClient
-      .get(`/api/v1/admin/reports/sales?period=${period}&group_by=${groupBy}`)
+      .get(`/api/v1/admin/reports/sales?${qs.toString()}`)
       .then((r: any) => setData(r))
       .finally(() => setLoading(false));
-  }, [period, groupBy]);
+  }, [period, groupBy, dateFrom, dateTo]);
 
   function handleExport() {
     adminService.exportSalesCsv(period).catch(() => {});
@@ -65,7 +75,9 @@ export default function SalesReportPage() {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+            disabled={usingCustomRange}
+            title={usingCustomRange ? "Clear the date range to use a rolling period" : undefined}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm disabled:bg-gray-100 disabled:text-gray-400"
           >
             {PERIODS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -74,6 +86,36 @@ export default function SalesReportPage() {
             ))}
           </select>
         </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+          <input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1.5 text-sm"
+          />
+        </div>
+        {usingCustomRange && (
+          <div className="flex items-end">
+            <button
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              className="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Clear dates
+            </button>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">Group By</label>
           <select

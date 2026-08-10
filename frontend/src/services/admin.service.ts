@@ -446,8 +446,11 @@ export const adminService = {
   },
 
   // Variant Sales Report
-  async getVariantSalesReport(period: string) {
-    return apiClient.get(`/api/v1/admin/reports/variant-sales?period=${period}`);
+  async getVariantSalesReport(period: string, dateFrom?: string, dateTo?: string) {
+    const qs = new URLSearchParams({ period });
+    if (dateFrom) qs.set("date_from", dateFrom);
+    if (dateTo) qs.set("date_to", dateTo);
+    return apiClient.get(`/api/v1/admin/reports/variant-sales?${qs.toString()}`);
   },
 
   // Customer Purchase History

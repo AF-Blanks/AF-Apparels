@@ -43,15 +43,20 @@ export default function VariantSalesPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  // Exact date range — when set it overrides the rolling period on the server.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const usingCustomRange = Boolean(dateFrom || dateTo);
 
   useEffect(() => {
     load(period);
-  }, [period]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, dateFrom, dateTo]);
 
   async function load(p: string) {
     setLoading(true);
     try {
-      const res = await adminService.getVariantSalesReport(p) as ReportData;
+      const res = await adminService.getVariantSalesReport(p, dateFrom, dateTo) as ReportData;
       setData(res);
       // auto-expand if only a few products
       if (res.products.length <= 5) {
@@ -137,8 +142,12 @@ export default function VariantSalesPage() {
           <button
             key={p.value}
             onClick={() => setPeriod(p.value)}
+            disabled={usingCustomRange}
+            title={usingCustomRange ? "Clear the dates to use a rolling period" : undefined}
             className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${
-              period === p.value
+              usingCustomRange
+                ? "bg-white text-gray-300 border-gray-200 cursor-not-allowed"
+                : period === p.value
                 ? "bg-gray-900 text-white border-gray-900"
                 : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
             }`}
@@ -146,6 +155,33 @@ export default function VariantSalesPage() {
             {p.label}
           </button>
         ))}
+        {/* Exact date range */}
+        <span className="text-xs text-gray-400 ml-1">or</span>
+        <input
+          type="date"
+          value={dateFrom}
+          max={dateTo || undefined}
+          onChange={e => setDateFrom(e.target.value)}
+          title="From date"
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+        />
+        <span className="text-xs text-gray-400">→</span>
+        <input
+          type="date"
+          value={dateTo}
+          min={dateFrom || undefined}
+          onChange={e => setDateTo(e.target.value)}
+          title="To date"
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm"
+        />
+        {usingCustomRange && (
+          <button
+            onClick={() => { setDateFrom(""); setDateTo(""); }}
+            className="px-3 py-1.5 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Clear
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <input
             type="text"
