@@ -81,6 +81,8 @@ interface AdminOrder {
   subtotal: string;
   shipping_cost: string;
   tax_amount?: string;
+  discount_percent?: string | number | null;
+  discount_amount?: string | number | null;
   total: string;
   items: OrderItem[];
   created_at: string;
@@ -352,6 +354,10 @@ export default function AdminOrderDetailPage() {
   const [addItemMsg, setAddItemMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
+  // admin discount on this order (percent typed, amount comes off the subtotal)
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [discountInput, setDiscountInput] = useState("");
+  const [savingDiscount, setSavingDiscount] = useState(false);
   const [recreatingInvoice, setRecreatingInvoice] = useState(false);
   // per-order email (send to this order's customer)
   const [showEmail, setShowEmail] = useState(false);
@@ -575,6 +581,29 @@ export default function AdminOrderDetailPage() {
       if (bs) setBoxSummary(bs);
     } catch {
       setMsg({ text: "Couldn't update box count", ok: false });
+    }
+  }
+
+  async function handleSaveDiscount(clear = false) {
+    if (!order) return;
+    const pct = clear ? 0 : parseFloat(discountInput);
+    if (!clear && (!Number.isFinite(pct) || pct < 0 || pct > 100)) {
+      setMsg({ text: "Enter a discount between 0 and 100%", ok: false });
+      return;
+    }
+    setSavingDiscount(true); setMsg(null);
+    try {
+      await apiClient.patch(`/api/v1/admin/orders/${order.id ?? id}/discount`, { discount_percent: pct });
+      // Reload so the subtotal, discount and total shown are the server's own
+      // figures — the invoice must never disagree with what's on screen.
+      const fresh = await adminService.getOrder(order.id ?? id) as AdminOrder;
+      setOrder(fresh);
+      setEditingDiscount(false);
+      setMsg({ text: pct > 0 ? `${pct}% discount applied` : "Discount removed", ok: true });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to apply discount", ok: false });
+    } finally {
+      setSavingDiscount(false);
     }
   }
 
@@ -1777,6 +1806,54 @@ export default function AdminOrderDetailPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#7A7880" }}>
                   <span>Shipping</span><span>${Number(order.shipping_cost).toFixed(2)}</span>
                 </div>
+                {/* Admin discount — a percent off the subtotal. Stored as both the
+                    percent and the amount, so it follows the subtotal as items change. */}
+                {editingDiscount ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }} className="no-print">
+                    <span style={{ fontSize: "14px", color: "#7A7880", flex: 1 }}>Discount</span>
+                    <input
+                      type="number" min={0} max={100} step="0.01" autoFocus
+                      value={discountInput}
+                      onChange={e => setDiscountInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleSaveDiscount(); }}
+                      style={{ width: "64px", padding: "5px 7px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", textAlign: "right", fontFamily: "var(--font-jakarta)" }}
+                    />
+                    <span style={{ fontSize: "13px", color: "#7A7880" }}>%</span>
+                    <button onClick={() => handleSaveDiscount()} disabled={savingDiscount}
+                      style={{ padding: "5px 9px", border: "none", borderRadius: "6px", background: savingDiscount ? "#9CA3AF" : "#059669", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>
+                      {savingDiscount ? "…" : "✓"}
+                    </button>
+                    <button onClick={() => setEditingDiscount(false)} disabled={savingDiscount}
+                      style={{ padding: "5px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", background: "#fff", fontSize: "12px", color: "#7A7880", cursor: "pointer", lineHeight: 1 }}>
+                      ✕
+                    </button>
+                  </div>
+                ) : Number(order.discount_amount ?? 0) > 0 ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#059669" }}>
+                    <span>
+                      Discount ({Number(order.discount_percent ?? 0)}%)
+                      <button onClick={() => { setDiscountInput(String(Number(order.discount_percent ?? 0))); setEditingDiscount(true); }}
+                        className="no-print"
+                        style={{ marginLeft: "6px", background: "none", border: "none", color: "#1A5CFF", fontSize: "12px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                        edit
+                      </button>
+                      <button onClick={() => handleSaveDiscount(true)} disabled={savingDiscount}
+                        className="no-print"
+                        style={{ marginLeft: "6px", background: "none", border: "none", color: "#E8242A", fontSize: "12px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                        remove
+                      </button>
+                    </span>
+                    <span>−${Number(order.discount_amount ?? 0).toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: "8px" }} className="no-print">
+                    <button onClick={() => { setDiscountInput(""); setEditingDiscount(true); }}
+                      style={{ background: "none", border: "none", color: "#1A5CFF", fontSize: "13px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                      + Add discount
+                    </button>
+                  </div>
+                )}
+
                 {order.tax_amount && Number(order.tax_amount) > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#7A7880" }}>
                     <span>Tax</span><span>${Number(order.tax_amount).toFixed(2)}</span>
