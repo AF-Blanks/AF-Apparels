@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useAuthStore } from "@/stores/auth.store";
 import { useState, useEffect } from "react";
 import {
   BarChartIcon, PackageIcon, BuildingIcon, ShirtIcon,
@@ -30,6 +31,11 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isOrdersActive = pathname.startsWith("/admin/orders") || pathname === "/admin/abandoned-carts" || pathname.startsWith("/admin/purchase-orders");
+  // Staff accounts get a view-only panel: everything that changes catalogue,
+  // pricing, money or configuration is hidden. (The API refuses their writes
+  // regardless — this just keeps the menu honest about what they can use.)
+  const isStaff = useAuthStore(st => st.user?.is_staff === true && st.user?.is_admin !== true);
+
   const isProductsActive = pathname.startsWith("/admin/products") || pathname.startsWith("/admin/inventory");
   const isCustomersActive = pathname.startsWith("/admin/customers");
   const isSettingsActive = pathname.startsWith("/admin/settings") || pathname.startsWith("/admin/users") || pathname === "/admin/analytics";
@@ -127,13 +133,13 @@ export function AdminSidebar() {
         <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
           <SubLink href="/admin/orders" label="All Orders" />
           <SubLink href="/admin/orders/drafts" label="Drafts" />
-          <SubLink href="/admin/orders/shipping-labels" label="Shipping Labels" />
-          <SubLink href="/admin/abandoned-carts" label="Abandoned Checkouts" />
+          {!isStaff && <SubLink href="/admin/orders/shipping-labels" label="Shipping Labels" />}
+          {!isStaff && <SubLink href="/admin/abandoned-carts" label="Abandoned Checkouts" />}
         </div>
       )}
 
-      <NavLink href="/admin/returns" label="Returns (RMA)" icon={<RefreshIcon size={15} color="currentColor" />} />
-      <NavLink href="/admin/purchase-orders" label="Purchase Orders" icon={<ShoppingCartIcon size={15} color="currentColor" />} />
+      {!isStaff && <NavLink href="/admin/returns" label="Returns (RMA)" icon={<RefreshIcon size={15} color="currentColor" />} />}
+      {!isStaff && <NavLink href="/admin/purchase-orders" label="Purchase Orders" icon={<ShoppingCartIcon size={15} color="currentColor" />} />}
 
       {/* ── CUSTOMERS ── */}
       <div style={SECTION_HEAD}>Customers</div>
@@ -162,12 +168,13 @@ export function AdminSidebar() {
         <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
           <SubLink href="/admin/customers" label="All Customers" />
           <SubLink href="/admin/customers/applications" label="Applications" />
-          <SubLink href="/admin/customers/tiers?tab=groups" label="Discount Groups" />
-          <SubLink href="/admin/customers/tiers?tab=variants" label="Individual Variant Pricing" />
+          {!isStaff && <SubLink href="/admin/customers/tiers?tab=groups" label="Discount Groups" />}
+          {!isStaff && <SubLink href="/admin/customers/tiers?tab=variants" label="Individual Variant Pricing" />}
         </div>
       )}
 
-      {/* ── CATALOG ── */}
+      {!isStaff && (<>
+{/* ── CATALOG ── */}
       <div style={SECTION_HEAD}>Catalog</div>
 
       {/* Products dropdown */}
@@ -199,13 +206,21 @@ export function AdminSidebar() {
         </div>
       )}
 
-      {/* ── MARKETING ── */}
-      <div style={SECTION_HEAD}>Marketing</div>
-      <NavLink href="/admin/discounts" label="Discounts" icon={<span style={{ fontSize: "15px" }}>%</span>} />
-      <NavLink href="/admin/standard-shipping" label="Standard Shipping" icon={<TruckIcon size={15} color="currentColor" />} />
-      <NavLink href="/admin/marketing" label="Email Campaigns" icon={<MailIcon size={15} color="currentColor" />} />
+      
+      </>)}
 
-      {/* ── CONTENT ── */}
+      {!isStaff && (<>
+{/* ── MARKETING ── */}
+      <div style={SECTION_HEAD}>Marketing</div>
+      {!isStaff && <NavLink href="/admin/discounts" label="Discounts" icon={<span style={{ fontSize: "15px" }}>%</span>} />}
+      {!isStaff && <NavLink href="/admin/standard-shipping" label="Standard Shipping" icon={<TruckIcon size={15} color="currentColor" />} />}
+      {!isStaff && <NavLink href="/admin/marketing" label="Email Campaigns" icon={<MailIcon size={15} color="currentColor" />} />}
+
+      
+      </>)}
+
+      {!isStaff && (<>
+{/* ── CONTENT ── */}
       <div style={SECTION_HEAD}>Content</div>
       <div
         onClick={() => setContentOpen(!contentOpen)}
@@ -233,6 +248,9 @@ export function AdminSidebar() {
           <SubLink href="/admin/product-specs" label="Product Specs" />
         </div>
       )}
+
+      
+      </>)}
 
       {/* ── REPORTS ── */}
       <div style={SECTION_HEAD}>Reports</div>
@@ -267,7 +285,8 @@ export function AdminSidebar() {
         </div>
       )}
 
-      {/* ── SETTINGS ── */}
+      {!isStaff && (<>
+{/* ── SETTINGS ── */}
       <div style={SECTION_HEAD}>Settings</div>
 
       {/* Settings dropdown */}
@@ -298,6 +317,7 @@ export function AdminSidebar() {
           <SubLink href="/admin/settings/audit-log" label="Audit Log" />
         </div>
       )}
+      </>)}
     </div>
   );
 

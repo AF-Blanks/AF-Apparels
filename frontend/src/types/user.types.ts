@@ -7,6 +7,7 @@ export interface UserProfile {
   phone: string | null;
   is_active: boolean;
   is_admin: boolean;       // Not in backend ProfileOut; added from JWT payload
+  is_staff?: boolean;      // View-only admin access; added from JWT payload
   account_type?: string;   // Not in backend ProfileOut; added from JWT payload
   email_verified: boolean;
   created_at: string;

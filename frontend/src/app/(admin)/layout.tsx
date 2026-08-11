@@ -7,7 +7,7 @@ import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { Footer } from "@/components/layout/Footer";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isAdmin, isLoading } = useAuthStore();
+  const { isAuthenticated, canUseAdmin, isLoading } = useAuthStore();
   const router = useRouter();
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -20,14 +20,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           router.replace("/login");
         }
       }, 300);
-    } else if (!isAdmin()) {
+    } else if (!canUseAdmin()) {
       router.replace("/account");
     }
 
     return () => {
       if (redirectTimer.current) clearTimeout(redirectTimer.current);
     };
-  }, [isLoading, isAuthenticated, isAdmin, router]);
+  }, [isLoading, isAuthenticated, canUseAdmin, router]);
 
   if (isLoading) {
     return (
@@ -37,7 +37,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!isAuthenticated() || !isAdmin()) {
+  if (!isAuthenticated() || !canUseAdmin()) {
     return null;
   }
 

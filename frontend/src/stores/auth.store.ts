@@ -75,7 +75,7 @@ function buildSyncState(): SyncAuthState {
   setAccessToken(session.token);
   return {
     accessToken: session.token,
-    user: { ...session.user, is_admin: !!payload.is_admin },
+    user: { ...session.user, is_admin: !!payload.is_admin, is_staff: !!payload.is_staff },
     isLoading: false,
   };
 }
@@ -97,6 +97,10 @@ interface AuthState {
   // Derived helpers
   isAuthenticated: () => boolean;
   isAdmin: () => boolean;
+  /** View-only admin access — may open the panel but cannot change anything. */
+  isStaff: () => boolean;
+  /** Anyone allowed into the admin panel at all (admin or staff). */
+  canUseAdmin: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -132,7 +136,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const session = readSession();
     if (session) {
       const payload = decodeJwtPayload(session.token);
-      const user = { ...session.user, is_admin: !!payload.is_admin };
+      const user = { ...session.user, is_admin: !!payload.is_admin, is_staff: !!payload.is_staff };
       const exp = payload.exp as number | undefined;
       const isExpired = exp ? (Date.now() / 1000) > exp - 30 : false;
       if (isExpired) {
@@ -150,4 +154,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   isAuthenticated: () => get().accessToken !== null,
   isAdmin: () => get().user?.is_admin === true,
+  isStaff: () => get().user?.is_staff === true && get().user?.is_admin !== true,
+  canUseAdmin: () => get().user?.is_admin === true || get().user?.is_staff === true,
 }));

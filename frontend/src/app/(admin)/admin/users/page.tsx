@@ -150,9 +150,8 @@ function UserModal({
             <div>
               <label style={lbl}>Role</label>
               <select style={inp} value={form.role} onChange={e => set("role", e.target.value)}>
-                <option value="admin">Admin</option>
-                <option value="staff">Staff</option>
-                <option value="customer">Customer</option>
+                <option value="admin">Admin — full access</option>
+                <option value="staff">Staff — view only</option>
               </select>
             </div>
             {isEdit && (
