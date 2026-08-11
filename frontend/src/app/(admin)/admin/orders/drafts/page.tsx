@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
@@ -376,17 +376,20 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                         const hasDiscount = companyDiscount > 0;
                         return (
                           <table style={{ borderCollapse: "collapse", fontSize: "12px", minWidth: `${90 + sizeList.length * 64}px` }}>
-                            <thead>
-                              <tr style={{ background: "#FAFAFA" }}>
-                                <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".06em", color: "#7A7880", fontWeight: 700 }}>Color</th>
-                                {sizeList.map(s => (
-                                  <th key={s} style={{ padding: "8px 6px", textAlign: "center", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880", fontWeight: 700 }}>{s}</th>
-                                ))}
-                              </tr>
-                            </thead>
+                            {/* Size headers repeat above every colour rather than
+                                once at the top — with many colours you'd otherwise
+                                scroll past them and lose track of which box is
+                                which size. */}
                             <tbody>
                               {colorList.map(color => (
-                                <tr key={color} style={{ borderBottom: "1px solid #F4F3EF" }}>
+                                <Fragment key={color}>
+                                <tr style={{ background: "#FAFAFA" }}>
+                                  <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".06em", color: "#7A7880", fontWeight: 700 }}>Color</th>
+                                  {sizeList.map(s => (
+                                    <th key={s} style={{ padding: "8px 6px", textAlign: "center", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880", fontWeight: 700 }}>{s}</th>
+                                  ))}
+                                </tr>
+                                <tr style={{ borderBottom: "1px solid #F4F3EF" }}>
                                   <td style={{ padding: "6px 10px", color: "#2A2830", fontWeight: 600, whiteSpace: "nowrap" }}>{color}</td>
                                   {sizeList.map(size => {
                                     const v = cell[color]?.[size];
@@ -411,6 +414,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                                     );
                                   })}
                                 </tr>
+                                </Fragment>
                               ))}
                             </tbody>
                           </table>
