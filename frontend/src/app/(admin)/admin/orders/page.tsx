@@ -18,6 +18,7 @@ interface AdminOrder {
   guest_email?: string | null;
   guest_name?: string | null;
   return_status?: string | null;
+  in_quickbooks?: boolean;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -209,6 +210,15 @@ export default function AdminOrdersPage() {
                     {o.return_status && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
                         {o.return_status === "refunded" ? "Refunded" : "Returned"}
+                      </span>
+                    )}
+                    {/* Flag a fulfilled order that never reached QuickBooks — without
+                        its invoice there's no revenue, no COGS and no stock movement. */}
+                    {!o.in_quickbooks && ["confirmed", "processing", "ready_for_pickup", "shipped", "delivered"].includes(o.status) && (
+                      <span
+                        title="This order has no invoice in QuickBooks yet. Open it and press “Recreate QB Invoice” if it doesn’t appear shortly."
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                        ⚠ Not in QB
                       </span>
                     )}
                   </div>
