@@ -33,6 +33,26 @@ export function AuthInitializer() {
       }
     });
     const found = useAuthStore.getState().initAuth();
+
+    if (found) {
+      // The stored session carries the role its token was minted with, and tokens
+      // last 30 days — so a promotion or demotion wouldn't show until the user
+      // next signed in. Re-read the role from the server on every load so the
+      // menus match what the API will actually allow.
+      apiClient
+        .get<UserProfile & { is_admin?: boolean; is_staff?: boolean }>("/api/v1/account/profile")
+        .then(profile => {
+          const store = useAuthStore.getState();
+          if (!store.user || !store.accessToken) return;
+          const nextAdmin = !!profile.is_admin;
+          const nextStaff = !!profile.is_staff;
+          if (store.user.is_admin !== nextAdmin || store.user.is_staff !== nextStaff) {
+            store.setAuth(store.accessToken, { ...store.user, is_admin: nextAdmin, is_staff: nextStaff });
+          }
+        })
+        .catch(() => { /* offline or expired — existing guards handle it */ });
+    }
+
     if (!found) {
       // No session in sessionStorage — try to restore from httpOnly refresh cookie.
       apiClient
