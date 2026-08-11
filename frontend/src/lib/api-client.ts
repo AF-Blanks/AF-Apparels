@@ -114,16 +114,38 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   }
 
   if (!response.ok) {
-    let errorBody: { error?: { code: string; message: string; details?: unknown[] } };
+    // Two error shapes reach us: the app's own {error:{code,message}} and
+    // FastAPI's plain {detail: ...} from any raise HTTPException. Reading only
+    // the first turned every HTTPException — "email already in use", validation
+    // messages — into a bare "Request failed", hiding what actually went wrong.
+    let errorBody: {
+      error?: { code: string; message: string; details?: unknown[] };
+      detail?: unknown;
+    };
     try {
       errorBody = (await response.json()) as typeof errorBody;
     } catch {
       errorBody = { error: { code: "UNKNOWN", message: response.statusText } };
     }
+
+    let detailMessage: string | undefined;
+    const d = errorBody.detail;
+    if (typeof d === "string") {
+      detailMessage = d;
+    } else if (Array.isArray(d)) {
+      // FastAPI validation errors: [{loc, msg, type}, …]
+      detailMessage = d
+        .map(e => (typeof e === "object" && e && "msg" in e ? String((e as { msg: unknown }).msg) : String(e)))
+        .filter(Boolean)
+        .join(", ");
+    } else if (d && typeof d === "object" && "message" in d) {
+      detailMessage = String((d as { message: unknown }).message);
+    }
+
     throw new ApiClientError(
       response.status,
       errorBody.error?.code ?? "UNKNOWN",
-      errorBody.error?.message ?? "Request failed",
+      errorBody.error?.message ?? detailMessage ?? response.statusText ?? "Request failed",
       errorBody.error?.details
     );
   }
