@@ -40,7 +40,7 @@ export function Header() {
   }, []);
 
   useEffect(() => {
-    if (isLoading || !user || user.is_admin) return;
+    if (isLoading || !user || user.is_admin || user.is_staff) return;
     function loadCount() {
       apiClient
         .get<{ items: { quantity: number }[] }>("/api/v1/cart")

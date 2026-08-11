@@ -76,7 +76,8 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (isLoading) return;
-    if (user?.is_admin) {
+    // Staff belong in the admin panel as well — theirs is just view-only.
+    if (user?.is_admin || user?.is_staff) {
       router.replace("/admin/dashboard");
       return;
     }

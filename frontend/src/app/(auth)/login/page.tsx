@@ -66,13 +66,20 @@ export default function LoginPage() {
 
       const profile = await authService.getProfile();
 
-      // JWT payload contains is_admin and account_type as claims
+      // JWT payload contains is_admin/is_staff and account_type as claims
       const payload = decodeJwtPayload(tokens.access_token);
-      const fullProfile = { ...profile, is_admin: !!payload.is_admin, account_type: (payload.account_type as string) || "wholesale" };
+      const fullProfile = {
+        ...profile,
+        is_admin: !!payload.is_admin,
+        is_staff: !!payload.is_staff,
+        account_type: (payload.account_type as string) || "wholesale",
+      };
 
       setAuth(tokens.access_token, fullProfile);
 
-      if (fullProfile.is_admin) {
+      // Staff belong in the admin panel too — theirs is just view-only. Sending
+      // them to /account dropped them into the customer shop instead.
+      if (fullProfile.is_admin || fullProfile.is_staff) {
         router.push("/admin/dashboard");
       } else {
         router.push("/account");

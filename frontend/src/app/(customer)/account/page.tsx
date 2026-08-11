@@ -27,8 +27,9 @@ export default function AccountOverviewPage() {
   const hasLoaded = useRef(false);
 
   useEffect(() => {
-    // Don't fetch until auth is settled and user is a non-admin customer
-    if (isLoading || !user || user.is_admin) return;
+    // Don't fetch until auth is settled and this is an actual customer
+    // (admin and staff accounts have no customer dashboard).
+    if (isLoading || !user || user.is_admin || user.is_staff) return;
     if (hasLoaded.current) return;
     hasLoaded.current = true;
 
@@ -43,8 +44,8 @@ export default function AccountOverviewPage() {
     load();
   }, [isLoading]);
 
-  // Admin accounts don't have a customer dashboard
-  if (!isLoading && user?.is_admin) {
+  // Admin and staff accounts don't have a customer dashboard
+  if (!isLoading && (user?.is_admin || user?.is_staff)) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
         <h2 className="text-sm font-semibold text-amber-800 mb-1">Admin Account</h2>
