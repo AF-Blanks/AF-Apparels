@@ -713,15 +713,27 @@ export default function AdminOrderDetailPage() {
     setAdminRates([]);
     setAdminSelectedRateId(null);
     try {
-      const result = await apiClient.post<{ rates: AdminRate[]; error?: string; box_count?: number }>(
+      const result = await apiClient.post<{
+        rates: AdminRate[]; error?: string; box_count?: number; missing_carriers?: string[];
+      }>(
         `/api/v1/admin/orders/${order?.id ?? id}/fetch-rates`,
         { weight_lbs: manualWeight, box_count: boxSummary?.num_boxes ?? 1 }
       );
       const rates = result.rates ?? [];
       adminRatesRef.current = rates;
       setAdminRates(rates);
-      if (rates.length > 0) setAdminSelectedRateId(rates[0]!.rate_id);
-      else {
+      if (rates.length > 0) {
+        setAdminSelectedRateId(rates[0]!.rate_id);
+        // A carrier that was still computing is absent, not unavailable — say so,
+        // otherwise a short list looks like the full set of options.
+        const late = result.missing_carriers ?? [];
+        if (late.length > 0) {
+          setMsg({
+            text: `${late.map(c => c.toUpperCase()).join(" and ")} hadn't answered yet — click Refresh Rates again to include ${late.length > 1 ? "them" : "it"}.`,
+            ok: false,
+          });
+        }
+      } else {
         // An empty list is not self-explanatory — Shippo returns one for an
         // address the carriers won't serve just as readily as for a bad weight.
         setMsg({
