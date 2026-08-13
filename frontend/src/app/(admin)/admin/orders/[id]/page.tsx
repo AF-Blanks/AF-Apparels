@@ -421,7 +421,14 @@ export default function AdminOrderDetailPage() {
         if (!_hasLiveRateOnLoad && !_isWillCallOnLoad) {
           try {
             const bs = await apiClient.get<BoxSummary>(`/api/v1/admin/orders/${o.id}/box-summary`);
-            if (bs && bs.num_boxes) setBoxSummary(bs);
+            if (bs && bs.num_boxes) {
+              setBoxSummary(bs);
+              // The field below is labelled PER BOX and a label is bought per box,
+              // so it must hold one box's weight. Seeding it from the shipment
+              // total asked the carriers to quote a single 187 lb package, which
+              // is over the 150 lb limit — they returned nothing at all.
+              if (bs.weight_per_box_lbs) setManualWeight(bs.weight_per_box_lbs);
+            }
           } catch { /* box summary is optional */ }
         }
 
@@ -578,7 +585,15 @@ export default function AdminOrderDetailPage() {
     try {
       await apiClient.patch(`/api/v1/admin/orders/${oid}/box-count`, { box_count: n });
       const bs = await apiClient.get<BoxSummary>(`/api/v1/admin/orders/${oid}/box-summary`);
-      if (bs) setBoxSummary(bs);
+      if (bs) {
+        setBoxSummary(bs);
+        // Splitting into more boxes makes each one lighter — requote against the
+        // new per-box weight, not the one from the previous split.
+        if (bs.weight_per_box_lbs) setManualWeight(bs.weight_per_box_lbs);
+        setAdminRates([]);
+        adminRatesRef.current = [];
+        setAdminSelectedRateId(null);
+      }
     } catch {
       setMsg({ text: "Couldn't update box count", ok: false });
     }
@@ -693,21 +708,33 @@ export default function AdminOrderDetailPage() {
 
   async function handleFetchAdminRates() {
     setAdminRatesLoading(true);
+    setMsg(null);
     adminRatesRef.current = [];
     setAdminRates([]);
     setAdminSelectedRateId(null);
     try {
-      const result = await apiClient.post<{ rates: AdminRate[]; error?: string }>(
+      const result = await apiClient.post<{ rates: AdminRate[]; error?: string; box_count?: number }>(
         `/api/v1/admin/orders/${order?.id ?? id}/fetch-rates`,
-        { weight_lbs: manualWeight }
+        { weight_lbs: manualWeight, box_count: boxSummary?.num_boxes ?? 1 }
       );
       const rates = result.rates ?? [];
       adminRatesRef.current = rates;
       setAdminRates(rates);
       if (rates.length > 0) setAdminSelectedRateId(rates[0]!.rate_id);
-    } catch {
+      else {
+        // An empty list is not self-explanatory — Shippo returns one for an
+        // address the carriers won't serve just as readily as for a bad weight.
+        setMsg({
+          text: result.error
+            ? `No carrier rates: ${result.error}`
+            : `No carrier rates came back for ${manualWeight} lbs to this address. Check the per-box weight and the shipping address.`,
+          ok: false,
+        });
+      }
+    } catch (e: unknown) {
       adminRatesRef.current = [];
       setAdminRates([]);
+      setMsg({ text: e instanceof Error ? e.message : "Couldn't fetch carrier rates.", ok: false });
     } finally {
       setAdminRatesLoading(false);
     }
