@@ -1028,6 +1028,19 @@ export default function AdminOrderDetailPage() {
   const hasLiveRate = !!order.shipping_rate_id;
   const isStandardGround = !hasLiveRate && !isWillCallPickup;
 
+  // The order stores the raw method key ("standard", "pallet"…). Show the same
+  // wording the customer saw on the checkout screen instead of the key.
+  const SHIPPING_METHOD_LABELS: Record<string, string> = {
+    standard: "Standard Ground",
+    expedited: "Expedited",
+    will_call: "Will Call Pickup",
+    pickup: "Will Call Pickup",
+    pallet: "Pallet Freight (Bulk)",
+    free: "Free Shipping",
+  };
+  const shippingMethodLabel =
+    SHIPPING_METHOD_LABELS[(order.shipping_method ?? "").toLowerCase()] ?? order.shipping_method;
+
   const addr = order.shipping_address;
   const zip = addr?.zip_code ?? addr?.postal_code ?? "";
 
@@ -1264,15 +1277,29 @@ export default function AdminOrderDetailPage() {
                 {/* Customer selection info banner */}
                 {order.shipping_method && (
                   <div style={{ background: "rgba(26,92,255,.06)", border: "1px solid rgba(26,92,255,.2)", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px" }}>
-                    <div style={{ fontSize: "12px", color: "#1A5CFF", fontWeight: 700, marginBottom: "2px" }}>Customer Selected:</div>
-                    <div style={{ fontSize: "12px", color: "#1A5CFF", fontWeight: 600 }}>
+                    <div style={{ fontSize: "12px", color: "#1A5CFF", fontWeight: 700, marginBottom: "2px" }}>Customer Selected at Checkout:</div>
+                    <div style={{ fontSize: "13px", color: "#1A5CFF", fontWeight: 700 }}>
                       {hasLiveRate && order.carrier
-                        ? `${order.carrier} — ${order.courier_service ?? ""} — $${Number(order.shipping_cost).toFixed(2)}`
-                        : `${order.shipping_method} — Flat Rate — $${Number(order.shipping_cost).toFixed(2)}`
+                        ? `${order.carrier}${order.courier_service ? ` — ${order.courier_service}` : ""} — $${Number(order.shipping_cost).toFixed(2)}`
+                        : `${shippingMethodLabel} — Flat Rate — $${Number(order.shipping_cost).toFixed(2)}`
                       }
                     </div>
+                    {/* A flat-rate pick carries no carrier service — the customer only chose a
+                        price tier, so the carrier below is the admin's call. Say so, otherwise
+                        "Standard Ground" reads as if the customer had asked for a service. */}
+                    {!hasLiveRate && (
+                      <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "4px", lineHeight: 1.5 }}>
+                        Customer picked a flat-rate tier, not a carrier service — no UPS/FedEx Ground vs Air choice was made at checkout. Pick the carrier service below when you generate the label.
+                      </div>
+                    )}
                     {order.shipping_rate_id && (
-                      <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "4px" }}>Rate ID: {order.shipping_rate_id}</div>
+                      <div style={{ fontSize: "11px", color: "#7A7880", marginTop: "4px" }}>Customer chose this exact service at checkout · Rate ID: {order.shipping_rate_id}</div>
+                    )}
+                    {order.courier && (
+                      <div style={{ fontSize: "12px", color: "#059669", fontWeight: 700, marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(26,92,255,.15)" }}>
+                        Actually shipped as: {courierDisplayName}{order.courier_service ? ` — ${order.courier_service}` : ""}
+                        {order.tracking_number && <span style={{ color: "#7A7880", fontWeight: 600 }}> · {order.tracking_number}</span>}
+                      </div>
                     )}
                   </div>
                 )}
