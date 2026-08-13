@@ -5,46 +5,52 @@ import { TrendingUpIcon, PackageIcon, UsersIcon } from "@/components/ui/icons";
 
 const REPORT_CARDS = [
   {
-    href: "/reports/sales",
+    href: "/admin/reports/sales",
     title: "Sales Report",
     description: "Revenue by period, category breakdown, top products",
     icon: <TrendingUpIcon size={36} color="#1A5CFF" />,
   },
   {
-    href: "/reports/inventory",
+    href: "/admin/reports/inventory",
     title: "Inventory Report",
     description: "Stock levels, low-stock alerts, movement history",
     icon: <PackageIcon size={36} color="#1A5CFF" />,
   },
   {
-    href: "/reports/inventory-value",
+    href: "/admin/reports/inventory-value",
     title: "Inventory Value",
     description: "Total worth of stock on hand — quantity × unit cost",
     icon: <PackageIcon size={36} color="#16a34a" />,
   },
   {
-    href: "/reports/variant-sales",
+    href: "/admin/reports/variant-sales",
     title: "Variant Sales",
     description: "Color & size breakdown of sold variants by period",
     icon: <TrendingUpIcon size={36} color="#16a34a" />,
   },
   {
-    href: "/reports/customers",
+    href: "/admin/reports/customers",
     title: "Customer Report",
     description: "New registrations, approval rate, AOV by tier",
     icon: <UsersIcon size={36} color="#1A5CFF" />,
   },
   {
-    href: "/reports/outstanding",
+    href: "/admin/reports/outstanding",
     title: "Outstanding Balances",
     description: "Who owes money, how much, and how long it's been due",
     icon: <UsersIcon size={36} color="#E8242A" />,
   },
   {
-    href: "/reports/purchase-history",
+    href: "/admin/reports/purchase-history",
     title: "Customer Purchase History",
     description: "Per-customer order history by product or line-item price",
     icon: <UsersIcon size={36} color="#0e7490" />,
+  },
+  {
+    href: "/admin/reports/qb-reconciliation",
+    title: "QuickBooks Reconciliation",
+    description: "Why dashboard sales and a QuickBooks P&L differ — order by order",
+    icon: <TrendingUpIcon size={36} color="#7c3aed" />,
   },
 ];
 
