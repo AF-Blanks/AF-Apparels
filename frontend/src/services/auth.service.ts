@@ -18,6 +18,8 @@ export interface RegisterWholesalePayload {
   phone?: string;
   fax?: string;
   company_email?: string;
+  /** Extra mailboxes that should also receive this customer's order paperwork. */
+  additional_emails?: string[];
   address_line1?: string;
   address_line2?: string;
   city?: string;

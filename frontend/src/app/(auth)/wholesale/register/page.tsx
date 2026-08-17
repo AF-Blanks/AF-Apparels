@@ -148,6 +148,12 @@ export default function WholesaleRegisterPage() {
     terms_accepted: false,
   });
 
+  // Order paperwork usually has to reach more than one mailbox at a wholesale
+  // business — a buyer, an accounts inbox, a warehouse. Collect those here so
+  // confirmations go to all of them from the first order, not just the one
+  // address the account was opened with.
+  const [extraEmails, setExtraEmails] = useState<string[]>([""]);
+
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
@@ -181,6 +187,7 @@ export default function WholesaleRegisterPage() {
         first_name: form.first_name,
         last_name: form.last_name,
         email: form.email,
+        additional_emails: extraEmails.map(e => e.trim()).filter(Boolean),
         phone: form.phone || undefined,
         password: form.password,
         fax: form.fax || undefined,
@@ -338,6 +345,42 @@ export default function WholesaleRegisterPage() {
                 <div>
                   <label htmlFor="email" style={labelStyle}>Direct Email Address {req}</label>
                   <input id="email" name="email" type="email" required value={form.email} onChange={handleChange} placeholder="you@company.com" style={inputStyle} />
+                </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={labelStyle}>Additional Emails for Order Notifications</label>
+                  <p style={{ fontSize: "12px", color: "#6B6B6B", margin: "0 0 8px" }}>
+                    Order confirmations, shipping updates and invoices go to the two addresses above.
+                    Add any others that should receive them too.
+                  </p>
+                  {extraEmails.map((val, i) => (
+                    <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                      <input
+                        type="email"
+                        value={val}
+                        onChange={e => setExtraEmails(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
+                        placeholder="accounts@yourcompany.com"
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                      {extraEmails.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setExtraEmails(prev => prev.filter((_, idx) => idx !== i))}
+                          aria-label="Remove this email"
+                          style={{ border: "1px solid #E2E2DE", background: "#fff", color: "#6B6B6B", padding: "0 14px", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setExtraEmails(prev => [...prev, ""])}
+                    style={{ border: "none", background: "none", color: "#1C3557", fontWeight: 700, fontSize: "13px", cursor: "pointer", padding: 0 }}
+                  >
+                    + Add another email
+                  </button>
                 </div>
               </div>
             </div>
