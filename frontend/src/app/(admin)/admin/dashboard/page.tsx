@@ -36,6 +36,8 @@ interface DashboardState {
   dailyCounts: number[];
   conversionRate: number;
   totalTaxCollected: number;
+  moneyReceived: number;
+  outstandingAmount: number;
   totalCustomers: number;
   revenueChange: number | null;
   ordersChange: number | null;
@@ -214,6 +216,8 @@ export default function AdminDashboard() {
         avgOrderValue: ov.average_order_value ?? 0,
         conversionRate: ov.conversion_rate ?? 0,
         totalTaxCollected: ov.total_tax_collected ?? 0,
+        moneyReceived: ov.money_received ?? 0,
+        outstandingAmount: ov.outstanding_amount ?? 0,
         totalCustomers: ov.total_customers ?? 0,
         revenueChange: ov.revenue_change_percent ?? null,
         ordersChange: ov.orders_change_percent ?? null,
@@ -266,6 +270,22 @@ export default function AdminDashboard() {
       change: fmtPct(state.revenueChange),
       up: (state.revenueChange ?? 0) >= 0,
       sub: `${state.totalOrders ?? 0} orders`,
+    },
+    {
+      // Total Sales is what was billed; these two split it into what has landed
+      // and what has not, so chasing money no longer means opening the orders report.
+      label: "Money Received",
+      value: `$${(state.moneyReceived ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      change: "",
+      up: true,
+      sub: "paid by card or on account",
+    },
+    {
+      label: "Outstanding",
+      value: `$${(state.outstandingAmount ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      change: "",
+      up: true,
+      sub: "still owed on these orders",
     },
     {
       label: "Orders",
@@ -347,7 +367,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Stat Cards */}
-      <div className="admin-dash-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: "16px", marginBottom: "24px" }}>
+      <div className="admin-dash-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "16px", marginBottom: "24px" }}>
         {statCards.map(stat => (
           <div key={stat.label} style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", padding: "20px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
