@@ -92,6 +92,9 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   const [productSearch, setProductSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<DraftProduct | null>(null);
   const [variantQtys, setVariantQtys] = useState<Record<string, string>>({});
+  // Lets the admin see every colour again without clearing the search that found
+  // the product in the first place.
+  const [showAllVariants, setShowAllVariants] = useState(false);
   const [lineItems, setLineItems] = useState<DraftLineItem[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
 
@@ -356,7 +359,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                         <div style={{ fontWeight: 700, fontSize: "13px", color: "#2A2830" }}>{selectedProduct.name}</div>
                         <div style={{ fontSize: "11px", color: "#7A7880" }}>{selectedProduct.variants?.length ?? 0} variants</div>
                       </div>
-                      <button onClick={() => { setSelectedProduct(null); setVariantQtys({}); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#7A7880" }}>✕ back</button>
+                      <button onClick={() => { setSelectedProduct(null); setVariantQtys({}); setShowAllVariants(false); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#7A7880" }}>✕ back</button>
                     </div>
                     <div style={{ maxHeight: "340px", overflow: "auto" }}>
                       {(() => {
@@ -373,25 +376,58 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                         }
                         colorList.sort();
                         const sizeList = [...sizeSet].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+
+                        // "1001 white" matches the product because it *has* a white
+                        // variant, and the API hands back all 272 of them — so the
+                        // grid ignored the word the admin typed to narrow it. Take
+                        // the colour and size words out of the search and show only
+                        // those rows; a term that names neither (a style code, a word
+                        // from the product name) narrows nothing.
+                        const _tokens = showAllVariants ? [] : productSearch.toLowerCase().split(/\s+/).filter(Boolean);
+                        const _colorTokens = _tokens.filter(t => colorList.some(c => c.toLowerCase().includes(t)));
+                        const _sizeTokens = _tokens.filter(t => sizeList.some(s => s.toLowerCase() === t));
+                        const _shownColors = _colorTokens.length
+                          ? colorList.filter(c => _colorTokens.some(t => c.toLowerCase().includes(t)))
+                          : colorList;
+                        const _shownSizes = _sizeTokens.length
+                          ? sizeList.filter(s => _sizeTokens.includes(s.toLowerCase()))
+                          : sizeList;
+                        const _narrowed = _shownColors.length < colorList.length || _shownSizes.length < sizeList.length;
                         const hasDiscount = companyDiscount > 0;
                         return (
-                          <table style={{ borderCollapse: "collapse", fontSize: "12px", minWidth: `${90 + sizeList.length * 64}px` }}>
+                          <>
+                          {_narrowed && (
+                            <div style={{ padding: "8px 12px", background: "rgba(26,92,255,.06)", borderBottom: "1px solid #E2E0DA", fontSize: "11px", color: "#1A5CFF", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                              <span>
+                                Showing {_shownColors.length} of {colorList.length} colour{colorList.length !== 1 ? "s" : ""}
+                                {_shownSizes.length < sizeList.length && ` · ${_shownSizes.length} of ${sizeList.length} sizes`}
+                                {" "}matching your search
+                              </span>
+                              <button
+                                onClick={() => setShowAllVariants(true)}
+                                style={{ background: "none", border: "none", color: "#1A5CFF", fontWeight: 700, fontSize: "11px", cursor: "pointer", padding: 0 }}
+                              >
+                                show all
+                              </button>
+                            </div>
+                          )}
+                          <table style={{ borderCollapse: "collapse", fontSize: "12px", minWidth: `${90 + _shownSizes.length * 64}px` }}>
                             {/* Size headers repeat above every colour rather than
                                 once at the top — with many colours you'd otherwise
                                 scroll past them and lose track of which box is
                                 which size. */}
                             <tbody>
-                              {colorList.map(color => (
+                              {_shownColors.map(color => (
                                 <Fragment key={color}>
                                 <tr style={{ background: "#FAFAFA" }}>
                                   <th style={{ padding: "8px 10px", textAlign: "left", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".06em", color: "#7A7880", fontWeight: 700 }}>Color</th>
-                                  {sizeList.map(s => (
+                                  {_shownSizes.map(s => (
                                     <th key={s} style={{ padding: "8px 6px", textAlign: "center", fontSize: "10px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880", fontWeight: 700 }}>{s}</th>
                                   ))}
                                 </tr>
                                 <tr style={{ borderBottom: "1px solid #F4F3EF" }}>
                                   <td style={{ padding: "6px 10px", color: "#2A2830", fontWeight: 600, whiteSpace: "nowrap" }}>{color}</td>
-                                  {sizeList.map(size => {
+                                  {_shownSizes.map(size => {
                                     const v = cell[color]?.[size];
                                     if (!v) return <td key={size} style={{ padding: "6px 6px", textAlign: "center", color: "#ddd" }}>—</td>;
                                     const price = applyDiscount(parseFloat(v.retail_price));
@@ -418,6 +454,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                               ))}
                             </tbody>
                           </table>
+                          </>
                         );
                       })()}
                     </div>
@@ -436,7 +473,7 @@ function CreateDraftModal({ onClose, onSuccess }: { onClose: () => void; onSucce
                     ) : products.length === 0 ? (
                       <div style={{ padding: "32px", textAlign: "center", color: "#aaa", fontSize: "13px" }}>No products found</div>
                     ) : products.map((p, i) => (
-                      <div key={p.id} onClick={() => { setSelectedProduct(p); setVariantQtys({}); }}
+                      <div key={p.id} onClick={() => { setSelectedProduct(p); setVariantQtys({}); setShowAllVariants(false); }}
                         style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", cursor: "pointer", borderBottom: i < products.length - 1 ? "1px solid #F4F3EF" : "none", background: "#fff" }}
                         onMouseEnter={e => (e.currentTarget.style.background = "#F4F3EF")}
                         onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
