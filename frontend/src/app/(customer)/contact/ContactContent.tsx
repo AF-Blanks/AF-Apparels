@@ -154,7 +154,7 @@ export default function ContactPage() {
               {[
                 { label: "Phone", value: "(214) 272-7213" },
                 { label: "Email", value: "info@afblanks.com" },
-                { label: "Hours", value: "Mon–Fri, 8AM–5PM CT" },
+                { label: "Hours", value: "Mon–Fri, 10:00 AM–4:30 PM CT" },
                 { label: "Location", value: "Dallas, TX" },
               ].map(item => (
                 <div key={item.label}>

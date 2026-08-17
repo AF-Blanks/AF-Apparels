@@ -1302,7 +1302,7 @@ export default function AdminOrderDetailPage() {
                   AF Apparels<br />
                   10719 Turbeville Rd<br />
                   Dallas, TX 75243<br />
-                  Mon–Fri 9am–5pm CST
+                  Mon–Fri 10am–4:30pm CST
                 </div>
                 <div style={{ marginTop: "12px", fontSize: "12px", color: "#059669", fontWeight: 700, background: "rgba(5,150,105,.08)", padding: "6px 10px", borderRadius: "6px", display: "inline-block" }}>
                   ✓ No shipping label required — customer will pick up

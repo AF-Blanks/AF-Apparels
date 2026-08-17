@@ -1,7 +1,7 @@
 // frontend/src/app/%28customer%29/products/%5Bslug%5D/ProductDetailClient.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SIZE_ORDER } from "@/lib/utils";
@@ -420,6 +420,12 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   // ── Order state ────────────────────────────────────────────────────────────
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  // Picking a swatch used to change only the gallery, leaving the customer to
+  // scroll an alphabetical list of dozens of colours to reach the size boxes for
+  // the one they just chose. Keep a handle on each colour's row so the swatch can
+  // take them straight there.
+  const colorRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [flashColor, setFlashColor] = useState<string | null>(null);
   const [hoverColor, setHoverColor] = useState<string | null>(null);
   const [expandedColors, setExpandedColors] = useState<string[]>([]);
   const [showAllColors, setShowAllColors] = useState(false);
@@ -947,7 +953,20 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                     return (
                       <button
                         key={group.color}
-                        onClick={() => { setSelectedColor(selectedColor === group.color ? null : group.color); setActiveImageIdx(0); }}
+                        onClick={() => {
+                          const next = selectedColor === group.color ? null : group.color;
+                          setSelectedColor(next);
+                          setActiveImageIdx(0);
+                          if (!next) return;   // deselecting — stay where they are
+                          setFlashColor(next);
+                          window.setTimeout(() => setFlashColor(c => (c === next ? null : c)), 1600);
+                          requestAnimationFrame(() => {
+                            colorRowRefs.current[next]?.scrollIntoView({
+                              behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+                              block: "center",
+                            });
+                          });
+                        }}
                         onMouseEnter={() => setHoverColor(group.color)}
                         onMouseLeave={() => setHoverColor(null)}
                         title={group.color}
@@ -989,7 +1008,16 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                         return s + (n >= 9999 || n < 0 ? 0 : n);
                       }, 0);
                       return (
-                        <div key={group.color}>
+                        <div
+                          key={group.color}
+                          ref={el => { colorRowRefs.current[group.color] = el; }}
+                          style={{
+                            scrollMarginTop: "90px",
+                            background: flashColor === group.color ? "rgba(28,53,87,.06)" : "transparent",
+                            transition: "background .4s ease",
+                            borderRadius: "6px",
+                          }}
+                        >
                           {/* Color header row */}
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0 8px", borderTop: groupIdx === 0 ? "none" : "1px solid #E2E2DE", flexWrap: "wrap", gap: "8px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
