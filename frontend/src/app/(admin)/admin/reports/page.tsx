@@ -47,6 +47,12 @@ const REPORT_CARDS = [
     icon: <UsersIcon size={36} color="#0e7490" />,
   },
   {
+    href: "/admin/reports/inventory-qb",
+    title: "Inventory vs QuickBooks",
+    description: "Where our stock and QuickBooks' quantity on hand disagree",
+    icon: <PackageIcon size={36} color="#dc2626" />,
+  },
+  {
     href: "/admin/reports/qb-reconciliation",
     title: "QuickBooks Reconciliation",
     description: "Why dashboard sales and a QuickBooks P&L differ — order by order",

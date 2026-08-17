@@ -282,6 +282,7 @@ export function AdminSidebar() {
           <SubLink href="/admin/reports/customers" label="Customer Report" />
           <SubLink href="/admin/reports/outstanding" label="Outstanding Balances" />
           <SubLink href="/admin/reports/purchase-history" label="Purchase History" />
+          <SubLink href="/admin/reports/inventory-qb" label="Inventory vs QuickBooks" />
           <SubLink href="/admin/reports/qb-reconciliation" label="QuickBooks Reconciliation" />
         </div>
       )}
