@@ -318,6 +318,10 @@ export default function AdminOrderDetailPage() {
   const [manualLabelLoading, setManualLabelLoading] = useState(false);
   const [adminRates, setAdminRates] = useState<AdminRate[]>([]);
   const [adminRatesLoading, setAdminRatesLoading] = useState(false);
+  // Shippo hands back a normal-looking PDF on a test key, watermarked
+  // "SAMPLE - DO NOT MAIL". Nothing else in the response says so, so warn here
+  // rather than let a sample label reach a parcel.
+  const [shippoTestMode, setShippoTestMode] = useState(false);
   const [adminSelectedRateId, setAdminSelectedRateId] = useState<string | null>(null);
   const adminRatesRef = useRef<AdminRate[]>([]);
 
@@ -714,11 +718,12 @@ export default function AdminOrderDetailPage() {
     setAdminSelectedRateId(null);
     try {
       const result = await apiClient.post<{
-        rates: AdminRate[]; error?: string; box_count?: number; missing_carriers?: string[];
+        rates: AdminRate[]; error?: string; box_count?: number; missing_carriers?: string[]; test_mode?: boolean;
       }>(
         `/api/v1/admin/orders/${order?.id ?? id}/fetch-rates`,
         { weight_lbs: manualWeight, box_count: boxSummary?.num_boxes ?? 1 }
       );
+      setShippoTestMode(!!result.test_mode);
       const rates = result.rates ?? [];
       adminRatesRef.current = rates;
       setAdminRates(rates);
@@ -1312,6 +1317,20 @@ export default function AdminOrderDetailPage() {
               /* CASE 1 & 2: Shippo label generation */
               <div style={{ marginBottom: "16px" }}>
                 <label style={{ ...LabelStyle, marginBottom: "10px" }}>Generate Shipping Label via Shippo</label>
+
+                {shippoTestMode && (
+                  <div style={{ background: "rgba(232,36,42,.07)", border: "1.5px solid rgba(232,36,42,.35)", borderRadius: "8px", padding: "12px 14px", marginBottom: "12px" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: "#E8242A", marginBottom: "3px" }}>
+                      Shippo is in test mode — labels are not mailable
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#7A7880", lineHeight: 1.55 }}>
+                      Rates and tracking numbers look real, but every label PDF comes out stamped
+                      &ldquo;SAMPLE &mdash; DO NOT MAIL&rdquo; and no carrier will accept it. Nothing is charged either.
+                      Switch <strong>SHIPPO_API_KEY</strong> to the live key (it starts with <code>shippo_live_</code>)
+                      to buy real postage.
+                    </div>
+                  </div>
+                )}
 
                 {/* Customer selection info banner */}
                 {order.shipping_method && (
