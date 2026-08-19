@@ -323,6 +323,9 @@ export default function AdminOrderDetailPage() {
   // rather than let a sample label reach a parcel.
   const [shippoTestMode, setShippoTestMode] = useState(false);
   const [resettingLabel, setResettingLabel] = useState(false);
+  // A percentage keeps tracking the subtotal; a fixed amount is a figure that was
+  // agreed and should not move when items do. Both are real cases, so ask which.
+  const [discountMode, setDiscountMode] = useState<"percent" | "amount">("percent");
   const [adminSelectedRateId, setAdminSelectedRateId] = useState<string | null>(null);
   const adminRatesRef = useRef<AdminRate[]>([]);
 
@@ -606,20 +609,39 @@ export default function AdminOrderDetailPage() {
 
   async function handleSaveDiscount(clear = false) {
     if (!order) return;
-    const pct = clear ? 0 : parseFloat(discountInput);
-    if (!clear && (!Number.isFinite(pct) || pct < 0 || pct > 100)) {
-      setMsg({ text: "Enter a discount between 0 and 100%", ok: false });
-      return;
+    const byAmount = !clear && discountMode === "amount";
+    const value = clear ? 0 : parseFloat(discountInput);
+    if (!clear) {
+      if (!Number.isFinite(value) || value < 0) {
+        setMsg({ text: byAmount ? "Enter a discount amount" : "Enter a discount between 0 and 100%", ok: false });
+        return;
+      }
+      if (byAmount && value > Number(order.subtotal ?? 0)) {
+        setMsg({ text: `A $${value.toFixed(2)} discount is more than the $${Number(order.subtotal ?? 0).toFixed(2)} of goods on this order.`, ok: false });
+        return;
+      }
+      if (!byAmount && value > 100) {
+        setMsg({ text: "Enter a discount between 0 and 100%", ok: false });
+        return;
+      }
     }
     setSavingDiscount(true); setMsg(null);
     try {
-      await apiClient.patch(`/api/v1/admin/orders/${order.id ?? id}/discount`, { discount_percent: pct });
+      await apiClient.patch(
+        `/api/v1/admin/orders/${order.id ?? id}/discount`,
+        byAmount ? { discount_amount: value } : { discount_percent: value },
+      );
       // Reload so the subtotal, discount and total shown are the server's own
       // figures — the invoice must never disagree with what's on screen.
       const fresh = await adminService.getOrder(order.id ?? id) as AdminOrder;
       setOrder(fresh);
       setEditingDiscount(false);
-      setMsg({ text: pct > 0 ? `${pct}% discount applied` : "Discount removed", ok: true });
+      setMsg({
+        text: value > 0
+          ? (byAmount ? `$${value.toFixed(2)} discount applied` : `${value}% discount applied`)
+          : "Discount removed",
+        ok: true,
+      });
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "Failed to apply discount", ok: false });
     } finally {
@@ -1931,19 +1953,35 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#7A7880" }}>
                   <span>Shipping</span><span>${Number(order.shipping_cost).toFixed(2)}</span>
                 </div>
-                {/* Admin discount — a percent off the subtotal. Stored as both the
-                    percent and the amount, so it follows the subtotal as items change. */}
+                {/* Admin discount — either a percent off the subtotal, which follows
+                    it as items change, or a fixed amount that was agreed and stays put. */}
                 {editingDiscount ? (
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }} className="no-print">
                     <span style={{ fontSize: "14px", color: "#7A7880", flex: 1 }}>Discount</span>
+                    <div style={{ display: "inline-flex", border: "1.5px solid #E2E0DA", borderRadius: "6px", overflow: "hidden" }}>
+                      {(["percent", "amount"] as const).map(m => (
+                        <button
+                          key={m}
+                          onClick={() => setDiscountMode(m)}
+                          title={m === "percent" ? "A percentage of the subtotal — follows it as items change" : "A fixed amount off — stays the same as items change"}
+                          style={{
+                            padding: "5px 9px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 700, lineHeight: 1,
+                            background: discountMode === m ? "#1B3A5C" : "#fff",
+                            color: discountMode === m ? "#fff" : "#7A7880",
+                          }}
+                        >
+                          {m === "percent" ? "%" : "$"}
+                        </button>
+                      ))}
+                    </div>
                     <input
-                      type="number" min={0} max={100} step="0.01" autoFocus
+                      type="number" min={0} max={discountMode === "percent" ? 100 : undefined} step="0.01" autoFocus
                       value={discountInput}
                       onChange={e => setDiscountInput(e.target.value)}
                       onKeyDown={e => { if (e.key === "Enter") handleSaveDiscount(); }}
-                      style={{ width: "64px", padding: "5px 7px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", textAlign: "right", fontFamily: "var(--font-jakarta)" }}
+                      placeholder={discountMode === "percent" ? "10" : "50.00"}
+                      style={{ width: "72px", padding: "5px 7px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", textAlign: "right", fontFamily: "var(--font-jakarta)" }}
                     />
-                    <span style={{ fontSize: "13px", color: "#7A7880" }}>%</span>
                     <button onClick={() => handleSaveDiscount()} disabled={savingDiscount}
                       style={{ padding: "5px 9px", border: "none", borderRadius: "6px", background: savingDiscount ? "#9CA3AF" : "#059669", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>
                       {savingDiscount ? "…" : "✓"}
@@ -1956,8 +1994,13 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                 ) : Number(order.discount_amount ?? 0) > 0 ? (
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#059669" }}>
                     <span>
-                      Discount ({Number(order.discount_percent ?? 0)}%)
-                      <button onClick={() => { setDiscountInput(String(Number(order.discount_percent ?? 0))); setEditingDiscount(true); }}
+                      Discount{Number(order.discount_percent ?? 0) > 0 ? ` (${Number(order.discount_percent)}%)` : ""}
+                      <button onClick={() => {
+                        const pct = Number(order.discount_percent ?? 0);
+                        setDiscountMode(pct > 0 ? "percent" : "amount");
+                        setDiscountInput(String(pct > 0 ? pct : Number(order.discount_amount ?? 0)));
+                        setEditingDiscount(true);
+                      }}
                         className="no-print"
                         style={{ marginLeft: "6px", background: "none", border: "none", color: "#1A5CFF", fontSize: "12px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
                         edit
@@ -1972,7 +2015,7 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                   </div>
                 ) : (
                   <div style={{ marginBottom: "8px" }} className="no-print">
-                    <button onClick={() => { setDiscountInput(""); setEditingDiscount(true); }}
+                    <button onClick={() => { setDiscountInput(""); setDiscountMode("percent"); setEditingDiscount(true); }}
                       style={{ background: "none", border: "none", color: "#1A5CFF", fontSize: "13px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
                       + Add discount
                     </button>
