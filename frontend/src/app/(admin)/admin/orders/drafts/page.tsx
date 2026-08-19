@@ -10,6 +10,7 @@ import { FileTextIcon } from "@/components/ui/icons";
 interface DraftOrder {
   id: string;
   order_number: string;
+  is_draft?: boolean;
   company_name: string;
   status: string;
   payment_status: string;
@@ -672,7 +673,12 @@ export default function DraftOrdersPage() {
       const data = await apiClient.get<{ items: DraftOrder[]; total: number }>(
         "/api/v1/admin/orders?status=pending&page_size=100"
       );
-      const drafts = (data?.items ?? []).filter(o => o.order_number.startsWith("DRAFT-"));
+      // Drafts now carry an ordinary order number, so the flag is what identifies
+      // them. Orders raised before the flag existed are still recognised by their
+      // "DRAFT-" number — nothing about them was rewritten.
+      const drafts = (data?.items ?? []).filter(
+        o => o.is_draft || o.order_number.startsWith("DRAFT-")
+      );
       setOrders(drafts);
       setTotal(drafts.length);
     } finally {

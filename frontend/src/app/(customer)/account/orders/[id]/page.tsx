@@ -22,6 +22,8 @@ interface OrderItem {
 interface Order {
   id: string;
   order_number: string;
+  /** Raised by an admin rather than placed at checkout. */
+  is_draft?: boolean;
   status: string;
   payment_status: string;
   total: string;
@@ -441,7 +443,7 @@ export default function OrderDetailPage() {
       )}
 
       {/* Pay Now banner for unpaid draft invoice orders */}
-      {order.order_number?.startsWith('DRAFT-') && order.payment_status !== 'paid' && (
+      {(order.is_draft || order.order_number?.startsWith('DRAFT-')) && order.payment_status !== 'paid' && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
           <p className="text-sm font-semibold text-gray-800 mb-3">Invoice payment pending</p>
           <a
