@@ -322,6 +322,7 @@ export default function AdminOrderDetailPage() {
   // "SAMPLE - DO NOT MAIL". Nothing else in the response says so, so warn here
   // rather than let a sample label reach a parcel.
   const [shippoTestMode, setShippoTestMode] = useState(false);
+  const [resettingLabel, setResettingLabel] = useState(false);
   const [adminSelectedRateId, setAdminSelectedRateId] = useState<string | null>(null);
   const adminRatesRef = useRef<AdminRate[]>([]);
 
@@ -707,6 +708,38 @@ export default function AdminOrderDetailPage() {
       setMsg({ text: errMsg, ok: false });
     } finally {
       setLabelLoading(false);
+    }
+  }
+
+  async function handleResetLabel() {
+    // Buying a second label does not undo the first, so make the admin say it out
+    // loud — on a live key the old one is real money already spent.
+    const detail = labelResult?.tracking_number
+      ? `
+
+Current label: ${(labelResult.carrier ?? "").toUpperCase()} ${labelResult.service ?? ""} — ${labelResult.tracking_number}`
+      : "";
+    if (!window.confirm(
+      "Clear this shipping label so a new one can be generated?" + detail +
+      `
+
+The existing label is NOT refunded — if it was a real one, request the refund from Shippo. The order's status is not changed.`
+    )) return;
+    setResettingLabel(true);
+    setMsg(null);
+    try {
+      await apiClient.post(`/api/v1/admin/orders/${order?.id ?? id}/reset-label`, {});
+      setLabelResult(null);
+      setAllLabels([]);
+      setAdminRates([]);
+      adminRatesRef.current = [];
+      setAdminSelectedRateId(null);
+      setOrder(prev => prev ? { ...prev, tracking_number: null, tracking_url: null, label_url: null } : prev);
+      setMsg({ text: "Label cleared — fetch rates and generate a new one.", ok: true });
+    } catch (e: unknown) {
+      setMsg({ text: e instanceof Error ? e.message : "Couldn't clear the label.", ok: false });
+    } finally {
+      setResettingLabel(false);
     }
   }
 
@@ -1592,6 +1625,13 @@ export default function AdminOrderDetailPage() {
                           Track Package →
                         </a>
                       )}
+                      {/* Nothing else could replace a label once one existed — the rate
+                          list stays hidden while it is stored. Needed whenever the first
+                          one can't be used: wrong weight, changed address, ruined print. */}
+                      <button onClick={handleResetLabel} disabled={resettingLabel}
+                        style={{ background: "#fff", color: "#7A7880", padding: "8px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, border: "1.5px solid #E2E0DA", cursor: resettingLabel ? "default" : "pointer", opacity: resettingLabel ? 0.6 : 1 }}>
+                        {resettingLabel ? "Clearing…" : "↻ Generate a new label"}
+                      </button>
                     </div>
                   </div>
                 )}
