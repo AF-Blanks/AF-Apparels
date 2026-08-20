@@ -276,6 +276,7 @@ export function AdminSidebar() {
         <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
           <SubLink href="/admin/reports/sales" label="Sales Report" />
           <SubLink href="/admin/reports/variant-sales" label="Variant Sales" />
+          <SubLink href="/admin/reports/variant-comparison" label="Variant Comparison" />
           <SubLink href="/admin/reports/inventory" label="Inventory Report" />
           <SubLink href="/admin/reports/inventory-value" label="Inventory Value" />
           <SubLink href="/admin/reports/inventory-listing" label="Inventory Listing Report" />

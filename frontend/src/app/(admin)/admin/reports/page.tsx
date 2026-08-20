@@ -29,6 +29,12 @@ const REPORT_CARDS = [
     icon: <TrendingUpIcon size={36} color="#16a34a" />,
   },
   {
+    href: "/admin/reports/variant-comparison",
+    title: "Variant Sales Comparison",
+    description: "One month against another, by product, colour and size",
+    icon: <TrendingUpIcon size={36} color="#0e7490" />,
+  },
+  {
     href: "/admin/reports/customers",
     title: "Customer Report",
     description: "New registrations, approval rate, AOV by tier",
