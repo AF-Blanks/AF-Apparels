@@ -68,6 +68,9 @@ export default function EditPurchaseOrderPage() {
   const [results, setResults] = useState<SearchProduct[]>([]);
   const [loadingVariants, setLoadingVariants] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // What a click actually added, and what it held back — a product can carry
+  // hundreds of variants and adding all of them is almost never the intent.
+  const [notice, setNotice] = useState<{ text: string; product?: SearchProduct } | null>(null);
 
   // ── Load ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -128,15 +131,34 @@ export default function EditPurchaseOrderPage() {
     }, 300);
   }, []);
 
-  async function addProduct(product: SearchProduct) {
+  async function addProduct(product: SearchProduct, typedQuery = "", addEverything = false) {
     setQuery("");
     setResults([]);
+    setNotice(null);
     setLoadingVariants(true);
     try {
       const detail = await apiClient.get<{ variants: FullVariant[] }>(`/api/v1/admin/products/${product.slug}`);
       const existingIds = new Set(items.map(i => i.product_variant_id).filter(Boolean));
-      const newRows: EditItem[] = (detail.variants ?? [])
-        .filter(v => !existingIds.has(v.id))   // don't duplicate a variant already on the PO
+      const all = (detail.variants ?? []).filter(v => !existingIds.has(v.id));
+
+      // "1001 black" matched the product because it HAS a black variant, and the
+      // click then put all 272 of them on the purchase order. Add the colours and
+      // sizes that were actually asked for; a word naming neither narrows nothing,
+      // and terms matching no variant fall back to everything rather than adding
+      // nothing at all.
+      const tokens = addEverything ? [] : typedQuery.toLowerCase().split(/\s+/).filter(Boolean);
+      const colourTokens = tokens.filter(t => all.some(v => (v.color ?? "").toLowerCase().includes(t)));
+      const sizeTokens = tokens.filter(t => all.some(v => (v.size ?? "").toLowerCase() === t));
+      let picked = all;
+      if (colourTokens.length) {
+        picked = picked.filter(v => colourTokens.some(t => (v.color ?? "").toLowerCase().includes(t)));
+      }
+      if (sizeTokens.length) {
+        picked = picked.filter(v => sizeTokens.includes((v.size ?? "").toLowerCase()));
+      }
+      if (picked.length === 0) picked = all;
+
+      const newRows: EditItem[] = picked
         .map(v => ({
           key: nextKey(),
           product_variant_id: v.id,
@@ -151,6 +173,13 @@ export default function EditPurchaseOrderPage() {
         setTimeout(() => setError(null), 3000);
       } else {
         setItems(prev => [...prev, ...newRows]);
+        const heldBack = all.length - newRows.length;
+        setNotice({
+          text: heldBack > 0
+            ? `Added ${newRows.length} variant${newRows.length === 1 ? "" : "s"} matching “${typedQuery.trim()}”. ${heldBack} more on this product were not added.`
+            : `Added ${newRows.length} variant${newRows.length === 1 ? "" : "s"}.`,
+          product: heldBack > 0 ? product : undefined,
+        });
       }
     } catch {
       setError("Couldn't load that product's variants.");
@@ -237,16 +266,31 @@ export default function EditPurchaseOrderPage() {
         <input
           value={query}
           onChange={e => runSearch(e.target.value)}
-          placeholder="Search products by name or code…"
+          placeholder="Search by name, code, colour or size — e.g. 1001 black 2XL"
           style={{ ...INPUT, width: "100%" }} />
         {loadingVariants && <div style={{ fontSize: "12px", color: "#6B7280", marginTop: "4px" }}>Loading variants…</div>}
         {results.length > 0 && (
           <div style={{ position: "absolute", zIndex: 20, left: 0, right: 0, background: "#fff", border: "1px solid #E5E7EB", borderRadius: "8px", marginTop: "4px", boxShadow: "0 8px 24px rgba(0,0,0,.12)", maxHeight: "240px", overflowY: "auto" }}>
             {results.map(p => (
-              <button key={p.id} onClick={() => addProduct(p)} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "none", border: "none", borderBottom: "1px solid #F3F4F6", cursor: "pointer", fontSize: "13px", color: "#111827" }}>
+              <button key={p.id} onClick={() => addProduct(p, query)} style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", background: "none", border: "none", borderBottom: "1px solid #F3F4F6", cursor: "pointer", fontSize: "13px", color: "#111827" }}>
                 {p.name}
               </button>
             ))}
+          </div>
+        )}
+        {notice && (
+          <div style={{ marginTop: "8px", padding: "8px 12px", background: "#F0F4FF", border: "1px solid #C7D2FE", borderRadius: "8px", fontSize: "12px", color: "#3730A3", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ flex: 1 }}>{notice.text}</span>
+            {notice.product && (
+              <button onClick={() => addProduct(notice.product!, "", true)}
+                style={{ background: "none", border: "none", color: "#1B3A5C", fontWeight: 700, fontSize: "12px", cursor: "pointer", padding: 0 }}>
+                add the rest
+              </button>
+            )}
+            <button onClick={() => setNotice(null)}
+              style={{ background: "none", border: "none", color: "#6B7280", fontWeight: 700, fontSize: "13px", cursor: "pointer", padding: 0, lineHeight: 1 }}>
+              ✕
+            </button>
           </div>
         )}
       </div>
