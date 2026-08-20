@@ -37,6 +37,8 @@ interface ProductBlock {
   product_id: string | null;
   product_name: string;
   search_variant_rows: VariantRow[];   // loaded from selected product
+  product_slug?: string;               // kept so every variant can be reloaded
+  narrowed_from?: number;              // full variant count, when the search narrowed it
   // New product
   new_product_name: string;
   new_sku_prefix: string;
@@ -200,20 +202,41 @@ export default function CreatePOPage() {
     }, 300);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function selectProduct(blockKey: number, product: SearchProduct) {
+  async function selectProduct(blockKey: number, product: SearchProduct, typedQuery = "") {
     updateBlock(blockKey, {
       search_query: product.name,
       search_results: [],
       product_id: product.id,
       product_name: product.name,
+      product_slug: product.slug,
       loading_variants: true,
       search_variant_rows: [],
+      narrowed_from: undefined,
     });
     try {
       const detail = await apiClient.get<{ variants: FullVariant[] }>(
         `/api/v1/admin/products/${product.slug}`
       );
-      const variants: FullVariant[] = detail.variants ?? [];
+      const all: FullVariant[] = detail.variants ?? [];
+
+      // "1001 black" finds the product because it HAS a black variant, and then
+      // every one of its 272 variants was loaded into the order — the colour that
+      // was typed narrowed nothing. Keep the colours and sizes actually asked for;
+      // a word naming neither (a style code, part of the product name) narrows
+      // nothing, and if the terms match no variant, fall back to the full list
+      // rather than showing an empty table.
+      const tokens = typedQuery.toLowerCase().split(/\s+/).filter(Boolean);
+      const colourTokens = tokens.filter(t => all.some(v => (v.color ?? "").toLowerCase().includes(t)));
+      const sizeTokens = tokens.filter(t => all.some(v => (v.size ?? "").toLowerCase() === t));
+      let variants = all;
+      if (colourTokens.length) {
+        variants = variants.filter(v => colourTokens.some(t => (v.color ?? "").toLowerCase().includes(t)));
+      }
+      if (sizeTokens.length) {
+        variants = variants.filter(v => sizeTokens.includes((v.size ?? "").toLowerCase()));
+      }
+      if (variants.length === 0) variants = all;
+
       const rows: VariantRow[] = variants
         .sort((a, b) => sizeRank(a.size ?? "") - sizeRank(b.size ?? ""))
         .map(v => blankRow({
@@ -224,7 +247,11 @@ export default function CreatePOPage() {
           unit_cost_expected: parseFloat(v.cost_per_item ?? "0") || 0,
           is_new_variant: false,
         }));
-      updateBlock(blockKey, { search_variant_rows: rows, loading_variants: false });
+      updateBlock(blockKey, {
+        search_variant_rows: rows,
+        loading_variants: false,
+        narrowed_from: variants.length < all.length ? all.length : undefined,
+      });
     } catch {
       updateBlock(blockKey, { loading_variants: false });
     }
@@ -470,7 +497,7 @@ export default function CreatePOPage() {
               onUpdate={patch => updateBlock(block.key, patch)}
               onRemove={() => removeBlock(block.key)}
               onSearchChange={q => searchProducts(block.key, q)}
-              onSelectProduct={p => selectProduct(block.key, p)}
+              onSelectProduct={p => selectProduct(block.key, p, block.search_query)}
               onUpdateRow={(rk, patch) => updateRow(block.key, rk, patch)}
               onRemoveRow={rk => removeRow(block.key, rk)}
               onDuplicateRow={rk => duplicateRow(block.key, rk)}
@@ -645,8 +672,23 @@ function ProductBlockEditor({
       {block.mode === "existing" && (
         <>
           {block.product_id ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", padding: "10px 14px", background: "#F0F4FF", borderRadius: "8px" }}>
-              <span style={{ flex: 1, fontWeight: 600, fontSize: "14px" }}>{block.product_name}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", padding: "10px 14px", background: "#F0F4FF", borderRadius: "8px", flexWrap: "wrap" }}>
+              <span style={{ flex: 1, fontWeight: 600, fontSize: "14px" }}>
+                {block.product_name}
+                {block.narrowed_from != null && (
+                  <span style={{ display: "block", fontWeight: 500, fontSize: "12px", color: "#6B7280", marginTop: "2px" }}>
+                    Showing {block.search_variant_rows.length} of {block.narrowed_from} variants matching your search
+                    <button
+                      onClick={() => block.product_slug && onSelectProduct({
+                        id: block.product_id ?? "", name: block.product_name, slug: block.product_slug,
+                      })}
+                      style={{ marginLeft: "8px", background: "none", border: "none", color: "#1B3A5C", fontWeight: 700, fontSize: "12px", cursor: "pointer", padding: 0 }}
+                    >
+                      load all
+                    </button>
+                  </span>
+                )}
+              </span>
               <button onClick={() => onUpdate({ product_id: null, product_name: "", search_variant_rows: [], search_query: "" })}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#6B7280" }}>
                 Change product
@@ -657,7 +699,7 @@ function ProductBlockEditor({
               <input
                 value={block.search_query}
                 onChange={e => onSearchChange(e.target.value)}
-                placeholder="Search by product name or product code…"
+                placeholder="Search by name, code, colour or size — e.g. 1001 black 2XL"
                 style={INPUT}
               />
               {block.search_results.length > 0 && (
