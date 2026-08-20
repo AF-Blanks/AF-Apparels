@@ -29,6 +29,12 @@ const REPORT_CARDS = [
     icon: <TrendingUpIcon size={36} color="#16a34a" />,
   },
   {
+    href: "/admin/reports/stock-movement",
+    title: "Stock Movement",
+    description: "Opening stock, sold, received and on order — per variant, per month",
+    icon: <PackageIcon size={36} color="#1B3A5C" />,
+  },
+  {
     href: "/admin/reports/variant-comparison",
     title: "Variant Sales Comparison",
     description: "One month against another, by product, colour and size",
