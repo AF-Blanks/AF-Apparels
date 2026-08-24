@@ -5,6 +5,12 @@ import { TrendingUpIcon, PackageIcon, UsersIcon } from "@/components/ui/icons";
 
 const REPORT_CARDS = [
   {
+    href: "/admin/reports/profit-loss",
+    title: "Profit & Loss",
+    description: "Revenue less cost of goods — what was actually earned",
+    icon: <TrendingUpIcon size={36} color="#15803d" />,
+  },
+  {
     href: "/admin/reports/sales",
     title: "Sales Report",
     description: "Revenue by period, category breakdown, top products",

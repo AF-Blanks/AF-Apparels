@@ -31,17 +31,6 @@ interface Movement {
   rows: Row[];
 }
 
-type Metric = "sold" | "closing" | "opening" | "received" | "on_order" | "other";
-
-const METRICS: { id: Metric; label: string; hint: string; tone: string }[] = [
-  { id: "sold",     label: "Sold",       hint: "units sold this month",              tone: "#1d4ed8" },
-  { id: "closing",  label: "In hand",    hint: "stock at the end of the month",      tone: "#111827" },
-  { id: "opening",  label: "Opening",    hint: "stock at the start of the month",    tone: "#6b7280" },
-  { id: "received", label: "Received",   hint: "arrived on a purchase order",        tone: "#15803d" },
-  { id: "on_order", label: "On order",   hint: "booked with a supplier, not yet in", tone: "#b45309" },
-  { id: "other",    label: "Adjustments", hint: "corrections, returns, restocks",    tone: "#7c3aed" },
-];
-
 const n = (v: number) => v.toLocaleString();
 const sizeRank = (s: string) => {
   const i = SIZE_ORDER.indexOf((s ?? "").toUpperCase());
@@ -55,7 +44,6 @@ export default function StockMovementPage() {
 
   const [month, setMonth] = useState("");
   const [search, setSearch] = useState("");
-  const [metric, setMetric] = useState<Metric>("sold");
   const [showList, setShowList] = useState(false);
 
   const load = useCallback((m?: string, q?: string) => {
@@ -92,7 +80,6 @@ export default function StockMovementPage() {
   }, [data]);
 
   const s = data?.summary;
-  const active = METRICS.find(m => m.id === metric)!;
 
   return (
     <div className="space-y-6">
@@ -153,20 +140,6 @@ export default function StockMovementPage() {
             </div>
           </div>
 
-          {/* Which figure the grids show */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 mr-1">Show in grid</span>
-            {METRICS.map(m => (
-              <button key={m.id} onClick={() => setMetric(m.id)} title={m.hint}
-                className={`px-3 py-1.5 rounded-md text-sm font-semibold border ${
-                  metric === m.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300"
-                }`}>
-                {m.label}
-              </button>
-            ))}
-            <span className="text-xs text-gray-500 ml-1">{active.hint}</span>
-          </div>
-
           {grids.length === 0 ? (
             <div className="bg-white border border-gray-200 rounded-lg py-10 text-center text-gray-400">
               Nothing moved in {data.period.label} for this search.
@@ -180,33 +153,27 @@ export default function StockMovementPage() {
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="text-sm" style={{ minWidth: `${180 + g.sizes.length * 74}px` }}>
+                <table className="text-sm" style={{ minWidth: `${190 + g.sizes.length * 88}px` }}>
                   <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                     <tr>
                       <th className="px-5 py-2.5 text-left sticky left-0 bg-gray-50">Colour</th>
-                      {g.sizes.map(sz => <th key={sz} className="px-3 py-2.5 text-right">{sz}</th>)}
-                      <th className="px-4 py-2.5 text-right border-l border-gray-200">Total</th>
+                      {g.sizes.map(sz => <th key={sz} className="px-3 py-2.5 text-center">{sz}</th>)}
+                      <th className="px-4 py-2.5 text-center border-l border-gray-200">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {g.colours.map(c => {
-                      const rowTotal = g.sizes.reduce((t, sz) => t + (g.cell.get(`${c}|${sz}`)?.[metric] ?? 0), 0);
+                      const cells = g.sizes.map(sz => g.cell.get(`${c}|${sz}`));
+                      const tot = {
+                        closing: cells.reduce((t, r) => t + (r?.closing ?? 0), 0),
+                        sold: cells.reduce((t, r) => t + (r?.sold ?? 0), 0),
+                        on_order: cells.reduce((t, r) => t + (r?.on_order ?? 0), 0),
+                      };
                       return (
                         <tr key={c} className="hover:bg-gray-50">
                           <td className="px-5 py-2.5 font-medium text-gray-900 whitespace-nowrap sticky left-0 bg-white">{c}</td>
-                          {g.sizes.map(sz => {
-                            const v = g.cell.get(`${c}|${sz}`)?.[metric];
-                            return (
-                              <td key={sz} className="px-3 py-2.5 text-right"
-                                style={{ fontVariantNumeric: "tabular-nums", color: v ? active.tone : "#d1d5db" }}>
-                                {v === undefined ? "·" : v === 0 ? "—" : n(v)}
-                              </td>
-                            );
-                          })}
-                          <td className="px-4 py-2.5 text-right font-bold text-gray-900 border-l border-gray-200"
-                            style={{ fontVariantNumeric: "tabular-nums" }}>
-                            {rowTotal === 0 ? "—" : n(rowTotal)}
-                          </td>
+                          {g.sizes.map((sz, i) => <Cell key={sz} r={cells[i]} />)}
+                          <td className="px-4 py-2.5 border-l border-gray-200 bg-gray-50/60"><Stack {...tot} strong /></td>
                         </tr>
                       );
                     })}
@@ -215,17 +182,25 @@ export default function StockMovementPage() {
                     <tr className="bg-gray-50 border-t-2 border-gray-200">
                       <td className="px-5 py-2.5 font-bold text-gray-900 sticky left-0 bg-gray-50">Total</td>
                       {g.sizes.map(sz => {
-                        const colTotal = g.colours.reduce((t, c) => t + (g.cell.get(`${c}|${sz}`)?.[metric] ?? 0), 0);
+                        const col = g.colours.map(c => g.cell.get(`${c}|${sz}`));
                         return (
-                          <td key={sz} className="px-3 py-2.5 text-right font-bold text-gray-900"
-                            style={{ fontVariantNumeric: "tabular-nums" }}>
-                            {colTotal === 0 ? "—" : n(colTotal)}
+                          <td key={sz} className="px-3 py-2.5">
+                            <Stack
+                              closing={col.reduce((t, r) => t + (r?.closing ?? 0), 0)}
+                              sold={col.reduce((t, r) => t + (r?.sold ?? 0), 0)}
+                              on_order={col.reduce((t, r) => t + (r?.on_order ?? 0), 0)}
+                              strong
+                            />
                           </td>
                         );
                       })}
-                      <td className="px-4 py-2.5 text-right font-bold text-gray-900 border-l border-gray-200"
-                        style={{ fontVariantNumeric: "tabular-nums" }}>
-                        {n(g.rows.reduce((t, r) => t + r[metric], 0))}
+                      <td className="px-4 py-2.5 border-l border-gray-200">
+                        <Stack
+                          closing={g.rows.reduce((t, r) => t + r.closing, 0)}
+                          sold={g.rows.reduce((t, r) => t + r.sold, 0)}
+                          on_order={g.rows.reduce((t, r) => t + r.on_order, 0)}
+                          strong
+                        />
                       </td>
                     </tr>
                   </tfoot>
@@ -281,6 +256,8 @@ export default function StockMovementPage() {
             <p className="font-semibold text-gray-900 mb-2">Reading this</p>
             <p className="mb-2">
               Every variant balances: <strong>Opening + Received − Sold ± Adjustments = In hand</strong>.
+              Each box shows <strong>stock in hand</strong> on top, then <span className="text-blue-600 font-semibold">↓ sold</span>
+              this month and, where there is any, <span className="text-amber-600 font-semibold">+ on order</span>.
               A <strong>·</strong> means that colour and size combination doesn&rsquo;t exist.
             </p>
             <p className="mb-2">
@@ -298,6 +275,30 @@ export default function StockMovementPage() {
       ) : (
         <div className="text-center py-12 text-gray-500">Couldn&rsquo;t load the report.</div>
       )}
+    </div>
+  );
+}
+
+/** One colour × size box: stock in hand, with what sold and what is still coming. */
+function Cell({ r }: { r?: Row }) {
+  if (!r) return <td className="px-3 py-2.5 text-center text-gray-200">·</td>;
+  return <td className="px-3 py-2.5"><Stack closing={r.closing} sold={r.sold} on_order={r.on_order} /></td>;
+}
+
+function Stack({ closing, sold, on_order, strong }: {
+  closing: number; sold: number; on_order: number; strong?: boolean;
+}) {
+  const quiet = closing === 0 && sold === 0 && on_order === 0;
+  if (quiet) return <div className="text-center text-gray-200">—</div>;
+  return (
+    <div className="text-center leading-tight" style={{ fontVariantNumeric: "tabular-nums" }}>
+      <div className={`${strong ? "font-bold" : "font-semibold"} ${closing === 0 ? "text-gray-300" : "text-gray-900"}`}>
+        {n(closing)}
+      </div>
+      <div className="text-[11px] mt-0.5 whitespace-nowrap">
+        <span className={sold ? "text-blue-600" : "text-gray-300"} title="sold this month">↓{n(sold)}</span>
+        {on_order > 0 && <span className="text-amber-600 ml-1.5" title="on order, not yet arrived">+{n(on_order)}</span>}
+      </div>
     </div>
   );
 }
