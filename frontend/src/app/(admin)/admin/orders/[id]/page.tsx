@@ -1947,6 +1947,15 @@ The existing label is NOT refunded — if it was a real one, request the refund 
             {/* Totals */}
             <div style={{ borderTop: "2px solid #E2E0DA", marginTop: "16px", paddingTop: "16px", display: "flex", justifyContent: "flex-end" }}>
               <div style={{ minWidth: "260px" }}>
+                {/* Pieces, not money. Each line shows its own quantity, but an order is
+                    agreed in total pieces — case counts, pallet counts — so that figure
+                    should not have to be added up by hand. */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#2A2830", fontWeight: 700 }}>
+                  <span>Total Quantity</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {(order.items ?? []).reduce((t, i) => t + Number(i.quantity ?? 0), 0).toLocaleString()} pcs
+                  </span>
+                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "14px", color: "#7A7880" }}>
                   <span>Subtotal</span><span>${Number(order.subtotal).toFixed(2)}</span>
                 </div>
