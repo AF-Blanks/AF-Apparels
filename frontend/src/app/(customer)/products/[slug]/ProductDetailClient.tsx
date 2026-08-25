@@ -730,7 +730,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
           {/* ── LEFT: Image Gallery ─────────────────────────────────────── */}
           <div className="pdp-gallery-col" style={{ position: "sticky", top: "24px", alignSelf: "start" }}>
             {/* Main image */}
-            <div className="pdp-main-img" style={{ width: "100%", height: "480px", border: "1px solid #E2E2DE", display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", overflow: "hidden" }}>
+            <div className="pdp-main-img" style={{ position: "relative", width: "100%", height: "480px", border: "1px solid #E2E2DE", display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", overflow: "hidden" }}>
               {displayImages[activeImageIdx] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -740,6 +740,20 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                 />
               ) : (
                 <span style={{ fontSize: "80px", opacity: 0.1 }}>👕</span>
+              )}
+
+              {/* Brand mark and product code sit on the photo itself so a screenshot
+                  or a saved image still says whose it is and which style it is —
+                  these travel to customers far more often than the page does.
+                  Removed by 2f6cc52 (31 Jul) alongside an unrelated change; the
+                  styling and the logo file were left in place, so only the markup
+                  needed restoring. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/Af-apparel logo.png" alt="AF Blanks" className="pdp-overlay-logo" style={{ position: "absolute", top: "10px", left: "10px", width: "auto", objectFit: "contain", pointerEvents: "none" }} />
+              {((product as any).product_code || (product as any).code) && (
+                <div className="pdp-overlay-code" style={{ position: "absolute", top: "10px", right: "10px", background: "rgba(255,255,255,0.88)", border: "1px solid #E2E2DE", borderRadius: "4px", padding: "3px 9px", fontFamily: "'IBM Plex Mono', monospace", color: "#1B3A5C", fontWeight: 600, letterSpacing: "0.05em", pointerEvents: "none" }}>
+                  {(product as any).product_code || (product as any).code}
+                </div>
               )}
             </div>
 
