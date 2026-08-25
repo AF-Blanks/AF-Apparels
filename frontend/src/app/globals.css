@@ -572,7 +572,7 @@
    width, so when it snaps back the second copy is already where the first was —
    the loop reads as continuous rather than restarting. */
 .announcement-track {
-  animation: announcement-scroll 38s linear infinite;
+  animation: announcement-scroll 55s linear infinite;
   will-change: transform;
 }
 @keyframes announcement-scroll {
