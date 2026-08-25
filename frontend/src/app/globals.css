@@ -557,3 +557,11 @@
   .pdp-overlay-logo { height: 50px; }
   .pdp-overlay-code { font-size: 13px; }
 }
+
+
+/* ── Header search ─────────────────────────────────────────────────────── */
+/* On a narrow header the word is the first thing that can go — a magnifier
+   already reads as search, and the row has a flag, a cart and an account to fit. */
+@media (max-width: 900px) {
+  .site-search-label { display: none; }
+}

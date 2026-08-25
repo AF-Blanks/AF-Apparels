@@ -9,6 +9,7 @@ import { authService } from "@/services/auth.service";
 import { apiClient } from "@/lib/api-client";
 import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
 import { ShoppingCartIcon } from "@/components/ui/icons";
+import { SiteSearch } from "@/components/layout/SiteSearch";
 
 const RESOURCES_LINKS = [
   { href: "/about", label: "About Us" },
@@ -183,6 +184,9 @@ export function Header() {
 
           {/* Right Actions */}
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            {/* Search — first, because a shopper who knows the style number wants
+                to type it, not walk the category menus to reach it. */}
+            <SiteSearch />
             {/* US flag */}
             <img src="https://flagcdn.com/w40/us.png" alt="US" width={28} height={18} style={{ objectFit: "cover", borderRadius: "2px", display: "block", marginRight: "8px" }} />
             {/* Cart */}
