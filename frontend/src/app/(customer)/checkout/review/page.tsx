@@ -11,6 +11,7 @@ import { ordersService } from "@/services/orders.service";
 import { apiClient, ApiClientError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/utils";
 import type { Cart } from "@/types/order.types";
+import { SHIPPING_CUTOFF_NOTICE } from "@/components/layout/AnnouncementBar";
 
 type GuestCartEntry = { variant_id: string; quantity: number; product_id: string; product_name: string; slug: string; color: string | null; size: string | null; unit_price: number; image_url?: string | null };
 
@@ -589,6 +590,16 @@ export default function CheckoutReviewPage() {
                 )}
               </div>
             )}
+
+            {/* The cut-off, restated where the decision is actually made. It
+                scrolls past in the header on every page, which is the wrong moment
+                — here it is read while deciding whether to place the order now. */}
+            <div style={{ background: "#F7F6F2", border: "1px solid #E2E2DE", padding: "12px 16px", marginBottom: "16px", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+              <span style={{ fontSize: "15px", lineHeight: 1.3 }} aria-hidden="true">🕒</span>
+              <p style={{ margin: 0, fontSize: "13px", color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6 }}>
+                {SHIPPING_CUTOFF_NOTICE}
+              </p>
+            </div>
 
             {/* ── Place Order ── */}
             <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>

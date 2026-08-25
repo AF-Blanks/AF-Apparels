@@ -565,3 +565,22 @@
 @media (max-width: 900px) {
   .site-search-label { display: none; }
 }
+
+
+/* ── Announcement bar ──────────────────────────────────────────────────── */
+/* The track holds two copies of the notice and slides exactly half its own
+   width, so when it snaps back the second copy is already where the first was —
+   the loop reads as continuous rather than restarting. */
+.announcement-track {
+  animation: announcement-scroll 38s linear infinite;
+  will-change: transform;
+}
+@keyframes announcement-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+/* Reading a moving line is hard enough; let a hover hold it still. */
+.announcement-track:hover { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .announcement-track { animation: none; }
+}
