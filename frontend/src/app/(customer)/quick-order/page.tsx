@@ -192,7 +192,9 @@ export default function QuickOrderPage() {
     const qty = parseInt(value, 10);
     setRows((prev) => prev.map((r) => {
       if (r.id !== rowId) return r;
-      const maxQty = r.productDetail?.variants.find((v) => v.color === color && v.size === size)?.stock_quantity;
+      const _v = r.productDetail?.variants.find((v) => v.color === color && v.size === size);
+      // No ceiling on a backorder line — the shortfall is the point.
+      const maxQty = _v?.allow_backorder ? undefined : _v?.stock_quantity;
       const clamped = isNaN(qty) || qty < 0 ? 0 : maxQty !== undefined ? Math.min(qty, maxQty) : qty;
       const colorQtys = { ...(r.quantities[color] ?? {}), [size]: clamped };
       return { ...r, quantities: { ...r.quantities, [color]: colorQtys } };
@@ -646,7 +648,11 @@ export default function QuickOrderPage() {
                                         {sizes.map((size) => {
                                           const v = getVariantForColor(row, color, size);
                                           const unitPrice = v?.effective_price ?? v?.retail_price;
-                                          const oos = !v || v.stock_quantity === 0 || v.status === "out_of_stock";
+                                          const oos = !v || v.status === "out_of_stock" ||
+                                            // Short but sellable: quick order takes it like any
+                                            // other line, otherwise the fast path refuses what
+                                            // the product page accepts.
+                                            ((v.stock_quantity ?? 0) <= 0 && !v.allow_backorder);
                                           return (
                                             <th key={size} style={{ padding: "0 0 8px", textAlign: "center", minWidth: "60px" }}>
                                               <div style={{ fontFamily: "var(--font-bebas)", fontSize: "15px", letterSpacing: ".06em", color: oos ? "#ccc" : "#2A2830" }}>{size}</div>
@@ -670,13 +676,17 @@ export default function QuickOrderPage() {
                                         {sizes.map((size) => {
                                           const qty = row.quantities[color]?.[size] ?? 0;
                                           const v = getVariantForColor(row, color, size);
-                                          const oos = !v || v.stock_quantity === 0 || v.status === "out_of_stock";
+                                          const oos = !v || v.status === "out_of_stock" ||
+                                            // Short but sellable: quick order takes it like any
+                                            // other line, otherwise the fast path refuses what
+                                            // the product page accepts.
+                                            ((v.stock_quantity ?? 0) <= 0 && !v.allow_backorder);
                                           return (
                                             <td key={size} style={{ padding: 0, textAlign: "center" }}>
                                               <input
                                                 type="number"
                                                 min={0}
-                                                max={v?.stock_quantity ?? 0}
+                                                max={v?.allow_backorder ? undefined : (v?.stock_quantity ?? 0)}
                                                 disabled={oos}
                                                 value={qty === 0 ? "" : qty}
                                                 onChange={(e) => handleQtyChange(row.id, color, size, e.target.value)}
