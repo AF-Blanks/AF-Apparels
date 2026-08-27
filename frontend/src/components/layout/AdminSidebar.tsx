@@ -133,6 +133,7 @@ export function AdminSidebar() {
         <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
           <SubLink href="/admin/orders" label="All Orders" />
           <SubLink href="/admin/orders/drafts" label="Drafts" />
+          <SubLink href="/admin/orders/backorders" label="Backorders" />
           {!isStaff && <SubLink href="/admin/orders/shipping-labels" label="Shipping Labels" />}
           {!isStaff && <SubLink href="/admin/abandoned-carts" label="Abandoned Checkouts" />}
         </div>
