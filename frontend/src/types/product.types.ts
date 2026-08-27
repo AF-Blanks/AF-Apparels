@@ -36,6 +36,10 @@ export interface ProductVariant {
   effective_price: string | null;
   status: "active" | "discontinued" | "out_of_stock";
   stock_quantity: number;
+  /** Sellable past zero — stock then runs negative and the shortfall is owed. */
+  allow_backorder?: boolean;
+  /** When the next purchase order carrying this variant is due in. */
+  expected_restock_date?: string | null;
 }
 
 /** Product list item (card view) — matches backend ProductListItem schema. */

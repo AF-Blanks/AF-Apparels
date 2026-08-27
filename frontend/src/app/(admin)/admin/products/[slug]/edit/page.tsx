@@ -218,7 +218,7 @@ export default function AdminProductEditPage() {
   const [expandAll, setExpandAll] = useState(false);
 
   // Variant local edits: variantId → field overrides
-  const [variantEdits, setVariantEdits] = useState<Record<string, Record<string, string>>>({});
+  const [variantEdits, setVariantEdits] = useState<Record<string, Record<string, string | boolean>>>({});
 
   // Bulk apply to all variants
   const [bulkApply, setBulkApply] = useState({ price: "", compare: "", cost: "", origin: "", stock: "" });
@@ -367,15 +367,22 @@ export default function AdminProductEditPage() {
     );
   }
 
-  function updateVariantEdit(id: string, field: string, value: string) {
+  function updateVariantEdit(id: string, field: string, value: string | boolean) {
     setVariantEdits(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }));
   }
 
   function getVariantValue(v: ProductVariant, field: keyof ProductVariant): string {
     const edit = variantEdits[v.id]?.[field];
-    if (edit !== undefined) return edit;
+    if (edit !== undefined) return String(edit);
     const val = v[field];
     return val == null ? "" : String(val);
+  }
+
+  /** Checkbox fields, kept apart from the text ones so neither has to coerce. */
+  function getVariantFlag(v: ProductVariant, field: keyof ProductVariant): boolean {
+    const edit = variantEdits[v.id]?.[field];
+    if (edit !== undefined) return edit === true || edit === "true";
+    return v[field] === true;
   }
 
   async function saveVariant(variantId: string) {
@@ -949,7 +956,7 @@ export default function AdminProductEditPage() {
                             }}
                           />
                         </th>
-                        {["Size", "SKU", "Price", "Compare Price", "Cost / Item", "Country of Origin", "Weight (g)", "Stock", ""].map(h => (
+                        {["Size", "SKU", "Price", "Compare Price", "Cost / Item", "Country of Origin", "Weight (g)", "Stock", "Backorder", ""].map(h => (
                           <th key={h} style={thStyle}>{h}</th>
                         ))}
                       </tr>
@@ -1054,6 +1061,29 @@ export default function AdminProductEditPage() {
                               onBlur={() => saveVariant(variant.id)}
                               style={{ padding: "6px 8px", border: "1px solid #E2E0DA", borderRadius: "5px", fontSize: "12px", width: "70px", textAlign: "center" }}
                             />
+                          </td>
+                          {/* Next to the stock number on purpose: this is what
+                              decides whether that number is allowed below zero. */}
+                          <td style={{ padding: "10px 16px", textAlign: "center" }}>
+                            <label
+                              title="Keep selling this size once stock reaches zero. Stock goes negative and the shortfall is owed until the next delivery."
+                              style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={getVariantFlag(variant, "allow_backorder")}
+                                onChange={e => {
+                                  updateVariantEdit(variant.id, "allow_backorder", e.target.checked);
+                                  saveVariant(variant.id);
+                                }}
+                                style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
+                              />
+                              {(variant.stock_quantity ?? 0) < 0 && (
+                                <span style={{ fontSize: "11px", color: "#E8242A", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                  {Math.abs(variant.stock_quantity ?? 0)} owed
+                                </span>
+                              )}
+                            </label>
                           </td>
                           <td style={{ padding: "10px 16px" }}>
                             <button

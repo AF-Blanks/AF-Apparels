@@ -387,18 +387,48 @@ function thumbSrc(img: { url_thumbnail_webp?: string | null; url_thumbnail?: str
   return img.url_thumbnail_webp ?? img.url_thumbnail ?? "";
 }
 
+/** Nothing left to send today. Negative means it is already owed to someone. */
 function isOutOfStock(stock: number | null | undefined): boolean {
-  return stock === null || stock === undefined || stock === 0;
+  return stock === null || stock === undefined || stock <= 0;
 }
 
-function getStockLabel(stock: number | null | undefined): string {
-  if (isOutOfStock(stock)) return "Out of Stock";
+/** Orderable despite being out of stock, because it is on the way. */
+function isBackorderable(v: { stock_quantity?: number | null; allow_backorder?: boolean } | null | undefined): boolean {
+  return !!v?.allow_backorder;
+}
+
+function formatRestock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** What the shopper is told about availability.
+ *
+ * A shortage on a backorder line is not a dead end — the goods are bought and
+ * dated — so it reads as a delivery estimate rather than a refusal. Without a
+ * date, say it ships when stock lands rather than inventing one. */
+function getStockLabel(
+  stock: number | null | undefined,
+  v?: { allow_backorder?: boolean; expected_restock_date?: string | null } | null,
+): string {
+  if (isOutOfStock(stock)) {
+    if (v?.allow_backorder) {
+      const when = formatRestock(v.expected_restock_date);
+      return when ? `Ships ${when}` : "Available on backorder";
+    }
+    return "Out of Stock";
+  }
   if ((stock as number) >= 9999) return "In Stock";
   return `${stock} left`;
 }
 
-function getStockColor(stock: number | null | undefined): string {
-  if (isOutOfStock(stock)) return "#EF4444";
+function getStockColor(
+  stock: number | null | undefined,
+  v?: { allow_backorder?: boolean } | null,
+): string {
+  if (isOutOfStock(stock)) return v?.allow_backorder ? "#D97706" : "#EF4444";
   if ((stock as number) <= 10) return "#F59E0B";
   return "#10B981";
 }
@@ -514,7 +544,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   const displayColorGroups = showAllColors ? colorGroups : colorGroups.slice(0, 4);
   const filteredGroups = showAllColors ? colorGroups : colorGroups.slice(0, 4);
   const pricePerUnit = Number(primaryVariant?.effective_price ?? primaryVariant?.retail_price ?? 0);
-  const anyInStock = (product.variants ?? []).some(v => !isOutOfStock(v.stock_quantity));
+  const anyInStock = (product.variants ?? []).some(v => !isOutOfStock(v.stock_quantity) || isBackorderable(v));
 
   // Color-filtered images for gallery: when a swatch is selected, show only that color's images
   const displayImages = selectedColor
@@ -579,12 +609,14 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     for (const { variant_id, quantity } of items) {
       const v = product?.variants?.find(x => x.id === variant_id);
       if (!v) continue;
-      if (isOutOfStock(v.stock_quantity)) {
+      // A backorder line is short on purpose — refusing it here would undo the
+      // whole point of marking it sellable.
+      if (isOutOfStock(v.stock_quantity) && !isBackorderable(v)) {
         setCartMsg({ type: "error", text: `${v.color ?? ""}${v.size ? ` / ${v.size}` : ""} is out of stock` });
         return;
       }
       const maxStock = v.stock_quantity as number;
-      if (maxStock < 9999 && quantity > maxStock) {
+      if (!isBackorderable(v) && maxStock < 9999 && quantity > maxStock) {
         setCartMsg({ type: "error", text: `Only ${maxStock} left for ${v.color ?? ""}${v.size ? ` / ${v.size}` : ""}` });
         return;
       }
@@ -643,7 +675,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     if (rowItems.length === 0) return;
     for (const { variant_id } of rowItems) {
       const v = group.variants.find(x => x.id === variant_id);
-      if (v && isOutOfStock(v.stock_quantity)) {
+      if (v && isOutOfStock(v.stock_quantity) && !isBackorderable(v)) {
         setCartMsg({ type: "error", text: `${v.size ?? ""} is out of stock` });
         return;
       }
@@ -1012,7 +1044,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                       const isLight = ["#FFFFFF", "#fffff0", "#fef3c7", "#f5f0e8"].includes(hex);
                       const rowQty = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0), 0);
                       const rowTotal = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0) * Number(v.effective_price ?? v.retail_price ?? 0), 0);
-                      const allRowOOS = group.variants.every(v => isOutOfStock(v.stock_quantity));
+                      const allRowOOS = group.variants.every(v => isOutOfStock(v.stock_quantity) && !isBackorderable(v));
                       // Total stock for this colour = sum across all its sizes.
                       // 9999+ is the "untracked / unlimited" sentinel, so if any size
                       // is untracked we show "In Stock" rather than a misleading sum.
@@ -1076,23 +1108,30 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               }
                               const qty = quantities[variant.id] ?? 0;
                               const isOOS = isOutOfStock(variant.stock_quantity);
+                              // Out of stock but on the way: the box stays usable
+                              // and says when, rather than refusing an order the
+                              // business has already bought the goods for.
+                              const onBackorder = isOOS && isBackorderable(variant);
+                              const blocked = isOOS && !onBackorder;
                               const stockNum = variant.stock_quantity as number;
                               // Live remaining: what's left after the qty typed for this size.
                               const remaining = Math.max(0, stockNum - qty);
-                              const stockLabel = isOOS ? "Out of Stock" : stockNum >= 9999 ? "In Stock" : `${remaining.toLocaleString()} in stock`;
+                              const stockLabel = onBackorder
+                                ? (formatRestock(variant.expected_restock_date) ? `Ships ${formatRestock(variant.expected_restock_date)}` : "On backorder")
+                                : isOOS ? "Out of Stock" : stockNum >= 9999 ? "In Stock" : `${remaining.toLocaleString()} in stock`;
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
-                                <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: isOOS ? "#fafafa" : "transparent" }}>
-                                  <span style={{ display: "block", fontSize: "11px", color: isOOS ? "#cc0000" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
-                                  <span style={{ display: "block", fontSize: "12px", color: isOOS ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
+                                <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked ? "#fafafa" : "transparent" }}>
+                                  <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
+                                  <span style={{ display: "block", fontSize: "12px", color: blocked ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
                                   <input
                                     type="number"
                                     min={0}
                                     max={variant.stock_quantity ?? undefined}
                                     value={qty === 0 ? "" : qty}
-                                    disabled={isOOS}
+                                    disabled={blocked}
                                     onChange={e => {
-                                      if (isOOS) return;
+                                      if (blocked) return;
                                       const raw = parseInt(e.target.value, 10) || 0;
                                       const maxStock = variant.stock_quantity ?? 9999;
                                       const val = Math.min(raw, maxStock);
