@@ -78,6 +78,8 @@ interface AdminOrder {
   courier_service: string | null;
   shipped_at: string | null;
   qb_invoice_id: string | null;
+  /** An invoice in QuickBooks is not the same as the money being recorded against it. */
+  qb_payment_id?: string | null;
   subtotal: string;
   shipping_cost: string;
   tax_amount?: string;
@@ -491,10 +493,19 @@ export default function AdminOrderDetailPage() {
   async function handleSyncQB() {
     setIsSyncing(true); setMsg(null);
     try {
-      await adminService.syncOrderToQb(order?.id ?? id);
-      setMsg({ text: "QuickBooks sync queued.", ok: true });
-    } catch {
-      setMsg({ text: "QB sync failed.", ok: false });
+      const res = await adminService.syncOrderToQb(order?.id ?? id) as { message?: string; action?: string } | undefined;
+      setMsg({ text: res?.message || "QuickBooks sync queued.", ok: true });
+      // The worker writes the payment id a moment later; re-read so the row
+      // stops offering to do something that has already been done.
+      if (res?.action === "payment_queued") {
+        setTimeout(() => {
+          adminService.getOrder(order?.id ?? id)
+            .then(fresh => setOrder(fresh as AdminOrder))
+            .catch(() => { /* the row simply stays until the page is reopened */ });
+        }, 4000);
+      }
+    } catch (err: unknown) {
+      setMsg({ text: err instanceof Error ? err.message : "QB sync failed.", ok: false });
     } finally { setIsSyncing(false); }
   }
 
@@ -2424,22 +2435,40 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                   </div>
                 </div>
               )}
-              {order.payment_method !== "ach" && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", marginTop: "5px" }}>
-                  <span style={{ color: "#7A7880" }}>QB Invoice</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontWeight: 600, color: order.qb_invoice_id ? "#059669" : "#aaa" }}>
-                      {order.qb_invoice_id ? `#${order.qb_invoice_id}` : "Not synced"}
-                    </span>
-                    {!order.qb_invoice_id && (
-                      <button
-                        onClick={handleSyncQB}
-                        disabled={isSyncing}
-                        style={{ background: "#1B3A5C", color: "#fff", border: "none", padding: "3px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 700, cursor: isSyncing ? "not-allowed" : "pointer", opacity: isSyncing ? 0.6 : 1 }}>
-                        {isSyncing ? "Syncing…" : "Sync Now"}
-                      </button>
-                    )}
-                  </div>
+              {/* Shown for every payment method. This row used to be hidden on ACH
+                  orders, so the one place that would have said "invoiced, but the
+                  payment never reached QuickBooks" was invisible exactly where
+                  that was happening. */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px", marginTop: "5px" }}>
+                <span style={{ color: "#7A7880" }}>QB Invoice</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontWeight: 600, color: order.qb_invoice_id ? "#059669" : "#aaa" }}>
+                    {order.qb_invoice_id ? `#${order.qb_invoice_id}` : "Not synced"}
+                  </span>
+                  {!order.qb_invoice_id && (
+                    <button
+                      onClick={handleSyncQB}
+                      disabled={isSyncing}
+                      style={{ background: "#1B3A5C", color: "#fff", border: "none", padding: "3px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 700, cursor: isSyncing ? "not-allowed" : "pointer", opacity: isSyncing ? 0.6 : 1 }}>
+                      {isSyncing ? "Syncing…" : "Sync Now"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Invoiced and settled here, but nothing recorded against it in the
+                  books — the gap that left every ACH payment out of QuickBooks. */}
+              {order.qb_invoice_id && order.payment_status === "paid" && !order.qb_payment_id && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", fontSize: "13px", marginTop: "8px", padding: "8px 10px", background: "#FEF6E7", border: "1px solid #E4B85C", borderRadius: "6px" }}>
+                  <span style={{ color: "#7A4F0B", fontWeight: 600, lineHeight: 1.4 }}>
+                    Payment not in QuickBooks
+                  </span>
+                  <button
+                    onClick={handleSyncQB}
+                    disabled={isSyncing}
+                    title="Record this order's payment against its QuickBooks invoice. Nothing else on the invoice is changed."
+                    style={{ flexShrink: 0, background: "#B45309", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 700, cursor: isSyncing ? "not-allowed" : "pointer", opacity: isSyncing ? 0.6 : 1 }}>
+                    {isSyncing ? "Recording…" : "Record Payment"}
+                  </button>
                 </div>
               )}
             </div>
