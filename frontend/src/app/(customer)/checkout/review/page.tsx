@@ -10,6 +10,7 @@ import { cartService } from "@/services/cart.service";
 import { ordersService } from "@/services/orders.service";
 import { apiClient, ApiClientError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/utils";
+import { ACH_AUTHORIZATION_TEXT } from "@/lib/ach-authorization";
 import type { Cart } from "@/types/order.types";
 import { SHIPPING_CUTOFF_NOTICE } from "@/components/layout/AnnouncementBar";
 
@@ -260,6 +261,7 @@ export default function CheckoutReviewPage() {
           ach_last_name: paymentMethod === "ach" ? achLastName : undefined,
           ach_phone: paymentMethod === "ach" ? achPhone : undefined,
           ach_authorized: paymentMethod === "ach" ? achAuthorized : undefined,
+          ach_authorization_text: paymentMethod === "ach" ? ACH_AUTHORIZATION_TEXT : undefined,
           order_notes: orderNotes || undefined,
           discount_code: appliedCoupon?.code || undefined,
           tax_amount: taxAmount > 0 ? taxAmount : undefined,
@@ -354,6 +356,7 @@ export default function CheckoutReviewPage() {
               ach_last_name: achLastName || undefined,
               ach_phone: achPhone || undefined,
               ach_authorized: achAuthorized,
+              ach_authorization_text: ACH_AUTHORIZATION_TEXT,
               ach_account_type: achAccountType || undefined,
             }
           : (paymentMethod === "net_30" || paymentMethod === "net_7")

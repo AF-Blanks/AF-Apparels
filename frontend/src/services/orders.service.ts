@@ -52,6 +52,8 @@ export interface ConfirmOrderPayload {
   ach_last_name?: string;
   ach_phone?: string;
   ach_authorized?: boolean;
+  /** The exact wording the customer agreed to, filed with the order. */
+  ach_authorization_text?: string;
 }
 
 export const ordersService = {

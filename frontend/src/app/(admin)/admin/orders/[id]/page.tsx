@@ -82,6 +82,10 @@ interface AdminOrder {
   qb_payment_id?: string | null;
   /** Where the bank debit has got to — money moves over days, not at once. */
   qb_echeck_status?: string | null;
+  /** Evidence the customer allowed the debit — produced if one is ever disputed. */
+  ach_authorized_at?: string | null;
+  ach_authorized_ip?: string | null;
+  ach_authorization_text?: string | null;
   subtotal: string;
   shipping_cost: string;
   tax_amount?: string;
@@ -2455,6 +2459,23 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                       </button>
                     )}
                   </div>
+                  {/* A bank can be told, up to two years on, that this debit was
+                      never allowed. This is the answer to that: what the customer
+                      read, when they agreed, and from where. */}
+                  {order.ach_authorized_at && (
+                    <details style={{ marginTop: "8px", fontSize: "11px", color: "#7A7880" }}>
+                      <summary style={{ cursor: "pointer", fontWeight: 600, color: "#059669" }}>
+                        Authorised {new Date(order.ach_authorized_at).toLocaleString()}
+                        {order.ach_authorized_ip ? ` · from ${order.ach_authorized_ip}` : ""}
+                      </summary>
+                      <p style={{ marginTop: "6px", lineHeight: 1.6, color: "#5A5A5A", fontStyle: "italic" }}>
+                        &ldquo;{order.ach_authorization_text}&rdquo;
+                      </p>
+                      <p style={{ marginTop: "6px", color: "#9A9A9A" }}>
+                        Keep this for two years — it is what answers a disputed debit.
+                      </p>
+                    </details>
+                  )}
                 </div>
               )}
               {/* Shown for every payment method. This row used to be hidden on ACH

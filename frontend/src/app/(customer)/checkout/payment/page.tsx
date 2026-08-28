@@ -8,6 +8,7 @@ import CouponField from "@/components/checkout/CouponField";
 import { useCheckoutStore } from "@/stores/checkout.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { apiClient } from "@/lib/api-client";
+import { ACH_AUTHORIZATION_TEXT } from "@/lib/ach-authorization";
 import { cartService } from "@/services/cart.service";
 import { formatCurrency } from "@/lib/utils";
 import type { Cart } from "@/types/order.types";
@@ -510,12 +511,10 @@ export default function CheckoutPaymentPage() {
                             onChange={e => { setAchForm(p => ({ ...p, authorized: e.target.checked })); setAchErrors(p => ({ ...p, authorized: undefined })); }}
                             style={{ marginTop: "2px", width: "16px", height: "16px", flexShrink: 0, accentColor: "#1C3557", cursor: "pointer" }}
                           />
+                          {/* Rendered from the same constant that is sent with the
+                              order, so what is filed is word for word what was read. */}
                           <span style={{ fontSize: "12px", color: "#4A4A4A", lineHeight: 1.6 }}>
-                            I authorise AF Apparels to debit the bank account above for the total
-                            of this order. This authorisation is for this order only. If the
-                            transfer is returned unpaid, I understand AF Apparels may charge a
-                            returned-item fee. To withdraw this authorisation, contact AF Apparels
-                            before the transfer is processed.
+                            {ACH_AUTHORIZATION_TEXT}
                           </span>
                         </label>
                         {achErrors.authorized && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "6px" }}>{achErrors.authorized}</p>}
