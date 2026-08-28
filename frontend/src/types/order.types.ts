@@ -18,6 +18,8 @@ export interface CartItem {
   moq: number;
   moq_satisfied: boolean;
   stock_quantity: number;
+  /** Sold past what the shelf holds — owed to the customer, not waiting to be picked. */
+  is_backordered?: boolean;
 }
 
 /** Cart validation result — matches backend CartValidation schema. */
@@ -29,6 +31,8 @@ export interface CartValidation {
   mov_current: string;
   estimated_shipping: string;
   has_shipping_tier: boolean;
+  /** Cart holds both in-stock and backordered lines — they cannot ship as one order. */
+  mixed_backorder?: boolean;
 }
 
 /** Cart response — matches backend CartResponse schema. */

@@ -202,6 +202,27 @@ export default function QuickOrderPage() {
   }
 
   // ── Add to cart ─────────────────────────────────────────────────────────
+  // What has been keyed in so far, split by whether the shelf can cover it. An
+  // order ships once, so a basket holding both kinds has to be placed as two —
+  // better said here, while the grid is still open, than at the checkout.
+  function enteredSplit(): { ready: number; waiting: number } {
+    let ready = 0, waiting = 0;
+    for (const row of rows) {
+      if (!row.productDetail) continue;
+      for (const color of Object.keys(row.quantities)) {
+        for (const size of getSizesForColor(row, color)) {
+          const qty = row.quantities[color]?.[size] ?? 0;
+          if (qty <= 0) continue;
+          const v = getVariantForColor(row, color, size);
+          if (!v) continue;
+          if (v.allow_backorder && (v.stock_quantity ?? 0) < qty) waiting += 1;
+          else ready += 1;
+        }
+      }
+    }
+    return { ready, waiting };
+  }
+
   async function handleAddToCart() {
     const activeRows = rows.filter((r) => r.productDetail && getRowTotals(r).units > 0);
     if (activeRows.length === 0) {
@@ -351,6 +372,14 @@ export default function QuickOrderPage() {
               Remove {checkedCount} selected
             </button>
           )}
+          {(() => {
+            const { ready, waiting } = enteredSplit();
+            return ready > 0 && waiting > 0 ? (
+              <div style={{ padding: "5px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 600, background: "rgba(180,83,9,.09)", border: "1px solid rgba(180,83,9,.28)", color: "#B45309" }}>
+                In-stock and backordered items can&rsquo;t ship together — order them separately
+              </div>
+            ) : null;
+          })()}
           {cartMsg && (
             <div style={{
               padding: "5px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 600,

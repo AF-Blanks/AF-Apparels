@@ -161,6 +161,7 @@ export default function CartPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
   const authIsLoading = useAuthStore((s) => s.isLoading);
   const [isGuest, setIsGuest] = useState(false);
+  const [guestBackordered, setGuestBackordered] = useState<Set<string>>(new Set());
 
   const [cart, setCart] = useState<Cart | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -223,6 +224,29 @@ export default function CartPage() {
       cartService.getCart().then(setCart).catch(console.error).finally(() => setIsLoading(false));
     }
   }, [authIsLoading, isAuthenticated]);
+
+  // A guest's basket lives in their browser, so nothing on it records whether a
+  // line is being sold short. Ask the server, which answers by exactly the rule
+  // the checkout will apply. A signed-in cart already carries the flag.
+  const guestBasketKey =
+    isGuest && cart
+      ? cart.items.map(i => `${i.variant_id}:${i.quantity}`).sort().join("|")
+      : "";
+
+  useEffect(() => {
+    if (!guestBasketKey) { setGuestBackordered(new Set()); return; }
+    let live = true;
+    apiClient
+      .post<{ backordered_variant_ids?: string[] }>("/api/v1/guest/stock-check", {
+        items: guestBasketKey.split("|").map(pair => {
+          const [variant_id, quantity] = pair.split(":");
+          return { variant_id, quantity: Number(quantity) };
+        }),
+      })
+      .then(r => { if (live) setGuestBackordered(new Set(r.backordered_variant_ids ?? [])); })
+      .catch(() => { /* checkout still enforces it; a failed hint must not block the cart */ });
+    return () => { live = false; };
+  }, [guestBasketKey]);
 
   async function handleRemoveProduct(group: ProductGroup) {
     setRemovingProductId(group.productId);
@@ -308,6 +332,10 @@ export default function CartPage() {
 
   function getCheckoutDisabledReason(): string | undefined {
     if (!cart || !cart.items || cart.items.length === 0) return "Cart is empty";
+    // An order ships once, so it cannot be part on the shelf and part owed. The
+    // checkout refuses this either way; saying it here means the customer finds
+    // out while they can still do something about it.
+    if (isMixed) return "In-stock and backordered items must be ordered separately";
     if (isGuest) return undefined;
     if (!cart.validation) return undefined;
     const v = cart.validation;
@@ -359,6 +387,11 @@ export default function CartPage() {
   }
 
   const isEmpty = !cart || !cart.items || cart.items.length === 0;
+  const isBackordered = (i: CartItem) =>
+    isGuest ? guestBackordered.has(i.variant_id) : Boolean(i.is_backordered);
+  const waitingItems = cart ? cart.items.filter(isBackordered) : [];
+  const readyItems = cart ? cart.items.filter(i => !isBackordered(i)) : [];
+  const isMixed = waitingItems.length > 0 && readyItems.length > 0;
   const disabledReason = getCheckoutDisabledReason();
   const isCheckoutEnabled = !disabledReason;
   const groups = cart ? groupByProduct(cart.items) : [];
@@ -387,6 +420,27 @@ export default function CartPage() {
 
             {/* ── LEFT: Cart table ── */}
             <div>
+              {/* An order ships as one parcel. Half of this cart is on the shelf
+                  and half is owed, so it has no single ship date — the customer
+                  is told which is which and asked to split it themselves rather
+                  than having the decision made for them. */}
+              {isMixed && (
+                <div style={{ background: "#FEF6E7", border: "1.5px solid #E4B85C", padding: "16px 18px", marginBottom: "16px" }}>
+                  <p style={{ fontSize: "14px", fontWeight: 600, color: "#7A4F0B", marginBottom: "6px" }}>
+                    These items can&rsquo;t ship in one order
+                  </p>
+                  <p style={{ fontSize: "13px", color: "#5C5443", lineHeight: 1.55, marginBottom: "12px" }}>
+                    Your cart has items that are in stock and items that are on backorder. Please place
+                    them as two separate orders — the in-stock items will then ship straight away, and
+                    the backordered ones follow when they arrive.
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "24px" }}>
+                    <BackorderGroup title="Ready to ship now" items={readyItems} accent="#1C3557" />
+                    <BackorderGroup title="On backorder" items={waitingItems} accent="#B45309" />
+                  </div>
+                </div>
+              )}
+
               {/* MOV warning */}
               {cart?.validation?.mov_violation && (
                 <div style={{ background: "rgba(232,36,42,.07)", border: "1.5px solid rgba(232,36,42,.25)", padding: "12px 16px", fontSize: "13px", color: "#E8242A", fontWeight: 600, marginBottom: "16px" }}>
@@ -438,6 +492,11 @@ export default function CartPage() {
                               {item.sku && (
                                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "11px", color: "#6B6B6B", marginTop: "3px" }}>
                                   {item.sku}
+                                </div>
+                              )}
+                              {isBackordered(item) && (
+                                <div style={{ display: "inline-block", marginTop: "5px", padding: "2px 7px", background: "#FEF3E2", border: "1px solid #E4B85C", fontSize: "10px", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, color: "#B45309" }}>
+                                  Backordered
                                 </div>
                               )}
                             </div>
@@ -539,6 +598,26 @@ export default function CartPage() {
 }
 
 // ── Order Summary sidebar component ──────────────────────────────────────────
+function BackorderGroup({ title, items, accent }: { title: string; items: CartItem[]; accent: string }) {
+  return (
+    <div style={{ minWidth: "180px" }}>
+      <p style={{ fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, color: accent, marginBottom: "5px" }}>
+        {title}
+      </p>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: "12.5px", color: "#3A3A3A", lineHeight: 1.65 }}>
+        {items.map(i => (
+          <li key={i.id}>
+            {i.product_name}
+            {(i.color || i.size) && (
+              <span style={{ color: "#6B6B6B" }}> — {[i.color, i.size].filter(Boolean).join(" / ")}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function OrderSummary({
   subtotal, appliedCoupon, onRemoveCoupon, isValid, disabledReason, isGuest, onCheckout,
 }: {

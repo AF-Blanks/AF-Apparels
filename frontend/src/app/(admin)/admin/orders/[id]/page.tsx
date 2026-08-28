@@ -15,6 +15,8 @@ interface OrderItem {
   quantity: number;
   unit_price: string;
   line_total: string;
+  /** Sold while the shelf was short — these goods are owed, not waiting to be picked. */
+  is_backordered?: boolean;
 }
 
 // Group order lines by product + colour into a compact size run so the same
@@ -29,12 +31,13 @@ function groupOrderItems(items: OrderItem[]) {
     key: string; product_name: string; product_code?: string | null; color: string | null;
     sizes: { id: string; size: string | null; quantity: number; line_total: number }[];
     totalQty: number; totalPrice: number; minPrice: number; maxPrice: number;
+    backordered: boolean;
   }>();
   for (const it of items ?? []) {
     const key = `${it.product_name}||${it.color ?? ""}`;
     let g = map.get(key);
     if (!g) {
-      g = { key, product_name: it.product_name, product_code: it.product_code, color: it.color, sizes: [], totalQty: 0, totalPrice: 0, minPrice: Infinity, maxPrice: 0 };
+      g = { key, product_name: it.product_name, product_code: it.product_code, color: it.color, sizes: [], totalQty: 0, totalPrice: 0, minPrice: Infinity, maxPrice: 0, backordered: false };
       map.set(key, g);
     }
     const up = Number(it.unit_price);
@@ -43,6 +46,7 @@ function groupOrderItems(items: OrderItem[]) {
     g.totalPrice += Number(it.line_total);
     g.minPrice = Math.min(g.minPrice, up);
     g.maxPrice = Math.max(g.maxPrice, up);
+    if (it.is_backordered) g.backordered = true;
   }
   const arr = Array.from(map.values());
   arr.forEach(g => g.sizes.sort((a, b) => rank(a.size) - rank(b.size)));
@@ -1909,7 +1913,16 @@ The existing label is NOT refunded — if it was a real one, request the refund 
               <tbody>
                 {groupOrderItems(order.items).map((g, i, arr) => (
                   <tr key={g.key} style={{ borderBottom: i < arr.length - 1 ? "1px solid #F4F3EF" : "none" }}>
-                    <td style={{ padding: "14px 12px", fontWeight: 700, fontSize: "14px", color: "#2A2830", verticalAlign: "top" as const }}>{g.product_name}</td>
+                    <td style={{ padding: "14px 12px", fontWeight: 700, fontSize: "14px", color: "#2A2830", verticalAlign: "top" as const }}>
+                      {g.product_name}
+                      {/* Nothing on the shelf stands behind this line — say so, so
+                          the warehouse doesn't go looking for it. */}
+                      {g.backordered && (
+                        <div style={{ display: "inline-block", marginLeft: "8px", padding: "1px 6px", background: "#FEF3E2", border: "1px solid #E4B85C", borderRadius: "3px", fontSize: "10px", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase" as const, color: "#B45309", verticalAlign: "middle" as const }}>
+                          Backordered
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: "14px 12px", fontSize: "12px", color: "#7A7880", fontFamily: "monospace", verticalAlign: "top" as const }}>{g.product_code ?? "—"}</td>
                     <td style={{ padding: "14px 12px", verticalAlign: "top" as const }}>
                       {g.color && <div style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830", marginBottom: "6px" }}>{g.color}</div>}
