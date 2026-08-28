@@ -201,7 +201,7 @@ export default function WholesaleRegisterPage() {
         ppai_number: form.ppai_number || undefined,
         asi_number: form.asi_number || undefined,
         secondary_business: form.secondary_business || undefined,
-        how_heard: form.how_heard || undefined,
+        how_heard: form.how_heard,
         num_employees: form.num_employees || undefined,
         num_sales_reps: form.num_sales_reps || undefined,
       });
@@ -406,8 +406,8 @@ export default function WholesaleRegisterPage() {
                 </div>
 
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <label htmlFor="how_heard" style={labelStyle}>How did you hear about us?</label>
-                  <select id="how_heard" name="how_heard" value={form.how_heard} onChange={handleChange} style={inputStyle}>
+                  <label htmlFor="how_heard" style={labelStyle}>How did you hear about us? {req}</label>
+                  <select id="how_heard" name="how_heard" required value={form.how_heard} onChange={handleChange} style={inputStyle}>
                     <option value="">Select…</option>
                     {HEAR_ABOUT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
