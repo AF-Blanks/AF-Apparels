@@ -70,6 +70,7 @@ export default function CheckoutReviewPage() {
     taxAmount: storedTaxAmount,
     paymentMethod,
     achBankName, achAccountHolder, achRoutingNumber, achAccountLast4, achAccountType,
+    achAccountNumber, achAccountOwnership, achFirstName, achLastName, achPhone, achAuthorized,
     shippingType,
     selectedRate,
     convenienceFee,
@@ -250,6 +251,15 @@ export default function CheckoutReviewPage() {
           ach_routing_number: paymentMethod === "ach" ? achRoutingNumber : undefined,
           ach_account_last4: paymentMethod === "ach" ? achAccountLast4 : undefined,
           ach_account_type: paymentMethod === "ach" ? achAccountType : undefined,
+          // Sent so the bank debit can be raised. Never stored here — the
+          // checkout store keeps it in memory only, and the server passes it
+          // straight to QuickBooks and keeps just the last four digits.
+          ach_account_number: paymentMethod === "ach" ? achAccountNumber : undefined,
+          ach_account_ownership: paymentMethod === "ach" ? achAccountOwnership : undefined,
+          ach_first_name: paymentMethod === "ach" ? achFirstName : undefined,
+          ach_last_name: paymentMethod === "ach" ? achLastName : undefined,
+          ach_phone: paymentMethod === "ach" ? achPhone : undefined,
+          ach_authorized: paymentMethod === "ach" ? achAuthorized : undefined,
           order_notes: orderNotes || undefined,
           discount_code: appliedCoupon?.code || undefined,
           tax_amount: taxAmount > 0 ? taxAmount : undefined,
@@ -336,6 +346,14 @@ export default function CheckoutReviewPage() {
               ach_account_holder: achAccountHolder || undefined,
               ach_routing_number: achRoutingNumber || undefined,
               ach_account_last4: achAccountLast4 || undefined,
+              // Only ever in flight: held in memory for this checkout, passed to
+              // QuickBooks to raise the debit, and never written down anywhere.
+              ach_account_number: achAccountNumber || undefined,
+              ach_account_ownership: achAccountOwnership || undefined,
+              ach_first_name: achFirstName || undefined,
+              ach_last_name: achLastName || undefined,
+              ach_phone: achPhone || undefined,
+              ach_authorized: achAuthorized,
               ach_account_type: achAccountType || undefined,
             }
           : (paymentMethod === "net_30" || paymentMethod === "net_7")

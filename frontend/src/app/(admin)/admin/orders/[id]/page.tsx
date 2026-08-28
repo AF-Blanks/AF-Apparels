@@ -80,6 +80,8 @@ interface AdminOrder {
   qb_invoice_id: string | null;
   /** An invoice in QuickBooks is not the same as the money being recorded against it. */
   qb_payment_id?: string | null;
+  /** Where the bank debit has got to — money moves over days, not at once. */
+  qb_echeck_status?: string | null;
   subtotal: string;
   shipping_cost: string;
   tax_amount?: string;
@@ -2426,6 +2428,26 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                     <span style={{ background: order.ach_verified ? "rgba(5,150,105,.12)" : "rgba(217,119,6,.12)", color: order.ach_verified ? "#059669" : "#D97706", padding: "3px 10px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
                       {order.ach_verified ? "Verified" : "Pending Verification"}
                     </span>
+                    {/* A bank debit is a request that clears over days and can
+                        still come back. Saying only "pending" would hide the
+                        difference between waiting and having been refused. */}
+                    {order.qb_echeck_status && !order.ach_verified && (
+                      <span style={{
+                        marginLeft: "8px", padding: "3px 10px", borderRadius: "10px",
+                        fontSize: "11px", fontWeight: 700,
+                        ...(["SUCCEEDED", "SETTLED", "CAPTURED", "PAID"].includes(order.qb_echeck_status)
+                          ? { background: "rgba(5,150,105,.12)", color: "#059669" }
+                          : ["FAILED", "DECLINED", "VOIDED", "RETURNED", "CANCELLED", "REJECTED", "FAILED_TO_RAISE"].includes(order.qb_echeck_status)
+                          ? { background: "rgba(220,38,38,.12)", color: "#dc2626" }
+                          : { background: "rgba(180,83,9,.12)", color: "#B45309" }),
+                      }}>
+                        {order.qb_echeck_status === "FAILED_TO_RAISE"
+                          ? "Transfer could not be started"
+                          : ["FAILED", "DECLINED", "VOIDED", "RETURNED", "CANCELLED", "REJECTED"].includes(order.qb_echeck_status)
+                          ? `Transfer returned (${order.qb_echeck_status.toLowerCase()})`
+                          : "Transfer in progress — 1-5 business days"}
+                      </span>
+                    )}
                     {!order.ach_verified && (
                       <button onClick={handleVerifyAch} disabled={isVerifyingAch}
                         style={{ background: "#059669", color: "#fff", border: "none", padding: "6px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", opacity: isVerifyingAch ? .6 : 1 }}>

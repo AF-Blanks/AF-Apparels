@@ -50,6 +50,18 @@ interface CheckoutState {
   achRoutingNumber: string;
   achAccountLast4: string;
   achAccountType: string;
+  achAccountOwnership: string;
+  achFirstName: string;
+  achLastName: string;
+  achPhone: string;
+  achAuthorized: boolean;
+  /**
+   * The full account number, needed to raise the debit and never stored: only
+   * shippingType and selectedRate are persisted, so this lives in memory for
+   * the length of the checkout and goes no further — the same treatment card
+   * details get before they are tokenised.
+   */
+  achAccountNumber: string;
 
   // Step 2 — payment (QB Payments)
   qbToken: string | null;
@@ -82,7 +94,19 @@ interface CheckoutState {
   setTaxInfo: (region: string | null, rate: number, amount?: number) => void;
   setConvenienceFee: (fee: number) => void;
   setPaymentMethod: (m: "card" | "ach" | "net_30" | "net_7") => void;
-  setAchInfo: (bankName: string, accountHolder: string, routingNumber: string, accountLast4: string, accountType: string) => void;
+  setAchInfo: (info: {
+    bankName: string;
+    accountHolder: string;
+    routingNumber: string;
+    accountNumber: string;
+    accountLast4: string;
+    accountType: string;
+    accountOwnership: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    authorized: boolean;
+  }) => void;
   setPoNumber: (po: string) => void;
   setOrderNotes: (notes: string) => void;
   setQbToken: (token: string | null) => void;
@@ -123,6 +147,12 @@ const initialState = {
   achRoutingNumber: "",
   achAccountLast4: "",
   achAccountType: "",
+  achAccountOwnership: "personal",
+  achFirstName: "",
+  achLastName: "",
+  achPhone: "",
+  achAuthorized: false,
+  achAccountNumber: "",
   poNumber: "",
   orderNotes: "",
   qbToken: null,
@@ -156,8 +186,20 @@ export const useCheckoutStore = create<CheckoutState>()(
       setTaxInfo: (region, rate, amount = 0) => set({ taxRegion: region, taxRate: rate, taxAmount: amount }),
       setConvenienceFee: (fee) => set({ convenienceFee: fee }),
       setPaymentMethod: (m) => set({ paymentMethod: m }),
-      setAchInfo: (bankName, accountHolder, routingNumber, accountLast4, accountType) =>
-        set({ achBankName: bankName, achAccountHolder: accountHolder, achRoutingNumber: routingNumber, achAccountLast4: accountLast4, achAccountType: accountType }),
+      setAchInfo: (info) =>
+        set({
+          achBankName: info.bankName,
+          achAccountHolder: info.accountHolder,
+          achRoutingNumber: info.routingNumber,
+          achAccountNumber: info.accountNumber,
+          achAccountLast4: info.accountLast4,
+          achAccountType: info.accountType,
+          achAccountOwnership: info.accountOwnership,
+          achFirstName: info.firstName,
+          achLastName: info.lastName,
+          achPhone: info.phone,
+          achAuthorized: info.authorized,
+        }),
       setPoNumber: (po) => set({ poNumber: po }),
       setOrderNotes: (notes) => set({ orderNotes: notes }),
       setQbToken: (token) => set({ qbToken: token, savedCardId: null }),

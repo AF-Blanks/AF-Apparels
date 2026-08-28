@@ -81,7 +81,17 @@ export default function CheckoutPaymentPage() {
 
   const [savedAch, setSavedAch] = useState<SavedAch | null>(null);
   const [useNewAch, setUseNewAch] = useState(false);
-  const [achForm, setAchForm] = useState({ bankName: "", accountHolder: "", routingNumber: "", accountNumber: "", accountType: "checking" as "checking" | "savings" });
+  const [achForm, setAchForm] = useState({
+    bankName: "",
+    firstName: "",
+    lastName: "",
+    phone: "",
+    routingNumber: "",
+    accountNumber: "",
+    accountType: "checking" as "checking" | "savings",
+    accountOwnership: "personal" as "personal" | "business",
+    authorized: false,
+  });
   const [achErrors, setAchErrors] = useState<Partial<Record<keyof typeof achForm, string>>>({});
 
   // Guard: must have shipping address
@@ -190,25 +200,67 @@ export default function CheckoutPaymentPage() {
   }
 
   function handleAchContinue() {
-    if (savedAch && !useNewAch) {
-      setPaymentMethod("ach");
-      setAchInfo(savedAch.bank_name, savedAch.account_holder, savedAch.routing_last4, savedAch.account_last4, savedAch.account_type as "checking" | "savings");
-      router.push("/checkout/review");
-      return;
-    }
     const errors: Partial<Record<keyof typeof achForm, string>> = {};
     if (!achForm.bankName.trim()) errors.bankName = "Required";
-    if (!achForm.accountHolder.trim()) errors.accountHolder = "Required";
+    if (!achForm.firstName.trim()) errors.firstName = "Required";
+    if (!achForm.lastName.trim()) errors.lastName = "Required";
     if (!/^\d{9}$/.test(achForm.routingNumber.trim())) errors.routingNumber = "Must be exactly 9 digits";
+    else if (!isValidRoutingNumber(achForm.routingNumber)) errors.routingNumber = "That routing number isn't valid — please check it";
     if (!achForm.accountNumber.trim()) errors.accountNumber = "Required";
     else if (achForm.accountNumber.replace(/\D/g, "").length < 4) errors.accountNumber = "Account number too short";
+    if (achForm.phone.replace(/\D/g, "").length < 10) errors.phone = "Enter a 10-digit phone number";
+    if (!achForm.authorized) errors.authorized = "Please authorise the transfer to continue";
     if (Object.keys(errors).length > 0) { setAchErrors(errors); return; }
     const last4 = achForm.accountNumber.replace(/\D/g, "").slice(-4);
     setConvenienceFee(0);
     setPaymentMethod("ach");
-    setAchInfo(achForm.bankName.trim(), achForm.accountHolder.trim(), achForm.routingNumber.trim(), last4, achForm.accountType);
+    setAchInfo({
+      bankName: achForm.bankName.trim(),
+      accountHolder: `${achForm.firstName.trim()} ${achForm.lastName.trim()}`.trim(),
+      routingNumber: achForm.routingNumber.trim(),
+      accountNumber: achForm.accountNumber.replace(/\D/g, ""),
+      accountLast4: last4,
+      accountType: achForm.accountType,
+      accountOwnership: achForm.accountOwnership,
+      firstName: achForm.firstName.trim(),
+      lastName: achForm.lastName.trim(),
+      phone: achForm.phone.replace(/\D/g, ""),
+      authorized: achForm.authorized,
+    });
     router.push("/checkout/review");
   }
+
+  /**
+   * Whether this could be a real US routing number.
+   *
+   * Every ABA number carries a check digit, so a mistyped one can be caught
+   * while the customer is still looking at the field — rather than by the bank,
+   * days later, on an order that has already shipped. The server checks the
+   * same thing; this only saves the round trip.
+   */
+  function isValidRoutingNumber(routing: string): boolean {
+    const d = routing.replace(/\D/g, "");
+    if (d.length !== 9) return false;
+    const w = [3, 7, 1, 3, 7, 1, 3, 7, 1];
+    return d.split("").reduce((sum, c, i) => sum + Number(c) * w[i]!, 0) % 10 === 0;
+  }
+
+  // What is on file is enough to recognise the account, so it saves retyping —
+  // but never enough to charge it.
+  useEffect(() => {
+    if (!savedAch) return;
+    setAchForm(p => {
+      if (p.bankName || p.firstName || p.lastName) return p;   // don't overwrite typing
+      const [first = "", ...rest] = (savedAch.account_holder || "").trim().split(/\s+/);
+      return {
+        ...p,
+        bankName: savedAch.bank_name || "",
+        firstName: first,
+        lastName: rest.join(" "),
+        accountType: (savedAch.account_type === "savings" ? "savings" : "checking"),
+      };
+    });
+  }, [savedAch]);
 
   function handleNet30Continue() {
     setConvenienceFee(0);
@@ -377,8 +429,17 @@ export default function CheckoutPaymentPage() {
                   </div>
                 )}
 
-                {/* Manual ACH form — shown when no saved ACH, or user chose "use different account" */}
-                {(isGuest || !savedAch || useNewAch) && (
+                {/* Always shown. Only the last four digits of a saved account are
+                    kept, so there is nothing on file to take money with — the
+                    numbers are asked for each time, which is also why they are
+                    never at rest anywhere. */}
+                {savedAch && !useNewAch && (
+                  <div style={{ marginBottom: "14px", padding: "10px 12px", background: "#F4F3EF", fontSize: "12px", color: "#6B6B6B", lineHeight: 1.6 }}>
+                    For your security we don&rsquo;t keep your full account number, so please enter
+                    it again below.
+                  </div>
+                )}
+                {true && (
                   <div style={{ borderTop: savedAch && useNewAch ? "1px solid #E2E2DE" : "none", paddingTop: savedAch && useNewAch ? "16px" : "0" }}>
                     <div className="checkout-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                       <div>
@@ -387,9 +448,19 @@ export default function CheckoutPaymentPage() {
                         {achErrors.bankName && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.bankName}</p>}
                       </div>
                       <div>
-                        <label style={lbl}>Account Holder Name <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.accountHolder ? "#E8242A" : "#E2E2DE" }} value={achForm.accountHolder} onChange={e => { setAchForm(p => ({ ...p, accountHolder: e.target.value })); setAchErrors(p => ({ ...p, accountHolder: undefined })); }} placeholder="Full name on account" />
-                        {achErrors.accountHolder && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.accountHolder}</p>}
+                        <label style={lbl}>First Name on Account <span style={{ color: "#E8242A" }}>*</span></label>
+                        <input style={{ ...inp, borderColor: achErrors.firstName ? "#E8242A" : "#E2E2DE" }} value={achForm.firstName} onChange={e => { setAchForm(p => ({ ...p, firstName: e.target.value })); setAchErrors(p => ({ ...p, firstName: undefined })); }} placeholder="First name" />
+                        {achErrors.firstName && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.firstName}</p>}
+                      </div>
+                      <div>
+                        <label style={lbl}>Last Name on Account <span style={{ color: "#E8242A" }}>*</span></label>
+                        <input style={{ ...inp, borderColor: achErrors.lastName ? "#E8242A" : "#E2E2DE" }} value={achForm.lastName} onChange={e => { setAchForm(p => ({ ...p, lastName: e.target.value })); setAchErrors(p => ({ ...p, lastName: undefined })); }} placeholder="Last name" />
+                        {achErrors.lastName && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.lastName}</p>}
+                      </div>
+                      <div>
+                        <label style={lbl}>Phone <span style={{ color: "#E8242A" }}>*</span></label>
+                        <input style={{ ...inp, borderColor: achErrors.phone ? "#E8242A" : "#E2E2DE" }} value={achForm.phone} onChange={e => { setAchForm(p => ({ ...p, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })); setAchErrors(p => ({ ...p, phone: undefined })); }} placeholder="10-digit phone number" maxLength={10} />
+                        {achErrors.phone && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.phone}</p>}
                       </div>
                       <div>
                         <label style={lbl}>Routing Number <span style={{ color: "#E8242A" }}>*</span></label>
@@ -414,12 +485,48 @@ export default function CheckoutPaymentPage() {
                           ))}
                         </div>
                       </div>
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <label style={lbl}>Account Ownership <span style={{ color: "#E8242A" }}>*</span></label>
+                        <div style={{ display: "flex", gap: "10px" }}>
+                          {(["personal", "business"] as const).map(t => (
+                            <label key={t} onClick={() => setAchForm(p => ({ ...p, accountOwnership: t }))} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", border: `1px solid ${achForm.accountOwnership === t ? "#1C3557" : "#E2E2DE"}`, cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "#1A1A1A", background: achForm.accountOwnership === t ? "rgba(28,53,87,.04)" : "#FAFAF8" }}>
+                              <div style={{ width: "16px", height: "16px", borderRadius: "50%", border: `2px solid ${achForm.accountOwnership === t ? "#1C3557" : "#E2E2DE"}`, background: achForm.accountOwnership === t ? "#1C3557" : "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {achForm.accountOwnership === t && <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#fff" }} />}
+                              </div>
+                              {t.charAt(0).toUpperCase() + t.slice(1)}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Money cannot be taken out of someone's account without
+                          their say-so, and the wording has to state the amount,
+                          who is taking it, and how to stop it. */}
+                      <div style={{ gridColumn: "1 / -1", marginTop: "4px", padding: "14px", background: "#FAFAF8", border: `1px solid ${achErrors.authorized ? "#E8242A" : "#E2E2DE"}` }}>
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={achForm.authorized}
+                            onChange={e => { setAchForm(p => ({ ...p, authorized: e.target.checked })); setAchErrors(p => ({ ...p, authorized: undefined })); }}
+                            style={{ marginTop: "2px", width: "16px", height: "16px", flexShrink: 0, accentColor: "#1C3557", cursor: "pointer" }}
+                          />
+                          <span style={{ fontSize: "12px", color: "#4A4A4A", lineHeight: 1.6 }}>
+                            I authorise AF Apparels to debit the bank account above for the total
+                            of this order. This authorisation is for this order only. If the
+                            transfer is returned unpaid, I understand AF Apparels may charge a
+                            returned-item fee. To withdraw this authorisation, contact AF Apparels
+                            before the transfer is processed.
+                          </span>
+                        </label>
+                        {achErrors.authorized && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "6px" }}>{achErrors.authorized}</p>}
+                      </div>
                     </div>
                   </div>
                 )}
 
                 <div style={{ marginTop: "14px", padding: "12px 14px", background: "#F4F3EF", fontSize: "12px", color: "#6B6B6B", lineHeight: 1.6 }}>
-                  ACH payments are verified manually. Your order will be processed within 1–2 business days after payment is confirmed.
+                  Bank transfers take 1–5 business days to clear. Your order is confirmed straight
+                  away and we&rsquo;ll email you if anything goes wrong with the transfer.
                 </div>
                 <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
                   <a

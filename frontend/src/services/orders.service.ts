@@ -45,6 +45,13 @@ export interface ConfirmOrderPayload {
   ach_routing_number?: string;
   ach_account_last4?: string;
   ach_account_type?: string;
+  /** In flight only — sent so the debit can be raised, never stored client-side. */
+  ach_account_number?: string;
+  ach_account_ownership?: string;
+  ach_first_name?: string;
+  ach_last_name?: string;
+  ach_phone?: string;
+  ach_authorized?: boolean;
 }
 
 export const ordersService = {
