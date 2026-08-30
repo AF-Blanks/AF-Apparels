@@ -90,7 +90,11 @@ export default function CheckoutPaymentPage() {
     routingNumber: "",
     accountNumber: "",
     accountType: "checking" as "checking" | "savings",
-    accountOwnership: "personal" as "personal" | "business",
+    // Wholesale customers bank as companies, and a personal/business mismatch
+    // is one of the things a bank refuses a debit over. Defaulting to "personal"
+    // on a trade site meant the common case was the one nobody had to click,
+    // and the wrong one. Guests are retail, so they keep the personal default.
+    accountOwnership: "business" as "personal" | "business",
     authorized: false,
   });
   const [achErrors, setAchErrors] = useState<Partial<Record<keyof typeof achForm, string>>>({});
@@ -248,6 +252,10 @@ export default function CheckoutPaymentPage() {
 
   // What is on file is enough to recognise the account, so it saves retyping —
   // but never enough to charge it.
+  useEffect(() => {
+    setAchForm(p => ({ ...p, accountOwnership: isGuest ? "personal" : "business" }));
+  }, [isGuest]);
+
   useEffect(() => {
     if (!savedAch) return;
     setAchForm(p => {
@@ -488,6 +496,10 @@ export default function CheckoutPaymentPage() {
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
                         <label style={lbl}>Account Ownership <span style={{ color: "#E8242A" }}>*</span></label>
+                        <p style={{ fontSize: "11px", color: "#6B6B6B", margin: "0 0 6px", lineHeight: 1.5 }}>
+                          Must match how your bank holds the account. A business account
+                          entered as personal is a common reason a transfer is declined.
+                        </p>
                         <div style={{ display: "flex", gap: "10px" }}>
                           {(["personal", "business"] as const).map(t => (
                             <label key={t} onClick={() => setAchForm(p => ({ ...p, accountOwnership: t }))} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", border: `1px solid ${achForm.accountOwnership === t ? "#1C3557" : "#E2E2DE"}`, cursor: "pointer", fontSize: "13px", fontWeight: 600, color: "#1A1A1A", background: achForm.accountOwnership === t ? "rgba(28,53,87,.04)" : "#FAFAF8" }}>
