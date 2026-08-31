@@ -361,6 +361,52 @@ export default function AdminProductEditPage() {
     }));
   }, [product?.variants]);
 
+  /**
+   * The sizes this product comes in, once each, in the order they are worn.
+   *
+   * A bulk edit is nearly always aimed at a size rather than at a colour — the
+   * 3XL costs more in every colour it is made in — but the only way to say so
+   * was to find 3XL inside each colour group and tick it there. These are the
+   * shortcut for that.
+   */
+  const allSizes = useMemo<string[]>(() => {
+    const seen = new Set<string>();
+    for (const v of product?.variants ?? []) {
+      if (v.status === "discontinued") continue;
+      const sz = (v.size ?? "").trim();
+      if (sz) seen.add(sz);
+    }
+    return [...seen].sort((a, b) => {
+      const ai = SIZE_ORDER.indexOf(a.toUpperCase());
+      const bi = SIZE_ORDER.indexOf(b.toUpperCase());
+      if (ai === -1 && bi === -1) return a.localeCompare(b);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+  }, [product?.variants]);
+
+  const variantIdsForSize = (size: string) =>
+    (product?.variants ?? [])
+      .filter(v => v.status !== "discontinued" && (v.size ?? "").trim() === size)
+      .map(v => v.id);
+
+  const sizeIsSelected = (size: string) => {
+    const ids = variantIdsForSize(size);
+    return ids.length > 0 && ids.every(id => selectedVariantIds.has(id));
+  };
+
+  /** Tick or untick this size across every colour at once. */
+  function toggleSize(size: string) {
+    const ids = variantIdsForSize(size);
+    const on = sizeIsSelected(size);
+    setSelectedVariantIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => (on ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  }
+
   function toggleGroup(color: string) {
     setExpandedGroups(prev =>
       prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]
@@ -904,14 +950,51 @@ export default function AdminProductEditPage() {
                 >
                   Apply to All
                 </button>
-                {selectedVariantIds.size > 0 && (
-                  <button
-                    onClick={applyToSelectedVariants}
-                    disabled={!bulkApply.price && !bulkApply.compare && !bulkApply.cost && !bulkApply.origin && !bulkApply.stock}
-                    style={{ padding: "5px 14px", background: "#059669", color: "#fff", border: "none", borderRadius: "5px", fontSize: "12px", fontWeight: 700, cursor: "pointer", opacity: (!bulkApply.price && !bulkApply.compare && !bulkApply.cost && !bulkApply.origin && !bulkApply.stock) ? 0.4 : 1 }}
-                  >
-                    Apply to Selected ({selectedVariantIds.size})
-                  </button>
+                {/* Shown whether or not anything is picked. Hidden until the
+                    first tick, it was a way of editing every size that nobody
+                    knew was there — and the only visible button changed all of
+                    them. */}
+                <button
+                  onClick={applyToSelectedVariants}
+                  disabled={selectedVariantIds.size === 0 || (!bulkApply.price && !bulkApply.compare && !bulkApply.cost && !bulkApply.origin && !bulkApply.stock)}
+                  title={selectedVariantIds.size === 0 ? "Pick the sizes below first" : undefined}
+                  style={{ padding: "5px 14px", background: "#059669", color: "#fff", border: "none", borderRadius: "5px", fontSize: "12px", fontWeight: 700, cursor: selectedVariantIds.size === 0 ? "not-allowed" : "pointer", opacity: (selectedVariantIds.size === 0 || (!bulkApply.price && !bulkApply.compare && !bulkApply.cost && !bulkApply.origin && !bulkApply.stock)) ? 0.4 : 1 }}
+                >
+                  Apply to Selected{selectedVariantIds.size > 0 ? ` (${selectedVariantIds.size})` : ""}
+                </button>
+
+                {/* One tap per size, applied across every colour it comes in. */}
+                {allSizes.length > 0 && (
+                  <div style={{ flexBasis: "100%", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginTop: "4px", paddingTop: "10px", borderTop: "1px solid #E2E0DA" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#7A7880", whiteSpace: "nowrap", marginRight: "2px" }}>SIZES:</span>
+                    {allSizes.map(sz => {
+                      const on = sizeIsSelected(sz);
+                      return (
+                        <button
+                          key={sz}
+                          type="button"
+                          onClick={() => toggleSize(sz)}
+                          style={{ padding: "4px 11px", background: on ? "#059669" : "#fff", color: on ? "#fff" : "#2A2830", border: `1px solid ${on ? "#059669" : "#E2E0DA"}`, borderRadius: "5px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+                        >
+                          {sz}
+                        </button>
+                      );
+                    })}
+                    {selectedVariantIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVariantIds(new Set())}
+                        style={{ padding: "4px 10px", background: "none", border: "none", color: "#7A7880", fontSize: "12px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <span style={{ fontSize: "11px", color: "#9A9A9A", marginLeft: "auto" }}>
+                      {selectedVariantIds.size > 0
+                        ? `${selectedVariantIds.size} variant${selectedVariantIds.size === 1 ? "" : "s"} picked — "Apply to Selected" changes only these`
+                        : "Pick sizes to change only those. \u201CApply to All\u201D changes every size in every colour."}
+                    </span>
+                  </div>
                 )}
               </div>
             )}
