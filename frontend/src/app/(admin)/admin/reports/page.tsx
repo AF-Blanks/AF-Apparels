@@ -5,6 +5,12 @@ import { TrendingUpIcon, PackageIcon, UsersIcon } from "@/components/ui/icons";
 
 const REPORT_CARDS = [
   {
+    href: "/admin/reports/commission",
+    title: "Commission",
+    description: "What tiered customers earned — 1000/1001 at 10%, everything else at 18%",
+    icon: <UsersIcon size={36} color="#B45309" />,
+  },
+  {
     href: "/admin/reports/profit-loss",
     title: "Profit & Loss",
     description: "Revenue less cost of goods — what was actually earned",

@@ -276,6 +276,7 @@ export function AdminSidebar() {
       {reportsOpen && (
         <div style={{ paddingLeft: "18px", marginTop: "3px", marginBottom: "3px" }}>
           <SubLink href="/admin/reports/profit-loss" label="Profit & Loss" />
+          <SubLink href="/admin/reports/commission" label="Commission" />
           <SubLink href="/admin/reports/sales" label="Sales Report" />
           <SubLink href="/admin/reports/variant-sales" label="Variant Sales" />
           <SubLink href="/admin/reports/stock-movement" label="Stock Movement" />
