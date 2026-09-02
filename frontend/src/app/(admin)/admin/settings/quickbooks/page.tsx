@@ -33,8 +33,18 @@ export default function QuickBooksPage() {
   async function load() {
     setLoading(true);
     try {
-      const r: any = await apiClient.get("/api/v1/admin/quickbooks/status");
-      setData(r.data);
+      // apiClient returns the parsed body itself. Reading .data off it gave
+      // undefined every time, which is why this page has never shown a sync
+      // status — and why the failure was invisible rather than loud.
+      const r = await apiClient.get<QBStatus>("/api/v1/admin/quickbooks/status");
+      setData(r);
+    } catch (e) {
+      setMessage({
+        type: "error",
+        text: `Couldn't read the QuickBooks status: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      });
     } finally {
       setLoading(false);
     }
