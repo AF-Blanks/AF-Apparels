@@ -87,7 +87,6 @@ export default function StockMovementPage() {
 
   const [month, setMonth] = useState("");
   const [search, setSearch] = useState("");
-  const [showList, setShowList] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
   // A whole month is the usual question; a range is for the times it is not —
   // a season, or the week either side of a delivery.
@@ -249,210 +248,135 @@ export default function StockMovementPage() {
           </div>
 
 
-          {/* One row per variant, everything spelled out. This is the view
-              people actually read: the grid packs three numbers into a box the
-              size of a thumbnail, which is fine for scanning sizes and no use
-              at all for answering "how many of this do we have". */}
-          <div className="bg-white border border-gray-200 rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <p className="font-semibold text-gray-900">
-                  {productGroups.length} product{productGroups.length === 1 ? "" : "s"} ·{" "}
-                  {n(data.rows.length)} variant{data.rows.length === 1 ? "" : "s"}
-                </p>
-                <span>
-                  <button
-                    onClick={() => setOpen(new Set(productGroups.map(g => g.product)))}
-                    className="text-xs text-blue-600 hover:underline mr-3"
-                  >
-                    Expand all
-                  </button>
-                  <button
-                    onClick={() => setOpen(new Set())}
-                    className="text-xs text-gray-500 hover:underline"
-                  >
-                    Collapse all
-                  </button>
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {data.period.label}. Opening + Received − Sold ± Adjustments = In hand.
-              </p>
+          {/* Sizes across, colours down, and under each colour the three
+              figures anyone actually comes here for. A column of 754 rows made
+              the reader hold a product in their head while scrolling; laid out
+              this way a whole product is one glance, and the three lines are
+              named rather than left as numbers stacked in a box. */}
+          {productGroups.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-lg py-10 text-center text-gray-400">
+              Nothing moved in {data.period.label} for this search.
             </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                  <tr>
-                    <th className="px-6 py-3 text-left">Product</th>
-                    <th className="px-3 py-3 text-left">Colour</th>
-                    <th className="px-3 py-3 text-left">Size</th>
-                    <th className="px-3 py-3 text-right">Opening</th>
-                    <th className="px-3 py-3 text-right">Received</th>
-                    <th className="px-3 py-3 text-right">Sold</th>
-                    <th className="px-3 py-3 text-right">Adjustments</th>
-                    <th className="px-3 py-3 text-right">In hand</th>
-                    <th className="px-3 py-3 text-left">Status</th>
-                    <th className="px-3 py-3 text-right">On order</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {productGroups.length === 0 && (
-                    <tr>
-                      <td colSpan={10} className="px-6 py-10 text-center text-gray-400">
-                        Nothing moved in {data.period.label} for this search.
-                      </td>
-                    </tr>
-                  )}
-                  {productGroups.map(g => {
-                    const isOpen = open.has(g.product);
-                    return (
-                      <Fragment key={g.product}>
-                        <tr
-                          className="bg-white hover:bg-gray-50 cursor-pointer"
-                          onClick={() => {
-                            const next = new Set(open);
-                            if (isOpen) next.delete(g.product);
-                            else next.add(g.product);
-                            setOpen(next);
-                          }}
-                        >
-                          <td className="px-6 py-3 font-semibold text-gray-900" colSpan={3}>
-                            <span className="inline-block w-4 text-gray-400">
-                              {isOpen ? "▾" : "▸"}
-                            </span>
-                            {g.product}
-                            <span className="ml-2 text-xs font-normal text-gray-400">
-                              {g.rows.length} variant{g.rows.length === 1 ? "" : "s"}
-                            </span>
-                          </td>
-                          <Num v={g.opening} />
-                          <Num v={g.received} tone="#15803d" plus />
-                          <Num v={g.sold} tone="#1d4ed8" />
-                          <Num v={g.other} tone="#7c3aed" signed />
-                          <Num v={g.closing} strong />
-                          <td className="px-3 py-3">
-                            {/* Which sizes need attention, counted — so a product
-                                worth opening says so while still closed. */}
-                            <div className="flex flex-wrap gap-1">
-                              {g.owed > 0 && (
-                                <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-800 whitespace-nowrap">
-                                  {g.owed} owed
-                                </span>
-                              )}
-                              {g.out_of_stock > 0 && (
-                                <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-800 whitespace-nowrap">
-                                  {g.out_of_stock} out of stock
-                                </span>
-                              )}
-                              {g.owed === 0 && g.out_of_stock === 0 && (
-                                <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-green-100 text-green-800 whitespace-nowrap">
-                                  All in stock
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <Num v={g.on_order} tone="#b45309" />
-                        </tr>
-
-                        {isOpen && g.rows.map(r => (
-                          <tr key={r.variant_id} className="bg-gray-50/60 hover:bg-gray-100/60 text-[13px]">
-                            <td className="px-6 py-2 pl-14 text-gray-400 font-mono text-[11px]">{r.sku}</td>
-                            <td className="px-3 py-2 text-gray-700">{r.color}</td>
-                            <td className="px-3 py-2 text-gray-700">{r.size}</td>
-                            <Num v={r.opening} />
-                            <Num v={r.received} tone="#15803d" plus />
-                            <Num v={r.sold} tone="#1d4ed8" />
-                            <Num v={r.other} tone="#7c3aed" signed />
-                            <Num v={r.closing} strong />
-                            <td className="px-3 py-2"><Status closing={r.closing} on_order={r.on_order} /></td>
-                            <Num v={r.on_order} tone="#b45309" />
-                          </tr>
-                        ))}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* The size grid, for scanning a whole product at once. */}
-          <details className="bg-white border border-gray-200 rounded-lg" open={showList}
-            onToggle={e => setShowList((e.currentTarget as HTMLDetailsElement).open)}>
-            <summary className="px-6 py-4 font-semibold text-gray-900 cursor-pointer">
-              Size grid — every colour against every size
-            </summary>
-            <div className="border-t border-gray-100 p-4 space-y-4">
-              {grids.length === 0 ? (
-                <div className="bg-white border border-gray-200 rounded-lg py-10 text-center text-gray-400">
-                  Nothing moved in {data.period.label} for this search.
-                </div>
-              ) : grids.map(g => (
-                <div key={g.product} className="bg-white border border-gray-200 rounded-lg">
-                  <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                    <span className="font-semibold text-gray-900">{g.product}</span>
-                    <span className="text-xs text-gray-500">
-                      {g.colours.length} colour{g.colours.length === 1 ? "" : "s"} · {g.sizes.length} size{g.sizes.length === 1 ? "" : "s"}
+          ) : productGroups.map(g => {
+            const isOpen = open.has(g.product);
+            const grid = grids.find(x => x.product === g.product);
+            return (
+              <div key={g.product} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => {
+                    const next = new Set(open);
+                    if (isOpen) next.delete(g.product); else next.add(g.product);
+                    setOpen(next);
+                  }}
+                  className="w-full px-6 py-4 flex items-center justify-between gap-4 text-left hover:bg-gray-50"
+                >
+                  <span className="font-semibold text-gray-900">
+                    <span className="inline-block w-4 text-gray-400">{isOpen ? "▾" : "▸"}</span>
+                    {g.product}
+                    <span className="ml-2 text-xs font-normal text-gray-400">
+                      {grid ? `${grid.colours.length} colour${grid.colours.length === 1 ? "" : "s"} × ${grid.sizes.length} size${grid.sizes.length === 1 ? "" : "s"}` : ""}
                     </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="text-sm" style={{ minWidth: `${190 + g.sizes.length * 88}px` }}>
+                  </span>
+                  <span className="flex items-center gap-4 text-sm whitespace-nowrap" style={{ fontVariantNumeric: "tabular-nums" }}>
+                    <span className="text-gray-500">sold <strong className="text-blue-700">{n(g.sold)}</strong></span>
+                    <span className="text-gray-500">in hand <strong className="text-gray-900">{n(g.closing)}</strong></span>
+                    {g.owed > 0 && (
+                      <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-800">
+                        {g.owed} owed
+                      </span>
+                    )}
+                    {g.out_of_stock > 0 && (
+                      <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-800">
+                        {g.out_of_stock} out of stock
+                      </span>
+                    )}
+                    {g.owed === 0 && g.out_of_stock === 0 && (
+                      <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-green-100 text-green-800">
+                        All in stock
+                      </span>
+                    )}
+                  </span>
+                </button>
+
+                {isOpen && grid && (
+                  <div className="overflow-x-auto border-t border-gray-100">
+                    <table className="text-sm" style={{ minWidth: `${230 + grid.sizes.length * 78}px` }}>
                       <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                         <tr>
-                          <th className="px-5 py-2.5 text-left sticky left-0 bg-gray-50">Colour</th>
-                          {g.sizes.map(sz => <th key={sz} className="px-3 py-2.5 text-center">{sz}</th>)}
+                          <th className="px-5 py-2.5 text-left sticky left-0 bg-gray-50 z-10">Colour</th>
+                          {grid.sizes.map(sz => (
+                            <th key={sz} className="px-3 py-2.5 text-center">{sz}</th>
+                          ))}
                           <th className="px-4 py-2.5 text-center border-l border-gray-200">Total</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {g.colours.map(c => {
-                          const cells = g.sizes.map(sz => g.cell.get(`${c}|${sz}`));
-                          const tot = {
-                            closing: cells.reduce((t, r) => t + (r?.closing ?? 0), 0),
-                            sold: cells.reduce((t, r) => t + (r?.sold ?? 0), 0),
-                            on_order: cells.reduce((t, r) => t + (r?.on_order ?? 0), 0),
-                          };
+                      <tbody>
+                        {grid.colours.map(c => {
+                          const cells = grid.sizes.map(sz => grid.cell.get(`${c}|${sz}`));
+                          const sum = (pick: (r: Row) => number) =>
+                            cells.reduce((t, r) => t + (r ? pick(r) : 0), 0);
+                          // The three figures, each on its own named line, so a
+                          // number is never left to be guessed at from position.
+                          const LINES: Array<{ key: string; label: string; pick: (r: Row) => number; cls: string }> = [
+                            { key: "hand", label: "In hand",  pick: r => r.closing,  cls: "font-bold text-gray-900" },
+                            { key: "sold", label: "Sold",     pick: r => r.sold,     cls: "text-blue-700 font-semibold" },
+                            { key: "ord",  label: "On order", pick: r => r.on_order, cls: "text-amber-700 font-semibold" },
+                          ];
                           return (
-                            <tr key={c} className="hover:bg-gray-50">
-                              <td className="px-5 py-2.5 font-medium text-gray-900 whitespace-nowrap sticky left-0 bg-white">{c}</td>
-                              {g.sizes.map((sz, i) => <Cell key={sz} r={cells[i]} />)}
-                              <td className="px-4 py-2.5 border-l border-gray-200 bg-gray-50/60"><Stack {...tot} strong /></td>
-                            </tr>
+                            <Fragment key={c}>
+                              {LINES.map((line, li) => (
+                                <tr
+                                  key={line.key}
+                                  className={li === 0 ? "border-t-2 border-gray-200" : "border-t border-gray-50"}
+                                >
+                                  <td className="px-5 py-1.5 sticky left-0 bg-white z-10 whitespace-nowrap">
+                                    {li === 0 ? (
+                                      <span className="font-medium text-gray-900">{c}</span>
+                                    ) : (
+                                      <span className="inline-block w-3" />
+                                    )}
+                                    <span className="ml-2 text-[11px] uppercase tracking-wide text-gray-400">
+                                      {line.label}
+                                    </span>
+                                  </td>
+                                  {cells.map((r, i) => {
+                                    const v = r ? line.pick(r) : null;
+                                    // A colour that was never made in a size is
+                                    // not a zero of anything.
+                                    if (!r) return <td key={i} className="px-3 py-1.5 text-center text-gray-200">·</td>;
+                                    const outOfStock = line.key === "hand" && v === 0;
+                                    const owed = line.key === "hand" && (v ?? 0) < 0;
+                                    return (
+                                      <td
+                                        key={i}
+                                        className={`px-3 py-1.5 text-center ${owed ? "text-red-700 font-bold" : outOfStock ? "text-red-500 font-semibold" : v === 0 ? "text-gray-300" : line.cls}`}
+                                        style={{ fontVariantNumeric: "tabular-nums" }}
+                                        title={owed ? `${Math.abs(v ?? 0)} already sold and owed` : outOfStock ? "Out of stock" : undefined}
+                                      >
+                                        {v === 0 && line.key !== "hand" ? "—" : n(v ?? 0)}
+                                      </td>
+                                    );
+                                  })}
+                                  <td
+                                    className={`px-4 py-1.5 text-center border-l border-gray-200 bg-gray-50/60 ${line.cls}`}
+                                    style={{ fontVariantNumeric: "tabular-nums" }}
+                                  >
+                                    {n(sum(line.pick))}
+                                  </td>
+                                </tr>
+                              ))}
+                            </Fragment>
                           );
                         })}
                       </tbody>
-                      <tfoot>
-                        <tr className="bg-gray-50 border-t-2 border-gray-200">
-                          <td className="px-5 py-2.5 font-bold text-gray-900 sticky left-0 bg-gray-50">Total</td>
-                          {g.sizes.map(sz => {
-                            const col = g.colours.map(c => g.cell.get(`${c}|${sz}`));
-                            return (
-                              <td key={sz} className="px-3 py-2.5">
-                                <Stack
-                                  closing={col.reduce((t, r) => t + (r?.closing ?? 0), 0)}
-                                  sold={col.reduce((t, r) => t + (r?.sold ?? 0), 0)}
-                                  on_order={col.reduce((t, r) => t + (r?.on_order ?? 0), 0)}
-                                  strong
-                                />
-                              </td>
-                            );
-                          })}
-                          <td className="px-4 py-2.5 border-l border-gray-200">
-                            <Stack
-                              closing={g.rows.reduce((t, r) => t + r.closing, 0)}
-                              sold={g.rows.reduce((t, r) => t + r.sold, 0)}
-                              on_order={g.rows.reduce((t, r) => t + r.on_order, 0)}
-                              strong
-                            />
-                          </td>
-                        </tr>
-                      </tfoot>
                     </table>
                   </div>
-                </div>
-              ))}
-            </div>
-          </details>
+                )}
+              </div>
+            );
+          })}
+
+
 
           <div className="bg-white border border-gray-200 rounded-lg p-5 text-sm text-gray-600 leading-relaxed">
             <p className="font-semibold text-gray-900 mb-2">Reading this</p>
@@ -471,9 +395,9 @@ export default function StockMovementPage() {
             <p>
               <strong>Owed</strong> means in hand has gone below zero: those pieces are
               already sold to somebody and the next delivery pays them off before
-              anything is sellable again. The <strong>size grid</strong> below packs the
-              same figures into one box per colour and size, for scanning a whole
-              product at once.
+              anything is sellable again. <strong>Opening</strong>,
+              <strong> Received</strong> and <strong> Adjustments</strong> are in the
+              summary above; the grids carry the three figures a buyer reaches for.
             </p>
           </div>
         </>
@@ -484,29 +408,7 @@ export default function StockMovementPage() {
   );
 }
 
-/** One colour × size box: stock in hand, with what sold and what is still coming. */
-function Cell({ r }: { r?: Row }) {
-  if (!r) return <td className="px-3 py-2.5 text-center text-gray-200">·</td>;
-  return <td className="px-3 py-2.5"><Stack closing={r.closing} sold={r.sold} on_order={r.on_order} /></td>;
-}
 
-function Stack({ closing, sold, on_order, strong }: {
-  closing: number; sold: number; on_order: number; strong?: boolean;
-}) {
-  const quiet = closing === 0 && sold === 0 && on_order === 0;
-  if (quiet) return <div className="text-center text-gray-200">—</div>;
-  return (
-    <div className="text-center leading-tight" style={{ fontVariantNumeric: "tabular-nums" }}>
-      <div className={`${strong ? "font-bold" : "font-semibold"} ${closing === 0 ? "text-gray-300" : "text-gray-900"}`}>
-        {n(closing)}
-      </div>
-      <div className="text-[11px] mt-0.5 whitespace-nowrap">
-        <span className={sold ? "text-blue-600" : "text-gray-300"} title="sold this month">↓{n(sold)}</span>
-        {on_order > 0 && <span className="text-amber-600 ml-1.5" title="on order, not yet arrived">+{n(on_order)}</span>}
-      </div>
-    </div>
-  );
-}
 
 function Op({ children }: { children: React.ReactNode }) {
   return <span className="text-lg text-gray-300 font-bold">{children}</span>;
@@ -527,44 +429,4 @@ function Fig({ label, value, tone, strong }: {
   );
 }
 
-/** Where this variant stands, in words.
- *
- * A number alone makes a reader do the work: 0 and 3 and 400 all look the same
- * at a glance down a column of figures. Negative in hand is not a shortage of
- * nothing — it is stock already promised to somebody, which is a different
- * problem and reads as one.
- */
-function Status({ closing, on_order }: { closing: number; on_order: number }) {
-  const pill = "inline-block rounded px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap";
 
-  if (closing < 0) {
-    return (
-      <span className={`${pill} bg-red-100 text-red-800`}>
-        Owed {n(Math.abs(closing))}
-      </span>
-    );
-  }
-  if (closing === 0) {
-    return (
-      <span className={`${pill} ${on_order > 0 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"}`}>
-        {on_order > 0 ? "Out of stock — on order" : "Out of stock"}
-      </span>
-    );
-  }
-  if (closing <= 10) {
-    return <span className={`${pill} bg-amber-100 text-amber-800`}>Low — {n(closing)} left</span>;
-  }
-  return <span className={`${pill} bg-green-100 text-green-800`}>In stock</span>;
-}
-
-function Num({ v, tone, strong, signed, plus }: {
-  v: number; tone?: string; strong?: boolean; signed?: boolean; plus?: boolean;
-}) {
-  const text = v === 0 ? "—" : signed ? `${v > 0 ? "+" : "−"}${n(Math.abs(v))}` : plus ? `+${n(v)}` : n(v);
-  return (
-    <td className={`px-3 py-3 text-right ${strong ? "font-bold" : "font-medium"}`}
-      style={{ fontVariantNumeric: "tabular-nums", color: v === 0 ? "#d1d5db" : strong ? "#111827" : tone ?? "#374151" }}>
-      {text}
-    </td>
-  );
-}
