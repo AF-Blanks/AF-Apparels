@@ -1196,14 +1196,21 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                   <input
                                     type="number"
                                     min={0}
-                                    max={variant.stock_quantity ?? undefined}
+                                    max={variant.allow_backorder ? undefined : (variant.stock_quantity ?? undefined)}
                                     value={qty === 0 ? "" : qty}
                                     disabled={blocked}
                                     onChange={e => {
                                       if (blocked) return;
                                       const raw = parseInt(e.target.value, 10) || 0;
-                                      const maxStock = variant.stock_quantity ?? 9999;
-                                      const val = Math.min(raw, maxStock);
+                                      // A size sold past zero has no ceiling here.
+                                      // Capping at what is on the shelf quietly
+                                      // rewrote 100 as 50 — and as 0 for anything
+                                      // already out — so a backorder could be
+                                      // offered, dated and priced, and then not
+                                      // typed into the box.
+                                      const val = variant.allow_backorder
+                                        ? raw
+                                        : Math.min(raw, variant.stock_quantity ?? 9999);
                                       setQuantities(prev => {
                                         if (val <= 0) { const next = { ...prev }; delete next[variant.id]; return next; }
                                         return { ...prev, [variant.id]: val };
