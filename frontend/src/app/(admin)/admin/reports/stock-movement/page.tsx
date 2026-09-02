@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { SIZE_ORDER } from "@/lib/utils";
 
@@ -37,6 +37,49 @@ const sizeRank = (s: string) => {
   return i === -1 ? 900 : i;
 };
 
+/** A product with its variants, and its own arithmetic.
+ *
+ * Seven hundred rows in one list is a list nobody reads, and the question is not
+ * asked that way round: it is asked of a product, and only then — of whichever
+ * one looks wrong — of its colours and sizes.
+ */
+interface Group {
+  product: string;
+  rows: Row[];
+  opening: number; received: number; sold: number;
+  other: number; closing: number; on_order: number;
+  out_of_stock: number; owed: number;
+}
+
+function groupRows(rows: Row[]): Group[] {
+  const map = new Map<string, Group>();
+  for (const r of rows) {
+    let g = map.get(r.product_name);
+    if (!g) {
+      g = {
+        product: r.product_name, rows: [],
+        opening: 0, received: 0, sold: 0, other: 0, closing: 0, on_order: 0,
+        out_of_stock: 0, owed: 0,
+      };
+      map.set(r.product_name, g);
+    }
+    g.rows.push(r);
+    g.opening += r.opening;
+    g.received += r.received;
+    g.sold += r.sold;
+    g.other += r.other;
+    g.closing += r.closing;
+    g.on_order += r.on_order;
+    if (r.closing < 0) g.owed += 1;
+    else if (r.closing === 0) g.out_of_stock += 1;
+  }
+  // Busiest first, as the flat list was — but by product, so what actually
+  // moved comes to the top rather than its loudest single size.
+  return [...map.values()].sort(
+    (a, b) => (b.sold + b.received) - (a.sold + a.received)
+  );
+}
+
 export default function StockMovementPage() {
   const [data, setData] = useState<Movement | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +88,7 @@ export default function StockMovementPage() {
   const [month, setMonth] = useState("");
   const [search, setSearch] = useState("");
   const [showList, setShowList] = useState(false);
+  const [open, setOpen] = useState<Set<string>>(new Set());
   // A whole month is the usual question; a range is for the times it is not —
   // a season, or the week either side of a delivery.
   const [mode, setMode] = useState<"month" | "range">("month");
@@ -78,6 +122,11 @@ export default function StockMovementPage() {
 
   // One grid per product: colours down, sizes across. A variant list runs to
   // hundreds of rows for a single tee; the same figures as a grid fit on a screen.
+  const productGroups = useMemo(
+    () => groupRows(data?.rows ?? []),
+    [data],
+  );
+
   const grids = useMemo(() => {
     const byProduct = new Map<string, Row[]>();
     for (const r of data?.rows ?? []) {
@@ -206,9 +255,26 @@ export default function StockMovementPage() {
               at all for answering "how many of this do we have". */}
           <div className="bg-white border border-gray-200 rounded-lg">
             <div className="px-6 py-4 border-b border-gray-100">
-              <p className="font-semibold text-gray-900">
-                Every variant — {n(data.rows.length)} row{data.rows.length === 1 ? "" : "s"}
-              </p>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <p className="font-semibold text-gray-900">
+                  {productGroups.length} product{productGroups.length === 1 ? "" : "s"} ·{" "}
+                  {n(data.rows.length)} variant{data.rows.length === 1 ? "" : "s"}
+                </p>
+                <span>
+                  <button
+                    onClick={() => setOpen(new Set(productGroups.map(g => g.product)))}
+                    className="text-xs text-blue-600 hover:underline mr-3"
+                  >
+                    Expand all
+                  </button>
+                  <button
+                    onClick={() => setOpen(new Set())}
+                    className="text-xs text-gray-500 hover:underline"
+                  >
+                    Collapse all
+                  </button>
+                </span>
+              </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {data.period.label}. Opening + Received − Sold ± Adjustments = In hand.
               </p>
@@ -230,23 +296,81 @@ export default function StockMovementPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {data.rows.map(r => (
-                    <tr key={r.variant_id} className="hover:bg-gray-50">
-                      <td className="px-6 py-3 text-gray-900">
-                        {r.product_name}
-                        <div className="text-[11px] text-gray-400 font-mono">{r.sku}</div>
+                  {productGroups.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-6 py-10 text-center text-gray-400">
+                        Nothing moved in {data.period.label} for this search.
                       </td>
-                      <td className="px-3 py-3 text-gray-700">{r.color}</td>
-                      <td className="px-3 py-3 text-gray-700">{r.size}</td>
-                      <Num v={r.opening} />
-                      <Num v={r.received} tone="#15803d" plus />
-                      <Num v={r.sold} tone="#1d4ed8" />
-                      <Num v={r.other} tone="#7c3aed" signed />
-                      <Num v={r.closing} strong />
-                      <td className="px-3 py-3"><Status closing={r.closing} on_order={r.on_order} /></td>
-                      <Num v={r.on_order} tone="#b45309" />
                     </tr>
-                  ))}
+                  )}
+                  {productGroups.map(g => {
+                    const isOpen = open.has(g.product);
+                    return (
+                      <Fragment key={g.product}>
+                        <tr
+                          className="bg-white hover:bg-gray-50 cursor-pointer"
+                          onClick={() => {
+                            const next = new Set(open);
+                            if (isOpen) next.delete(g.product);
+                            else next.add(g.product);
+                            setOpen(next);
+                          }}
+                        >
+                          <td className="px-6 py-3 font-semibold text-gray-900" colSpan={3}>
+                            <span className="inline-block w-4 text-gray-400">
+                              {isOpen ? "▾" : "▸"}
+                            </span>
+                            {g.product}
+                            <span className="ml-2 text-xs font-normal text-gray-400">
+                              {g.rows.length} variant{g.rows.length === 1 ? "" : "s"}
+                            </span>
+                          </td>
+                          <Num v={g.opening} />
+                          <Num v={g.received} tone="#15803d" plus />
+                          <Num v={g.sold} tone="#1d4ed8" />
+                          <Num v={g.other} tone="#7c3aed" signed />
+                          <Num v={g.closing} strong />
+                          <td className="px-3 py-3">
+                            {/* Which sizes need attention, counted — so a product
+                                worth opening says so while still closed. */}
+                            <div className="flex flex-wrap gap-1">
+                              {g.owed > 0 && (
+                                <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-800 whitespace-nowrap">
+                                  {g.owed} owed
+                                </span>
+                              )}
+                              {g.out_of_stock > 0 && (
+                                <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-800 whitespace-nowrap">
+                                  {g.out_of_stock} out of stock
+                                </span>
+                              )}
+                              {g.owed === 0 && g.out_of_stock === 0 && (
+                                <span className="rounded px-2 py-0.5 text-[11px] font-semibold bg-green-100 text-green-800 whitespace-nowrap">
+                                  All in stock
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <Num v={g.on_order} tone="#b45309" />
+                        </tr>
+
+                        {isOpen && g.rows.map(r => (
+                          <tr key={r.variant_id} className="bg-gray-50/60 hover:bg-gray-100/60 text-[13px]">
+                            <td className="px-6 py-2 pl-14 text-gray-400 font-mono text-[11px]">{r.sku}</td>
+                            <td className="px-3 py-2 text-gray-700">{r.color}</td>
+                            <td className="px-3 py-2 text-gray-700">{r.size}</td>
+                            <Num v={r.opening} />
+                            <Num v={r.received} tone="#15803d" plus />
+                            <Num v={r.sold} tone="#1d4ed8" />
+                            <Num v={r.other} tone="#7c3aed" signed />
+                            <Num v={r.closing} strong />
+                            <td className="px-3 py-2"><Status closing={r.closing} on_order={r.on_order} /></td>
+                            <Num v={r.on_order} tone="#b45309" />
+                          </tr>
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
