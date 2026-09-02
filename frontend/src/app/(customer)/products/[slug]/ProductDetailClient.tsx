@@ -441,17 +441,21 @@ function getStockLabel(
     incoming?: Incoming[] | null;
   } | null,
 ): string {
+  const arriving = v?.allow_backorder ? describeIncoming(v.incoming) : null;
+
   if (isOutOfStock(stock)) {
     if (v?.allow_backorder) {
-      const all = describeIncoming(v.incoming);
-      if (all) return `Expected: ${all}`;
+      if (arriving) return `Expected: ${arriving}`;
       const when = formatRestock(v.expected_restock_date);
       return when ? `Expected ${when}` : "Available on backorder";
     }
     return "Out of Stock";
   }
-  if ((stock as number) >= 9999) return "In Stock";
-  return `${stock} left`;
+  // In stock and more on the way. Somebody ordering beyond what is on the shelf
+  // needs the same date, and on a shelf that is holding it reads as reassurance
+  // rather than an apology — so it is worded as an addition, not a shortage.
+  const have = (stock as number) >= 9999 ? "In Stock" : `${stock} left`;
+  return arriving ? `${have} · ${arriving} more` : have;
 }
 
 function getStockColor(
@@ -1151,11 +1155,24 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                     ?? (formatRestock(variant.expected_restock_date)
                                         ? `Expected ${formatRestock(variant.expected_restock_date)}`
                                         : "On backorder"))
-                                : isOOS ? "Out of Stock" : stockNum >= 9999 ? "In Stock" : `${remaining.toLocaleString()} in stock`;
+                                : isOOS ? "Out of Stock"
+                                : stockNum >= 9999 ? "In Stock"
+                                : `${remaining.toLocaleString()} in stock`;
+                              // What is still on its way, shown under the count
+                              // for sizes that have stock — the shopper buying
+                              // more than the shelf holds needs it just as much.
+                              const alsoComing = variant.allow_backorder && !onBackorder
+                                ? describeIncoming(variant.incoming as Incoming[] | undefined)
+                                : null;
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
                                 <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked ? "#fafafa" : "transparent" }}>
                                   <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
+                                  {alsoComing && (
+                                    <span style={{ display: "block", fontSize: "10px", color: "#D97706", fontWeight: 600, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>
+                                      +{alsoComing} more
+                                    </span>
+                                  )}
                                   <span style={{ display: "block", fontSize: "12px", color: blocked ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
                                   <input
                                     type="number"
