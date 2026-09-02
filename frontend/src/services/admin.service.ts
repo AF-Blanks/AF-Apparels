@@ -508,6 +508,13 @@ export const adminService = {
     );
   },
 
+  async exportCommissionCsv(from: string, to: string) {
+    return downloadCsv(
+      `/api/v1/admin/reports/commission/export-csv?date_from=${from}&date_to=${to}`,
+      `commission-${from}-to-${to}.csv`
+    );
+  },
+
   async exportCustomersCsv(period: string) {
     return downloadCsv(
       `/api/v1/admin/reports/customers/export-csv?period=${period}`,

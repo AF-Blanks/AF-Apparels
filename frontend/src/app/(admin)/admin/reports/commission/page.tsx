@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
+import { adminService } from "@/services/admin.service";
 
 interface CommissionOrder {
   order_id: string;
@@ -13,6 +14,8 @@ interface CommissionOrder {
   other_base: number;
   other_commission: number;
   total_commission: number;
+  payment_status?: string;
+  paid?: boolean;
 }
 
 interface CommissionCustomer {
@@ -25,6 +28,7 @@ interface CommissionCustomer {
   other_base: number;
   other_commission: number;
   total_commission: number;
+  unpaid_commission?: number;
   orders: CommissionOrder[];
 }
 
@@ -43,8 +47,10 @@ interface CommissionReport {
     other_base: number;
     other_commission: number;
     total_commission: number;
+    unpaid_commission?: number;
   };
   customers: CommissionCustomer[];
+  warning?: string;
 }
 
 const money = (n: number) =>
@@ -76,6 +82,18 @@ export default function CommissionReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await adminService.exportCommissionCsv(from, to);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't export the report.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const load = useCallback((f: string, t: string) => {
     setLoading(true);
@@ -94,12 +112,27 @@ export default function CommissionReportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Commission</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          What tiered customers have earned on what they bought.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Commission</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            What tiered customers have earned on what they bought.
+          </p>
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting || !data?.customers.length}
+          className="shrink-0 border border-gray-300 rounded-md px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+        >
+          {exporting ? "Preparing…" : "Export CSV"}
+        </button>
       </div>
+
+      {data?.warning && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg px-5 py-4 text-sm text-amber-900">
+          {data.warning}
+        </div>
+      )}
 
       {/* The arrangement itself, stated on the page — a total is only checkable
           against the rule it came from. */}
@@ -110,8 +143,9 @@ export default function CommissionReportPage() {
           <strong>{r.special_percent}%</strong> on products{" "}
           <strong>{r.special_codes.join(" and ")}</strong>, and{" "}
           <strong>{r.default_percent}%</strong> on everything else. Worked out on the
-          goods only — shipping, tax and fees earn nothing — and counting settled
-          orders alone.
+          goods only — shipping, tax and fees earn nothing. Orders still on terms
+          are counted and marked, so a total can be read as earned or as not yet
+          collected.
         </div>
       )}
 
@@ -240,6 +274,13 @@ function CustomerRows({ c, open, onToggle }: {
           <td className="px-6 py-2 pl-12 text-gray-700">
             {o.order_number}
             <span className="text-gray-400"> · {shortDate(o.date)}</span>
+            {/* An order still on terms earns the same, but the money has not
+                arrived — worth seeing beside the figure, not buried in a total. */}
+            {o.paid === false && (
+              <span className="ml-2 rounded px-1.5 py-0.5 text-[11px] font-semibold bg-amber-100 text-amber-800">
+                not paid
+              </span>
+            )}
           </td>
           <td className="px-4 py-2 text-gray-400">{o.units} pcs</td>
           <td className="px-4 py-2"></td>
