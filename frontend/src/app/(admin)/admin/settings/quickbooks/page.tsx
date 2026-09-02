@@ -12,6 +12,14 @@ interface FailedSync {
   updated_at: string | null;
 }
 
+interface QBItem {
+  id: string;
+  name: string | null;
+  type: string | null;
+  active: boolean;
+  account: string | null;
+}
+
 interface QBStatus {
   last_sync_at: string | null;
   synced_today: number;
@@ -28,6 +36,8 @@ export default function QuickBooksPage() {
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [purging, setPurging] = useState(false);
+  const [items, setItems] = useState<QBItem[] | null>(null);
+  const [loadingItems, setLoadingItems] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
   async function load() {
@@ -47,6 +57,32 @@ export default function QuickBooksPage() {
       });
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Fetch the items in the connected company.
+   *
+   * On demand rather than on page load: it is a live call to QuickBooks, and
+   * this page is opened for plenty of reasons that have nothing to do with it.
+   */
+  async function loadItems() {
+    setLoadingItems(true);
+    setMessage(null);
+    try {
+      const r = await apiClient.get<{ items: QBItem[] }>(
+        "/api/v1/admin/quickbooks/items"
+      );
+      setItems(r.items ?? []);
+    } catch (e) {
+      setMessage({
+        type: "error",
+        text: `Couldn't read the item list: ${
+          e instanceof Error ? e.message : "unknown error"
+        }`,
+      });
+    } finally {
+      setLoadingItems(false);
     }
   }
 
@@ -203,6 +239,67 @@ export default function QuickBooksPage() {
           )}
         </div>
       )}
+
+      {/* The four item ids an invoice is built from. They belong to one company
+          and have to be looked up again after moving, so make looking them up
+          a button rather than a hunt through QuickBooks for four URLs. */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-gray-900">Item IDs for invoices</p>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Merchandise, Shipping, Sales Tax Collected and the Convenience Fee.
+              These go in Railway as QB_MERCHANDISE_ITEM_ID, QB_SHIPPING_ITEM_ID,
+              QB_TAX_ITEM_ID and QB_CONVENIENCE_FEE_ITEM_ID.
+            </p>
+          </div>
+          <button
+            onClick={loadItems}
+            disabled={loadingItems}
+            className="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+          >
+            {loadingItems ? "Reading…" : "Show items"}
+          </button>
+        </div>
+
+        {items && (
+          <div className="mt-4 overflow-x-auto">
+            {items.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                This QuickBooks company has no items yet.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                    <th className="py-2 pr-4 font-semibold">ID</th>
+                    <th className="py-2 pr-4 font-semibold">Name</th>
+                    <th className="py-2 pr-4 font-semibold">Type</th>
+                    <th className="py-2 font-semibold">Account</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it) => (
+                    <tr key={it.id} className="border-b border-gray-100">
+                      <td className="py-2 pr-4 font-mono font-semibold text-gray-900">
+                        {it.id}
+                      </td>
+                      <td className="py-2 pr-4 text-gray-900">
+                        {it.name}
+                        {!it.active && (
+                          <span className="ml-2 text-xs text-gray-400">inactive</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 text-gray-500">{it.type}</td>
+                      <td className="py-2 text-gray-500">{it.account}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Instructions box for when QB is rate-limited */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
