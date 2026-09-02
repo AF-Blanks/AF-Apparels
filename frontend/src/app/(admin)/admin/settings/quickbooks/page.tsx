@@ -76,6 +76,38 @@ export default function QuickBooksPage() {
     }
   }
 
+  const [adopting, setAdopting] = useState(false);
+
+  /**
+   * Accept the company we are now connected to, and forget the previous one's
+   * record numbers.
+   *
+   * A customer id means something only inside the company it was created in.
+   * Syncing refuses to run while ours belong to a different one, and this is
+   * the deliberate act that resolves it — so it asks first, in plain words.
+   */
+  async function handleAdopt() {
+    const warning = [
+      "Switch this system over to the QuickBooks company you are now connected to?",
+      "",
+      "Every customer's QuickBooks reference will be cleared, and customers will be created fresh in the new company as orders come in.",
+      "",
+      "Invoices and payments already raised are left exactly as they are.",
+      "",
+      "Only do this after connecting to the company you want.",
+    ].join("\n");
+    if (!confirm(warning)) return;
+    setAdopting(true); setMessage(null);
+    try {
+      const d = await apiClient.post<{ message: string }>(
+        "/api/v1/admin/quickbooks/adopt-company", { confirm: true });
+      setMessage({ type: "success", text: d.message });
+      load();
+    } catch (err: unknown) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Couldn't switch company." });
+    } finally { setAdopting(false); }
+  }
+
   function handleConnect() {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/quickbooks/connect`;
   }
@@ -103,6 +135,14 @@ export default function QuickBooksPage() {
             {purging ? "Purging..." : "Purge Queue"}
           </button>
           <button
+            onClick={handleAdopt}
+            disabled={adopting}
+            title="Use after connecting to a different QuickBooks company"
+            className="px-4 py-2 border border-red-300 rounded-md text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 disabled:opacity-50"
+          >
+            {adopting ? "Switching…" : "Switch to Connected Company"}
+          </button>
+          <button
             onClick={handleConnect}
             className="px-4 py-2 bg-[#1B3A5C] text-white rounded-md text-sm font-medium hover:bg-[#162f4a]"
           >
@@ -118,6 +158,7 @@ export default function QuickBooksPage() {
           <li>Create a new Intuit app at developer.intuit.com</li>
           <li>Update <code className="bg-amber-100 px-1 rounded">QB_CLIENT_ID</code> and <code className="bg-amber-100 px-1 rounded">QB_CLIENT_SECRET</code> in Railway env vars and redeploy</li>
           <li>Click <strong>Purge Queue</strong> — clears all backed-up retry tasks</li>
+          <li>After connecting to a <em>different company</em>, click <strong>Switch to Connected Company</strong> — until then syncing stays paused on purpose, because the customer references we hold belong to the previous company</li>
           <li>Click <strong>Connect QuickBooks</strong> — starts OAuth with the new app</li>
         </ol>
       </div>
