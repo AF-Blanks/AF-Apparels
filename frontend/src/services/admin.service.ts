@@ -554,15 +554,19 @@ export const adminService = {
     return apiClient.get<{ count: number }>("/api/v1/admin/marketing/recipients-count");
   },
 
-  async sendMarketingCampaign(subject: string, body_html: string) {
+  async sendMarketingCampaign(
+    subject: string,
+    body_html: string,
+    attachments: Array<{ url: string; filename: string }> = []
+  ) {
     return apiClient.post<{ campaign_id: string; recipient_count: number }>(
       "/api/v1/admin/marketing/send",
-      { subject, body_html }
+      { subject, body_html, attachments }
     );
   },
 
   async listMarketingCampaigns() {
-    return apiClient.get<Array<{ id: string; subject: string; recipient_count: number; sent_at: string | null }>>(
+    return apiClient.get<Array<{ id: string; subject: string; recipient_count: number; sent_at: string | null; attachments: Array<{ url: string; filename: string }> }>>(
       "/api/v1/admin/marketing/campaigns"
     );
   },

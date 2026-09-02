@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { adminService } from "@/services/admin.service";
+import { apiClient } from "@/lib/api-client";
 
 const RichTextEditor = dynamic(
   () => import("@/components/admin/RichTextEditor").then(m => m.RichTextEditor),
@@ -34,6 +35,24 @@ interface Campaign {
   subject: string;
   recipient_count: number;
   sent_at: string | null;
+  attachments?: Array<{ url: string; filename: string }>;
+}
+
+/** A file already uploaded and waiting to go out with the next send. */
+interface Attached {
+  url: string;
+  filename: string;
+  size: number;
+}
+
+/** Resend refuses mail over ~40MB; mailboxes start refusing well before that. */
+const MAX_TOTAL_BYTES = 15 * 1024 * 1024;
+const MAX_FILES = 5;
+
+function readableSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export default function MarketingPage() {
@@ -45,6 +64,8 @@ export default function MarketingPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [files, setFiles] = useState<Attached[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     adminService.getMarketingRecipientsCount().then(r => setRecipientCount(r.count)).catch(() => {});
@@ -55,11 +76,54 @@ export default function MarketingPage() {
     adminService.listMarketingCampaigns().then(setCampaigns).catch(() => {});
   }
 
+  async function handleAttach(picked: FileList | null) {
+    if (!picked?.length) return;
+    const chosen = Array.from(picked);
+
+    if (files.length + chosen.length > MAX_FILES) {
+      setError(`Up to ${MAX_FILES} attachments per email.`);
+      return;
+    }
+    const total =
+      files.reduce((n, f) => n + f.size, 0) + chosen.reduce((n, f) => n + f.size, 0);
+    if (total > MAX_TOTAL_BYTES) {
+      setError(
+        `Attachments come to ${readableSize(total)}. Keep the total under ` +
+          `${readableSize(MAX_TOTAL_BYTES)} — larger mail gets refused or filtered ` +
+          `by many mailboxes. For something big, link to it in the message instead.`
+      );
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    try {
+      const added: Attached[] = [];
+      for (const file of chosen) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await apiClient.postForm<{ url: string }>("/api/v1/upload", fd);
+        added.push({ url: res.url, filename: file.name, size: file.size });
+      }
+      setFiles(prev => [...prev, ...added]);
+    } catch (e) {
+      setError(
+        e instanceof Error ? `Couldn't upload: ${e.message}` : "Couldn't upload the file."
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleSend() {
     setSending(true);
     setError(null);
     try {
-      const result = await adminService.sendMarketingCampaign(subject.trim(), body);
+      const result = await adminService.sendMarketingCampaign(
+        subject.trim(),
+        body,
+        files.map(f => ({ url: f.url, filename: f.filename }))
+      );
       setSuccess({ recipient_count: result.recipient_count });
       setSubject("");
       setBody("");
@@ -120,6 +184,69 @@ export default function MarketingPage() {
           />
         </div>
 
+        <div style={{ marginTop: "18px" }}>
+          <label style={labelStyle}>
+            Attachments
+            <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#7A7880", marginLeft: "8px" }}>
+              PDF or image — a price list, a lookbook, a flyer
+            </span>
+          </label>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            <label
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "8px",
+                padding: "9px 16px", border: "1px solid #D9D7D0", borderRadius: "8px",
+                background: "#fff", fontSize: "13px", fontWeight: 600,
+                cursor: uploading || files.length >= MAX_FILES ? "not-allowed" : "pointer",
+                opacity: uploading || files.length >= MAX_FILES ? 0.5 : 1,
+              }}
+            >
+              {uploading ? "Uploading…" : "Add file"}
+              <input
+                type="file"
+                multiple
+                accept="application/pdf,image/*"
+                disabled={uploading || files.length >= MAX_FILES}
+                onChange={e => {
+                  handleAttach(e.target.files);
+                  e.target.value = "";
+                }}
+                style={{ display: "none" }}
+              />
+            </label>
+            <span style={{ fontSize: "12px", color: "#9A9890" }}>
+              up to {MAX_FILES} files, {readableSize(MAX_TOTAL_BYTES)} in total
+            </span>
+          </div>
+
+          {files.length > 0 && (
+            <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+              {files.map((f, i) => (
+                <li
+                  key={`${f.url}-${i}`}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: "12px", padding: "9px 12px", border: "1px solid #EDEBE4",
+                    borderRadius: "8px", background: "#FBFAF7", fontSize: "13px",
+                  }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {f.filename}
+                    <span style={{ color: "#9A9890", marginLeft: "8px" }}>{readableSize(f.size)}</span>
+                  </span>
+                  <button
+                    onClick={() => setFiles(prev => prev.filter((_, n) => n !== i))}
+                    style={{ border: "none", background: "none", color: "#E8242A", fontSize: "13px", fontWeight: 600, cursor: "pointer", padding: 0 }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #E2E0DA" }}>
           <span style={{ fontSize: "13px", color: "#7A7880" }}>
             {recipientCount === null ? "Loading recipient count…" : `Will send to ${recipientCount} active customer${recipientCount !== 1 ? "s" : ""}`}
@@ -174,7 +301,23 @@ export default function MarketingPage() {
             <tbody>
               {campaigns.map(c => (
                 <tr key={c.id} style={{ borderBottom: "1px solid #F4F3EF" }}>
-                  <td style={{ padding: "10px 12px", fontWeight: 600 }}>{c.subject}</td>
+                  <td style={{ padding: "10px 12px", fontWeight: 600 }}>
+                    {c.subject}
+                    {/* What went out matters as much as what it said — "did they
+                        get the price list?" is the question people come here with. */}
+                    {!!c.attachments?.length && (
+                      <div style={{ marginTop: "4px", fontWeight: 400, fontSize: "12px", color: "#7A7880" }}>
+                        {c.attachments.map((a, i) => (
+                          <span key={`${a.url}-${i}`}>
+                            {i > 0 && ", "}
+                            <a href={a.url} target="_blank" rel="noopener noreferrer" style={{ color: "#1A5CFF" }}>
+                              {a.filename}
+                            </a>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: "10px 12px" }}>{c.recipient_count}</td>
                   <td style={{ padding: "10px 12px", color: "#7A7880" }}>{c.sent_at ? new Date(c.sent_at).toLocaleString() : "—"}</td>
                 </tr>
