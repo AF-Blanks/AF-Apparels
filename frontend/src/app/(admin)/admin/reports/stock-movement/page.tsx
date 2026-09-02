@@ -199,82 +199,21 @@ export default function StockMovementPage() {
             </div>
           </div>
 
-          {grids.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-lg py-10 text-center text-gray-400">
-              Nothing moved in {data.period.label} for this search.
-            </div>
-          ) : grids.map(g => (
-            <div key={g.product} className="bg-white border border-gray-200 rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-                <span className="font-semibold text-gray-900">{g.product}</span>
-                <span className="text-xs text-gray-500">
-                  {g.colours.length} colour{g.colours.length === 1 ? "" : "s"} · {g.sizes.length} size{g.sizes.length === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="text-sm" style={{ minWidth: `${190 + g.sizes.length * 88}px` }}>
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                    <tr>
-                      <th className="px-5 py-2.5 text-left sticky left-0 bg-gray-50">Colour</th>
-                      {g.sizes.map(sz => <th key={sz} className="px-3 py-2.5 text-center">{sz}</th>)}
-                      <th className="px-4 py-2.5 text-center border-l border-gray-200">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {g.colours.map(c => {
-                      const cells = g.sizes.map(sz => g.cell.get(`${c}|${sz}`));
-                      const tot = {
-                        closing: cells.reduce((t, r) => t + (r?.closing ?? 0), 0),
-                        sold: cells.reduce((t, r) => t + (r?.sold ?? 0), 0),
-                        on_order: cells.reduce((t, r) => t + (r?.on_order ?? 0), 0),
-                      };
-                      return (
-                        <tr key={c} className="hover:bg-gray-50">
-                          <td className="px-5 py-2.5 font-medium text-gray-900 whitespace-nowrap sticky left-0 bg-white">{c}</td>
-                          {g.sizes.map((sz, i) => <Cell key={sz} r={cells[i]} />)}
-                          <td className="px-4 py-2.5 border-l border-gray-200 bg-gray-50/60"><Stack {...tot} strong /></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gray-50 border-t-2 border-gray-200">
-                      <td className="px-5 py-2.5 font-bold text-gray-900 sticky left-0 bg-gray-50">Total</td>
-                      {g.sizes.map(sz => {
-                        const col = g.colours.map(c => g.cell.get(`${c}|${sz}`));
-                        return (
-                          <td key={sz} className="px-3 py-2.5">
-                            <Stack
-                              closing={col.reduce((t, r) => t + (r?.closing ?? 0), 0)}
-                              sold={col.reduce((t, r) => t + (r?.sold ?? 0), 0)}
-                              on_order={col.reduce((t, r) => t + (r?.on_order ?? 0), 0)}
-                              strong
-                            />
-                          </td>
-                        );
-                      })}
-                      <td className="px-4 py-2.5 border-l border-gray-200">
-                        <Stack
-                          closing={g.rows.reduce((t, r) => t + r.closing, 0)}
-                          sold={g.rows.reduce((t, r) => t + r.sold, 0)}
-                          on_order={g.rows.reduce((t, r) => t + r.on_order, 0)}
-                          strong
-                        />
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          ))}
 
-          {/* Every figure for one variant at a time, when the grid isn't enough */}
-          <details className="bg-white border border-gray-200 rounded-lg" open={showList}
-            onToggle={e => setShowList((e.currentTarget as HTMLDetailsElement).open)}>
-            <summary className="px-6 py-4 font-semibold text-gray-900 cursor-pointer">
-              Full detail — every figure, one row per variant ({n(data.rows.length)})
-            </summary>
-            <div className="overflow-x-auto border-t border-gray-100">
+          {/* One row per variant, everything spelled out. This is the view
+              people actually read: the grid packs three numbers into a box the
+              size of a thumbnail, which is fine for scanning sizes and no use
+              at all for answering "how many of this do we have". */}
+          <div className="bg-white border border-gray-200 rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <p className="font-semibold text-gray-900">
+                Every variant — {n(data.rows.length)} row{data.rows.length === 1 ? "" : "s"}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {data.period.label}. Opening + Received − Sold ± Adjustments = In hand.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
@@ -284,8 +223,9 @@ export default function StockMovementPage() {
                     <th className="px-3 py-3 text-right">Opening</th>
                     <th className="px-3 py-3 text-right">Received</th>
                     <th className="px-3 py-3 text-right">Sold</th>
-                    <th className="px-3 py-3 text-right">Adjust.</th>
+                    <th className="px-3 py-3 text-right">Adjustments</th>
                     <th className="px-3 py-3 text-right">In hand</th>
+                    <th className="px-3 py-3 text-left">Status</th>
                     <th className="px-3 py-3 text-right">On order</th>
                   </tr>
                 </thead>
@@ -303,31 +243,113 @@ export default function StockMovementPage() {
                       <Num v={r.sold} tone="#1d4ed8" />
                       <Num v={r.other} tone="#7c3aed" signed />
                       <Num v={r.closing} strong />
+                      <td className="px-3 py-3"><Status closing={r.closing} on_order={r.on_order} /></td>
                       <Num v={r.on_order} tone="#b45309" />
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* The size grid, for scanning a whole product at once. */}
+          <details className="bg-white border border-gray-200 rounded-lg" open={showList}
+            onToggle={e => setShowList((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary className="px-6 py-4 font-semibold text-gray-900 cursor-pointer">
+              Size grid — every colour against every size
+            </summary>
+            <div className="border-t border-gray-100 p-4 space-y-4">
+              {grids.length === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-lg py-10 text-center text-gray-400">
+                  Nothing moved in {data.period.label} for this search.
+                </div>
+              ) : grids.map(g => (
+                <div key={g.product} className="bg-white border border-gray-200 rounded-lg">
+                  <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-semibold text-gray-900">{g.product}</span>
+                    <span className="text-xs text-gray-500">
+                      {g.colours.length} colour{g.colours.length === 1 ? "" : "s"} · {g.sizes.length} size{g.sizes.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="text-sm" style={{ minWidth: `${190 + g.sizes.length * 88}px` }}>
+                      <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-5 py-2.5 text-left sticky left-0 bg-gray-50">Colour</th>
+                          {g.sizes.map(sz => <th key={sz} className="px-3 py-2.5 text-center">{sz}</th>)}
+                          <th className="px-4 py-2.5 text-center border-l border-gray-200">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {g.colours.map(c => {
+                          const cells = g.sizes.map(sz => g.cell.get(`${c}|${sz}`));
+                          const tot = {
+                            closing: cells.reduce((t, r) => t + (r?.closing ?? 0), 0),
+                            sold: cells.reduce((t, r) => t + (r?.sold ?? 0), 0),
+                            on_order: cells.reduce((t, r) => t + (r?.on_order ?? 0), 0),
+                          };
+                          return (
+                            <tr key={c} className="hover:bg-gray-50">
+                              <td className="px-5 py-2.5 font-medium text-gray-900 whitespace-nowrap sticky left-0 bg-white">{c}</td>
+                              {g.sizes.map((sz, i) => <Cell key={sz} r={cells[i]} />)}
+                              <td className="px-4 py-2.5 border-l border-gray-200 bg-gray-50/60"><Stack {...tot} strong /></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gray-50 border-t-2 border-gray-200">
+                          <td className="px-5 py-2.5 font-bold text-gray-900 sticky left-0 bg-gray-50">Total</td>
+                          {g.sizes.map(sz => {
+                            const col = g.colours.map(c => g.cell.get(`${c}|${sz}`));
+                            return (
+                              <td key={sz} className="px-3 py-2.5">
+                                <Stack
+                                  closing={col.reduce((t, r) => t + (r?.closing ?? 0), 0)}
+                                  sold={col.reduce((t, r) => t + (r?.sold ?? 0), 0)}
+                                  on_order={col.reduce((t, r) => t + (r?.on_order ?? 0), 0)}
+                                  strong
+                                />
+                              </td>
+                            );
+                          })}
+                          <td className="px-4 py-2.5 border-l border-gray-200">
+                            <Stack
+                              closing={g.rows.reduce((t, r) => t + r.closing, 0)}
+                              sold={g.rows.reduce((t, r) => t + r.sold, 0)}
+                              on_order={g.rows.reduce((t, r) => t + r.on_order, 0)}
+                              strong
+                            />
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
           </details>
 
           <div className="bg-white border border-gray-200 rounded-lg p-5 text-sm text-gray-600 leading-relaxed">
             <p className="font-semibold text-gray-900 mb-2">Reading this</p>
             <p className="mb-2">
-              Every variant balances: <strong>Opening + Received − Sold ± Adjustments = In hand</strong>.
-              Each box shows <strong>stock in hand</strong> on top, then <span className="text-blue-600 font-semibold">↓ sold</span>
-              this period and, where there is any, <span className="text-amber-600 font-semibold">+ on order</span>.
-              A <strong>·</strong> means that colour and size combination doesn&rsquo;t exist.
+              Every row balances: <strong>Opening + Received − Sold ± Adjustments = In hand</strong>.
+              <strong> Opening</strong> is what was on the shelf when the period began,
+              <strong> In hand</strong> what is there now.
+              <strong> Adjustments</strong> is anything that was neither a sale nor a
+              delivery — a stock count correction, a return put back, a cancelled
+              order restocked.
             </p>
             <p className="mb-2">
               <strong>On order</strong> is stock booked with a supplier that hasn&rsquo;t arrived. It is kept out of
               the in-hand figure on purpose — it isn&rsquo;t on the shelf yet.
             </p>
             <p>
-              <strong>August 2026 reads oddly, and correctly.</strong> The opening stock was loaded on 1 August, so
-              it lands in <strong>Adjustments</strong> rather than in Opening, and Opening can come out at or below
-              zero — that is what the stock record held before the shop opened. From September on, these figures
-              read normally.
+              <strong>Owed</strong> means in hand has gone below zero: those pieces are
+              already sold to somebody and the next delivery pays them off before
+              anything is sellable again. The <strong>size grid</strong> below packs the
+              same figures into one box per colour and size, for scanning a whole
+              product at once.
             </p>
           </div>
         </>
@@ -379,6 +401,36 @@ function Fig({ label, value, tone, strong }: {
       </div>
     </div>
   );
+}
+
+/** Where this variant stands, in words.
+ *
+ * A number alone makes a reader do the work: 0 and 3 and 400 all look the same
+ * at a glance down a column of figures. Negative in hand is not a shortage of
+ * nothing — it is stock already promised to somebody, which is a different
+ * problem and reads as one.
+ */
+function Status({ closing, on_order }: { closing: number; on_order: number }) {
+  const pill = "inline-block rounded px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap";
+
+  if (closing < 0) {
+    return (
+      <span className={`${pill} bg-red-100 text-red-800`}>
+        Owed {n(Math.abs(closing))}
+      </span>
+    );
+  }
+  if (closing === 0) {
+    return (
+      <span className={`${pill} ${on_order > 0 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"}`}>
+        {on_order > 0 ? "Out of stock — on order" : "Out of stock"}
+      </span>
+    );
+  }
+  if (closing <= 10) {
+    return <span className={`${pill} bg-amber-100 text-amber-800`}>Low — {n(closing)} left</span>;
+  }
+  return <span className={`${pill} bg-green-100 text-green-800`}>In stock</span>;
 }
 
 function Num({ v, tone, strong, signed, plus }: {
