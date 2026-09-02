@@ -407,6 +407,35 @@ export default function AdminProductEditPage() {
     });
   }
 
+  /** Turn backorder on or off for every size of one colour.
+   *
+   * A colour is bought as a colour. Deciding that Black can be sold past zero
+   * and then ticking it eight times, once per size, is the same decision typed
+   * out eight times — and it is the eighth that gets missed, which is how a
+   * size ends up refusing orders its neighbours accept.
+   */
+  async function setBackorderForColor(
+    variants: ProductVariant[], on: boolean,
+  ) {
+    // Only the ones that would actually change. Saving a variant to set a flag
+    // it already has is a write, a request and a chance to fail for nothing.
+    const changing = variants.filter(v => getVariantFlag(v, "allow_backorder") !== on);
+    if (changing.length === 0) return;
+
+    setVariantEdits(prev => {
+      const next = { ...prev };
+      for (const v of changing) {
+        next[v.id] = { ...(next[v.id] ?? {}), allow_backorder: on };
+      }
+      return next;
+    });
+    // Saved one at a time, as a single tick already does. Each carries only its
+    // own change, so one failing leaves the rest done rather than all undone.
+    for (const v of changing) {
+      await saveVariant(v.id, { allow_backorder: on });
+    }
+  }
+
   function toggleGroup(color: string) {
     setExpandedGroups(prev =>
       prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]
@@ -431,9 +460,18 @@ export default function AdminProductEditPage() {
     return v[field] === true;
   }
 
-  async function saveVariant(variantId: string) {
-    if (!product || !variantEdits[variantId]) return;
-    await adminService.updateVariant(product.id, variantId, variantEdits[variantId]);
+  /**
+   * @param patch what to save, when the caller already knows it.
+   *
+   * Without it this reads variantEdits out of the closure, which is the state as
+   * it was when this render began — so a change made and saved in the same
+   * breath saves the value before the change, or nothing at all if it was the
+   * first edit to that variant.
+   */
+  async function saveVariant(variantId: string, patch?: Record<string, unknown>) {
+    const body = patch ?? variantEdits[variantId];
+    if (!product || !body) return;
+    await adminService.updateVariant(product.id, variantId, body);
   }
 
   // Merchant-approved price change for a WHOLE color (all its sizes) in one click.
@@ -1013,7 +1051,30 @@ export default function AdminProductEditPage() {
                   <ColorDot name={group.color} size={20} border="1.5px solid rgba(0,0,0,.1)" customColors={customColors} onSetCustom={setCustomColor} />
                   <span style={{ fontWeight: 700, fontSize: "14px", color: "#2A2830" }}>{group.color}</span>
                   <span style={{ fontSize: "12px", color: "#7A7880" }}>({group.variants.length} sizes)</span>
-                  <span style={{ marginLeft: "auto", fontSize: "12px", color: "#7A7880" }}>
+                  {/* Sits in the colour header because that is the level the
+                      decision is taken at — the whole colour, not size by size. */}
+                  <label
+                    onClick={e => e.stopPropagation()}
+                    title="Allow backorder on every size of this colour"
+                    style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#4B5563", cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={group.variants.length > 0 && group.variants.every(v => getVariantFlag(v, "allow_backorder"))}
+                      ref={el => {
+                        // Some sizes on, some off: shown as neither, so the box
+                        // never claims the whole colour is one way when it is not.
+                        if (el) {
+                          const onCount = group.variants.filter(v => getVariantFlag(v, "allow_backorder")).length;
+                          el.indeterminate = onCount > 0 && onCount < group.variants.length;
+                        }
+                      }}
+                      onChange={e => setBackorderForColor(group.variants, e.target.checked)}
+                      style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
+                    />
+                    Backorder all sizes
+                  </label>
+                  <span style={{ fontSize: "12px", color: "#7A7880" }}>
                     Stock: {group.variants.reduce((s, v) => s + (v.stock_quantity ?? 0), 0)} units
                   </span>
                   <span style={{ fontSize: "12px", color: "#aaa", transform: (expandAll || expandedGroups.includes(group.color)) ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
@@ -1156,8 +1217,9 @@ export default function AdminProductEditPage() {
                                 type="checkbox"
                                 checked={getVariantFlag(variant, "allow_backorder")}
                                 onChange={e => {
-                                  updateVariantEdit(variant.id, "allow_backorder", e.target.checked);
-                                  saveVariant(variant.id);
+                                  const on = e.target.checked;
+                                  updateVariantEdit(variant.id, "allow_backorder", on);
+                                  saveVariant(variant.id, { allow_backorder: on });
                                 }}
                                 style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#1B3A5C" }}
                               />
