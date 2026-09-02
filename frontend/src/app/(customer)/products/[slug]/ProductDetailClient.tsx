@@ -810,7 +810,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
       {/* Main content */}
       <div style={{ maxWidth: "1500px", margin: "0 auto", padding: "0 24px 64px" }}>
-        <div className="pdp-main-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "56px", paddingTop: "32px" }}>
+        <div className="pdp-main-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 3fr)", gap: "56px", paddingTop: "32px" }}>
 
           {/* ── LEFT: Image Gallery ─────────────────────────────────────── */}
           <div className="pdp-gallery-col" style={{ position: "sticky", top: "24px", alignSelf: "start" }}>
@@ -1186,7 +1186,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
                                 <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked ? "#fafafa" : "transparent" }}>
-                                  <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
+                                  <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", lineHeight: 1.25 }}>{stockLabel}</span>
                                   {alsoComing && (
                                     <span style={{ display: "block", fontSize: "10px", color: "#D97706", fontWeight: 600, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px" }}>
                                       {alsoComing}
