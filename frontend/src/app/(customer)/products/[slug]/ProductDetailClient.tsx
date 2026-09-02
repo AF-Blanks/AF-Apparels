@@ -421,6 +421,25 @@ function describeIncoming(incoming?: Incoming[] | null): string | null {
   return parts.length ? parts.join(", then ") : null;
 }
 
+/** The same news in the width of a size box.
+ *
+ * "500 on Sep 12, then 300 on Oct 4" is the right sentence where there is room
+ * for a sentence. In a column one eighth of the page wide it is not a sentence,
+ * it is a wedge — it cannot wrap, so the column grows to fit it and everything
+ * beside it gives way. Here the soonest delivery is the answer, short.
+ */
+function shortIncoming(incoming?: Incoming[] | null): string | null {
+  const rows = (incoming ?? []).filter(i => i?.expected_date && i.quantity > 0);
+  if (!rows.length) return null;
+  const first = rows[0];
+  if (!first) return null;
+  const when = new Date(first.expected_date);
+  if (Number.isNaN(when.getTime())) return null;
+  const date = when.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const more = rows.length > 1 ? ` +${rows.length - 1}` : "";
+  return `+${first.quantity.toLocaleString()} ${date}${more}`;
+}
+
 function formatRestock(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -791,7 +810,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
       {/* Main content */}
       <div style={{ maxWidth: "1500px", margin: "0 auto", padding: "0 24px 64px" }}>
-        <div className="pdp-main-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "56px", paddingTop: "32px" }}>
+        <div className="pdp-main-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "56px", paddingTop: "32px" }}>
 
           {/* ── LEFT: Image Gallery ─────────────────────────────────────── */}
           <div className="pdp-gallery-col" style={{ position: "sticky", top: "24px", alignSelf: "start" }}>
@@ -1119,7 +1138,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
 
                           {/* Size headers — repeated for this colour so they stay
                               visible however far down the list you scroll. */}
-                          <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, 1fr) 80px 90px`, gap: "4px", background: "#F5F4F1", borderTop: "1px solid #E2E2DE", borderBottom: "1px solid #E2E2DE" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, minmax(0, 1fr)) 80px 90px`, gap: "4px", background: "#F5F4F1", borderTop: "1px solid #E2E2DE", borderBottom: "1px solid #E2E2DE" }}>
                             {uniqueSizes.map(size => (
                               <div key={size} style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#1A1A1A", fontWeight: 700, padding: "5px 8px", letterSpacing: ".02em" }}>{size}</div>
                             ))}
@@ -1128,7 +1147,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                           </div>
 
                           {/* Size inputs row */}
-                          <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, 1fr) 80px 90px`, gap: "4px", marginBottom: "4px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, minmax(0, 1fr)) 80px 90px`, gap: "4px", marginBottom: "4px" }}>
                             {uniqueSizes.map(size => {
                               const variant = group.variants.find(v => v.size === size);
                               if (!variant) {
@@ -1151,7 +1170,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               // Live remaining: what's left after the qty typed for this size.
                               const remaining = Math.max(0, stockNum - qty);
                               const stockLabel = onBackorder
-                                ? (describeIncoming(variant.incoming as Incoming[] | undefined)
+                                ? (shortIncoming(variant.incoming as Incoming[] | undefined)
                                     ?? (formatRestock(variant.expected_restock_date)
                                         ? `Expected ${formatRestock(variant.expected_restock_date)}`
                                         : "On backorder"))
@@ -1162,15 +1181,15 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               // for sizes that have stock — the shopper buying
                               // more than the shelf holds needs it just as much.
                               const alsoComing = variant.allow_backorder && !onBackorder
-                                ? describeIncoming(variant.incoming as Incoming[] | undefined)
+                                ? shortIncoming(variant.incoming as Incoming[] | undefined)
                                 : null;
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
                                 <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked ? "#fafafa" : "transparent" }}>
                                   <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>{stockLabel}</span>
                                   {alsoComing && (
-                                    <span style={{ display: "block", fontSize: "10px", color: "#D97706", fontWeight: 600, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", whiteSpace: "nowrap" }}>
-                                      +{alsoComing} more
+                                    <span style={{ display: "block", fontSize: "10px", color: "#D97706", fontWeight: 600, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px" }}>
+                                      {alsoComing}
                                     </span>
                                   )}
                                   <span style={{ display: "block", fontSize: "12px", color: blocked ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
