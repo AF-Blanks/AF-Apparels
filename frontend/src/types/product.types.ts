@@ -40,6 +40,8 @@ export interface ProductVariant {
   allow_backorder?: boolean;
   /** When the next purchase order carrying this variant is due in. */
   expected_restock_date?: string | null;
+  /** Deliveries ordered but not yet arrived, soonest first. */
+  incoming?: Array<{ expected_date: string; quantity: number }> | null;
 }
 
 /** Product list item (card view) — matches backend ProductListItem schema. */

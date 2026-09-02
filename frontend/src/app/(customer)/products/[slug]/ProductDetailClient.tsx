@@ -397,6 +397,30 @@ function isBackorderable(v: { stock_quantity?: number | null; allow_backorder?: 
   return !!v?.allow_backorder;
 }
 
+interface Incoming {
+  expected_date: string;
+  quantity: number;
+}
+
+/** Every delivery still to come, written out.
+ *
+ * Two purchase orders arriving weeks apart are two different answers, and which
+ * one applies depends on how many the shopper wants — somebody after 500 is not
+ * served by the date the first 100 land. So the quantity goes beside each date
+ * rather than only the soonest being shown.
+ */
+function describeIncoming(incoming?: Incoming[] | null): string | null {
+  const rows = (incoming ?? []).filter(i => i?.expected_date && i.quantity > 0);
+  if (!rows.length) return null;
+  const parts = rows
+    .map(i => {
+      const when = formatRestock(i.expected_date);
+      return when ? `${i.quantity.toLocaleString()} on ${when}` : null;
+    })
+    .filter(Boolean) as string[];
+  return parts.length ? parts.join(", then ") : null;
+}
+
 function formatRestock(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -411,12 +435,18 @@ function formatRestock(iso: string | null | undefined): string | null {
  * date, say it ships when stock lands rather than inventing one. */
 function getStockLabel(
   stock: number | null | undefined,
-  v?: { allow_backorder?: boolean; expected_restock_date?: string | null } | null,
+  v?: {
+    allow_backorder?: boolean;
+    expected_restock_date?: string | null;
+    incoming?: Incoming[] | null;
+  } | null,
 ): string {
   if (isOutOfStock(stock)) {
     if (v?.allow_backorder) {
+      const all = describeIncoming(v.incoming);
+      if (all) return `Expected: ${all}`;
       const when = formatRestock(v.expected_restock_date);
-      return when ? `Ships ${when}` : "Available on backorder";
+      return when ? `Expected ${when}` : "Available on backorder";
     }
     return "Out of Stock";
   }
@@ -1117,7 +1147,10 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               // Live remaining: what's left after the qty typed for this size.
                               const remaining = Math.max(0, stockNum - qty);
                               const stockLabel = onBackorder
-                                ? (formatRestock(variant.expected_restock_date) ? `Ships ${formatRestock(variant.expected_restock_date)}` : "On backorder")
+                                ? (describeIncoming(variant.incoming as Incoming[] | undefined)
+                                    ?? (formatRestock(variant.expected_restock_date)
+                                        ? `Expected ${formatRestock(variant.expected_restock_date)}`
+                                        : "On backorder"))
                                 : isOOS ? "Out of Stock" : stockNum >= 9999 ? "In Stock" : `${remaining.toLocaleString()} in stock`;
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (

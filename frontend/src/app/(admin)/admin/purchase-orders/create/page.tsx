@@ -469,7 +469,12 @@ export default function CreatePOPage() {
               )}
             </div>
             <div>
-              <label style={LBL}>Expected Delivery</label>
+              <label style={LBL}>
+                Expected Delivery
+                <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#7A7880", marginLeft: "6px" }}>
+                  — shown to customers on backordered sizes
+                </span>
+              </label>
               <input type="date" value={expectedDelivery} onChange={e => setExpectedDelivery(e.target.value)} style={INPUT} />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>

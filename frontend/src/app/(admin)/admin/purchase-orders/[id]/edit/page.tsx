@@ -251,7 +251,12 @@ export default function EditPurchaseOrderPage() {
           </select>
         </div>
         <div>
-          <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "5px" }}>Expected Delivery</label>
+          <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: "5px" }}>
+            Expected Delivery
+            <span style={{ fontWeight: 400, color: "#7A7880", marginLeft: "6px" }}>
+              — shown to customers on backordered sizes
+            </span>
+          </label>
           <input type="date" value={expectedDelivery} onChange={e => setExpectedDelivery(e.target.value)} style={{ ...INPUT, width: "100%" }} />
         </div>
       </div>
