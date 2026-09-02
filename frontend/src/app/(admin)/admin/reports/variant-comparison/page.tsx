@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 
 type RowState = "up" | "down" | "same" | "new" | "stopped";
@@ -52,12 +52,63 @@ const FILTERS: { id: string; label: string; keep: (r: Row) => boolean }[] = [
   { id: "stopped", label: "Stopped",      keep: r => r.state === "stopped" },
 ];
 
+/** A product with its variants, and the product's own totals.
+ *
+ * Three hundred and twenty eight rows in one list is a list nobody reads. The
+ * question is asked product first — "how did 1001 do" — and only then, of the
+ * product that stands out, colour and size. So the report is shaped the way the
+ * question is, and opens one product at a time.
+ */
+interface ProductGroup {
+  product_name: string;
+  rows: Row[];
+  units: number;
+  prev_units: number;
+  units_change: number;
+  revenue: number;
+  revenue_change: number;
+  stopped: number;
+  down: number;
+  up: number;
+}
+
+function groupByProduct(rows: Row[]): ProductGroup[] {
+  const map = new Map<string, ProductGroup>();
+  for (const r of rows) {
+    let g = map.get(r.product_name);
+    if (!g) {
+      g = {
+        product_name: r.product_name, rows: [],
+        units: 0, prev_units: 0, units_change: 0,
+        revenue: 0, revenue_change: 0,
+        stopped: 0, down: 0, up: 0,
+      };
+      map.set(r.product_name, g);
+    }
+    g.rows.push(r);
+    g.units += r.units;
+    g.prev_units += r.prev_units;
+    g.units_change += r.units_change;
+    g.revenue += r.revenue;
+    g.revenue_change += r.revenue_change;
+    if (r.state === "stopped") g.stopped += 1;
+    else if (r.state === "down") g.down += 1;
+    else if (r.state === "up" || r.state === "new") g.up += 1;
+  }
+  // Biggest movers first, as before — but by product now, so the one that
+  // actually shifted is at the top rather than its loudest single size.
+  return [...map.values()].sort(
+    (a, b) => Math.abs(b.units_change) - Math.abs(a.units_change)
+  );
+}
+
 export default function VariantComparisonPage() {
   const [data, setData] = useState<Comparison | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [month, setMonth] = useState("");
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const [compareTo, setCompareTo] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -85,6 +136,7 @@ export default function VariantComparisonPage() {
   const s = data?.summary;
   const keep = FILTERS.find(f => f.id === filter)?.keep ?? (() => true);
   const rows = (data?.rows ?? []).filter(keep);
+  const groups = groupByProduct(rows);
 
   return (
     <div className="space-y-6">
@@ -158,7 +210,22 @@ export default function VariantComparisonPage() {
             <div className="px-6 py-4 border-b border-gray-100 font-semibold text-gray-900 flex items-center justify-between flex-wrap gap-2">
               <span>{data.period.label} vs {data.compare.label}</span>
               <span className="text-xs font-normal text-gray-500">
-                {rows.length.toLocaleString()} variant{rows.length === 1 ? "" : "s"} · biggest changes first
+                <span className="mr-3">
+                  {groups.length} product{groups.length === 1 ? "" : "s"} ·{" "}
+                  {rows.length.toLocaleString()} variant{rows.length === 1 ? "" : "s"} · biggest changes first
+                </span>
+                <button
+                  onClick={() => setOpen(new Set(groups.map(g => g.product_name)))}
+                  className="text-xs text-blue-600 hover:underline mr-2"
+                >
+                  Expand all
+                </button>
+                <button
+                  onClick={() => setOpen(new Set())}
+                  className="text-xs text-gray-500 hover:underline"
+                >
+                  Collapse all
+                </button>
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -176,47 +243,104 @@ export default function VariantComparisonPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {rows.length === 0 ? (
+                  {groups.length === 0 ? (
                     <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400">
                       Nothing sold in either month for this filter.
                     </td></tr>
-                  ) : rows.map((r, i) => {
-                    const st = STATE[r.state];
+                  ) : groups.map(g => {
+                    const isOpen = open.has(g.product_name);
                     return (
-                      <tr key={`${r.product_name}|${r.color}|${r.size}|${i}`} className="hover:bg-gray-50">
-                        <td className="px-6 py-3 text-gray-900">{r.product_name}</td>
-                        <td className="px-4 py-3 text-gray-700">{r.color}</td>
-                        <td className="px-4 py-3 text-gray-700">{r.size}</td>
-                        <td className="px-4 py-3 text-right font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
-                          {r.units.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-right text-gray-500" style={{ fontVariantNumeric: "tabular-nums" }}>
-                          {r.prev_units.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
-                          <span className={r.units_change > 0 ? "text-green-700 font-semibold" : r.units_change < 0 ? "text-red-600 font-semibold" : "text-gray-400"}>
-                            {r.units_change > 0 ? "+" : ""}{r.units_change.toLocaleString()}
-                          </span>
-                          {r.units_change_pct !== null && r.units_change !== 0 && (
-                            <div className="text-[11px] text-gray-400">
-                              {r.units_change_pct > 0 ? "+" : ""}{r.units_change_pct}%
+                      <Fragment key={g.product_name}>
+                        {/* The product line: the whole answer for most questions,
+                            and the way in when it is not. */}
+                        <tr
+                          className="bg-white hover:bg-gray-50 cursor-pointer"
+                          onClick={() => {
+                            const next = new Set(open);
+                            if (isOpen) next.delete(g.product_name);
+                            else next.add(g.product_name);
+                            setOpen(next);
+                          }}
+                        >
+                          <td className="px-6 py-3 font-semibold text-gray-900" colSpan={3}>
+                            <span className="inline-block w-4 text-gray-400">
+                              {isOpen ? "▾" : "▸"}
+                            </span>
+                            {g.product_name}
+                            <span className="ml-2 text-xs font-normal text-gray-400">
+                              {g.rows.length} variant{g.rows.length === 1 ? "" : "s"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900" style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {g.units.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-right text-gray-500" style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {g.prev_units.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
+                            <span className={g.units_change > 0 ? "text-green-700 font-bold" : g.units_change < 0 ? "text-red-600 font-bold" : "text-gray-400"}>
+                              {g.units_change > 0 ? "+" : ""}{g.units_change.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {money(g.revenue)}
+                            {g.revenue_change !== 0 && (
+                              <div className={`text-[11px] font-normal ${g.revenue_change > 0 ? "text-green-600" : "text-red-500"}`}>
+                                {g.revenue_change > 0 ? "+" : ""}{money(g.revenue_change)}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {/* How this product's sizes are behaving, counted, so
+                                one worth opening says so while still closed. */}
+                            <div className="flex flex-wrap gap-1">
+                              {g.up > 0 && <span className="px-1.5 py-0.5 rounded border text-[11px] bg-green-50 text-green-700 border-green-200">{g.up} up</span>}
+                              {g.down > 0 && <span className="px-1.5 py-0.5 rounded border text-[11px] bg-amber-50 text-amber-800 border-amber-200">{g.down} down</span>}
+                              {g.stopped > 0 && <span className="px-1.5 py-0.5 rounded border text-[11px] bg-red-50 text-red-700 border-red-200">{g.stopped} stopped</span>}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
-                          {money(r.revenue)}
-                          {r.revenue_change !== 0 && (
-                            <div className={`text-[11px] ${r.revenue_change > 0 ? "text-green-600" : "text-red-500"}`}>
-                              {r.revenue_change > 0 ? "+" : ""}{money(r.revenue_change)}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-block px-2 py-0.5 rounded border text-[11px] font-semibold ${st.cls}`}>
-                            {st.label}
-                          </span>
-                        </td>
-                      </tr>
+                          </td>
+                        </tr>
+
+                        {isOpen && g.rows.map((r, i) => {
+                          const st = STATE[r.state];
+                          return (
+                            <tr key={`${r.color}|${r.size}|${i}`} className="bg-gray-50/60 hover:bg-gray-100/60 text-[13px]">
+                              <td className="px-6 py-2 pl-14"></td>
+                              <td className="px-4 py-2 text-gray-700">{r.color}</td>
+                              <td className="px-4 py-2 text-gray-700">{r.size}</td>
+                              <td className="px-4 py-2 text-right font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                {r.units.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-right text-gray-500" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                {r.prev_units.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                <span className={r.units_change > 0 ? "text-green-700 font-semibold" : r.units_change < 0 ? "text-red-600 font-semibold" : "text-gray-400"}>
+                                  {r.units_change > 0 ? "+" : ""}{r.units_change.toLocaleString()}
+                                </span>
+                                {r.units_change_pct !== null && r.units_change !== 0 && (
+                                  <div className="text-[11px] text-gray-400">
+                                    {r.units_change_pct > 0 ? "+" : ""}{r.units_change_pct}%
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-right" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                {money(r.revenue)}
+                                {r.revenue_change !== 0 && (
+                                  <div className={`text-[11px] ${r.revenue_change > 0 ? "text-green-600" : "text-red-500"}`}>
+                                    {r.revenue_change > 0 ? "+" : ""}{money(r.revenue_change)}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2">
+                                <span className={`inline-block px-2 py-0.5 rounded border text-[11px] ${st.cls}`}>
+                                  {st.label}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })}
                 </tbody>
