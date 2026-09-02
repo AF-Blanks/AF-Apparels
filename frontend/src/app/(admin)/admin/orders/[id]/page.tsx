@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { adminService } from "@/services/admin.service";
 import { apiClient } from "@/lib/api-client";
+import PaymentReminderDialog from "@/components/admin/PaymentReminderDialog";
 
 interface OrderItem {
   id: string;
@@ -1229,53 +1230,14 @@ The existing label is NOT refunded — if it was a real one, request the refund 
   const mapQuery = [addr?.address_line1, addr?.city, addr?.state].filter(Boolean).join(", ");
 
   const reminderModal = reminder ? (
-    <div
-      onClick={() => !reminderBusy && setReminder(null)}
-      style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
-      <div onClick={e => e.stopPropagation()}
-        style={{ background: "#fff", borderRadius: "12px", width: "100%", maxWidth: "620px", padding: "24px", boxShadow: "0 20px 50px rgba(0,0,0,.25)" }}>
-        <h3 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: 800, color: "#2A2830" }}>
-          Send payment reminder
-        </h3>
-        <p style={{ margin: "0 0 18px", fontSize: "13px", color: "#7A7880" }}>
-          ${reminder.amount_due.toFixed(2)} outstanding on this order
-          {reminder.account_due > reminder.amount_due + 0.005
-            ? ` · $${reminder.account_due.toFixed(2)} across all their open orders`
-            : ""}
-        </p>
-
-        <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#7A7880", marginBottom: "4px" }}>To</label>
-        <input value={reminder.to_email}
-          onChange={e => setReminder({ ...reminder, to_email: e.target.value })}
-          style={{ width: "100%", padding: "9px 11px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", marginBottom: "14px" }} />
-
-        <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#7A7880", marginBottom: "4px" }}>Subject</label>
-        <input value={reminder.subject}
-          onChange={e => setReminder({ ...reminder, subject: e.target.value })}
-          style={{ width: "100%", padding: "9px 11px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", marginBottom: "14px" }} />
-
-        <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#7A7880", marginBottom: "4px" }}>
-          Message <span style={{ fontWeight: 400 }}>— change it however you like</span>
-        </label>
-        <textarea value={reminder.message} rows={13}
-          onChange={e => setReminder({ ...reminder, message: e.target.value })}
-          style={{ width: "100%", padding: "11px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", lineHeight: 1.6, fontFamily: "inherit", resize: "vertical" }} />
-        <p style={{ margin: "6px 0 0", fontSize: "11px", color: "#9A9A9A" }}>
-          The order number, the amount and a link to the invoice are added below your message.
-        </p>
-
-        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
-          <button onClick={() => setReminder(null)} disabled={reminderBusy}
-            style={{ background: "none", border: "1px solid #E2E0DA", padding: "9px 18px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: "#7A7880", cursor: "pointer" }}>
-            Cancel
-          </button>
-          <button onClick={sendReminder} disabled={reminderBusy || !reminder.to_email.trim()}
-            style={{ background: "#B45309", color: "#fff", border: "none", padding: "9px 20px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: reminderBusy ? "not-allowed" : "pointer", opacity: reminderBusy ? 0.6 : 1 }}>
-            {reminderBusy ? "Sending…" : "Send reminder"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <PaymentReminderDialog
+      draft={reminder}
+      orderNumber={order?.order_number}
+      busy={reminderBusy}
+      onChange={setReminder}
+      onCancel={() => setReminder(null)}
+      onSend={sendReminder}
+    />
   ) : null;
 
   return (

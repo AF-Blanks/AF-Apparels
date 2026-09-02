@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
+import PaymentReminderDialog from "@/components/admin/PaymentReminderDialog";
 
 interface Aging { current: number; d30: number; d60: number; d90: number }
+
+/** One order still carrying a balance — what a reminder is actually about. */
+interface OpenOrder {
+  order_id: string;
+  order_number: string;
+  date: string | null;
+  days: number | null;
+  total: number;
+  paid: number;
+  due: number;
+  payment_status: string;
+  payment_terms: string | null;
+}
+
+import type { ReminderDraft } from "@/components/admin/PaymentReminderDialog";
 
 interface Row {
   company_id: string;
@@ -20,6 +36,7 @@ interface Row {
   oldest_unpaid_date: string | null;
   days_outstanding: number | null;
   aging: Aging;
+  orders: OpenOrder[];
 }
 
 interface OutstandingReport {
@@ -47,6 +64,10 @@ export default function OutstandingReportPage() {
   const [data, setData] = useState<OutstandingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [includeSettled, setIncludeSettled] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<(ReminderDraft & { orderId: string; orderNumber: string }) | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("outstanding");
   const [sortDesc, setSortDesc] = useState(true);
@@ -105,8 +126,51 @@ export default function OutstandingReportPage() {
     URL.revokeObjectURL(url);
   }
 
+  /** Fetch the reminder the server would send, and hand it over to be edited. */
+  async function openDraft(o: OpenOrder) {
+    setBusy(true); setNote(null);
+    try {
+      const d = await apiClient.get<ReminderDraft>(
+        `/api/v1/admin/orders/${o.order_id}/payment-reminder`);
+      setDraft({ ...d, orderId: o.order_id, orderNumber: o.order_number });
+    } catch (err: unknown) {
+      setNote({ text: err instanceof Error ? err.message : "Couldn't prepare the reminder.", ok: false });
+    } finally { setBusy(false); }
+  }
+
+  async function sendDraft() {
+    if (!draft) return;
+    setBusy(true);
+    try {
+      const r = await apiClient.post<{ message: string }>(
+        `/api/v1/admin/orders/${draft.orderId}/payment-reminder`,
+        { to_email: draft.to_email, subject: draft.subject, message: draft.message });
+      setDraft(null);
+      setNote({ text: r.message || "Reminder sent.", ok: true });
+    } catch (err: unknown) {
+      setNote({ text: err instanceof Error ? err.message : "The reminder could not be sent.", ok: false });
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="space-y-6">
+      {draft && (
+        <PaymentReminderDialog
+          draft={draft}
+          orderNumber={draft.orderNumber}
+          busy={busy}
+          onChange={d => setDraft({ ...draft, ...d })}
+          onCancel={() => setDraft(null)}
+          onSend={sendDraft}
+        />
+      )}
+      {note && (
+        <div className={`rounded-lg px-4 py-3 text-sm border ${note.ok
+          ? "bg-green-50 border-green-200 text-green-800"
+          : "bg-red-50 border-red-200 text-red-700"}`}>
+          {note.text}
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
@@ -192,9 +256,16 @@ export default function OutstandingReportPage() {
                   ) : rows.map((r) => {
                     const age = ageStyle(r.days_outstanding);
                     return (
-                      <tr key={r.company_id} className="hover:bg-gray-50">
-                        <td className="px-5 py-3">
-                          <div className="font-medium text-gray-900">{r.company_name}</div>
+                        <Fragment key={r.company_id}>
+                        <tr onClick={() => setOpenId(openId === r.company_id ? null : r.company_id)}
+                          className="hover:bg-gray-50 cursor-pointer">
+                          <td className="px-5 py-3">
+                            <div className="font-medium text-gray-900">
+                              <span className="text-gray-400 mr-2">
+                                {openId === r.company_id ? "▾" : "▸"}
+                              </span>
+                              {r.company_name}
+                            </div>
                           {r.email && <div className="text-xs text-gray-500">{r.email}</div>}
                         </td>
                         <td className="px-5 py-3">
@@ -216,14 +287,57 @@ export default function OutstandingReportPage() {
                             <div className="text-[11px] text-gray-400 mt-0.5">since {r.oldest_unpaid_date}</div>
                           )}
                         </td>
-                        <td className="px-5 py-3 text-right whitespace-nowrap">
-                          <Link href={`/admin/customers/${r.company_id}`} className="text-blue-600 text-xs font-semibold hover:underline">
-                            View →
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="px-5 py-3 text-right whitespace-nowrap">
+                            <Link href={`/admin/customers/${r.company_id}`}
+                              onClick={e => e.stopPropagation()}
+                              className="text-blue-600 text-xs font-semibold hover:underline">
+                              View →
+                            </Link>
+                          </td>
+                        </tr>
+                        {/* The orders the balance is made of. A customer total
+                            cannot be chased; an order can. */}
+                        {openId === r.company_id && (r.orders ?? []).map(o => (
+                          <tr key={o.order_id} className="bg-gray-50/60 text-[13px]">
+                            <td className="px-5 py-2 pl-12">
+                              <Link href={`/admin/orders/${o.order_id}`}
+                                className="font-semibold text-blue-700 hover:underline">
+                                {o.order_number}
+                              </Link>
+                              <span className="text-gray-400"> · {o.date ?? "—"}</span>
+                            </td>
+                            <td className="px-5 py-2 text-gray-500">
+                              {o.payment_terms ?? "—"}
+                            </td>
+                            <td className="px-5 py-2 text-right text-gray-400"
+                              style={{ fontVariantNumeric: "tabular-nums" }}>
+                              {o.days != null ? `${o.days}d` : "—"}
+                            </td>
+                            <td className="px-5 py-2 text-right text-gray-600"
+                              style={{ fontVariantNumeric: "tabular-nums" }}>{money(o.total)}</td>
+                            <td className="px-5 py-2 text-right text-green-700"
+                              style={{ fontVariantNumeric: "tabular-nums" }}>{money(o.paid)}</td>
+                            <td className="px-5 py-2 text-right font-bold text-red-600"
+                              style={{ fontVariantNumeric: "tabular-nums" }}>{money(o.due)}</td>
+                            <td className="px-5 py-2"></td>
+                            <td className="px-5 py-2 text-right whitespace-nowrap">
+                              <button onClick={() => openDraft(o)} disabled={busy}
+                                className="text-xs font-semibold px-2.5 py-1 rounded border border-amber-600 text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+                                ⏰ Remind
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {openId === r.company_id && (r.orders ?? []).length === 0 && (
+                          <tr className="bg-gray-50/60">
+                            <td colSpan={8} className="px-5 py-3 pl-12 text-xs text-gray-400">
+                              No individual open orders — this balance may predate the current records.
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                      );
+                    })}
                 </tbody>
                 {rows.length > 0 && (
                   <tfoot>
