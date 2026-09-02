@@ -29,6 +29,8 @@ interface QBStatus {
   company_name: string | null;
   ids_realm: string | null;
   needs_switch: boolean;
+  orders_kept_with_previous_company: number;
+  invoiced_orders_not_stamped: number;
 }
 
 export default function QuickBooksPage() {
@@ -235,6 +237,27 @@ export default function QuickBooksPage() {
           ) : (
             <p className="mt-2 text-sm text-emerald-900">
               Set up and syncing normally.
+              {data.orders_kept_with_previous_company > 0 && (
+                <>
+                  {" "}
+                  {data.orders_kept_with_previous_company} earlier{" "}
+                  {data.orders_kept_with_previous_company === 1 ? "order is" : "orders are"}{" "}
+                  pinned to the company they were invoiced in and will not be
+                  synced here.
+                </>
+              )}
+              {data.invoiced_orders_not_stamped > 0 && (
+                <>
+                  {" "}
+                  <strong>
+                    {data.invoiced_orders_not_stamped} invoiced{" "}
+                    {data.invoiced_orders_not_stamped === 1 ? "order carries" : "orders carry"}{" "}
+                    no company
+                  </strong>{" "}
+                  — those invoice numbers would be reused here if anything
+                  re-synced them.
+                </>
+              )}
             </p>
           )}
         </div>
