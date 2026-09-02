@@ -21,7 +21,7 @@ interface Row {
 interface MonthOption { value: string; label: string }
 
 interface Movement {
-  period: MonthOption;
+  period: MonthOption & { from?: string; to?: string };
   available_months: MonthOption[];
   summary: {
     variants: number;
@@ -45,16 +45,31 @@ export default function StockMovementPage() {
   const [month, setMonth] = useState("");
   const [search, setSearch] = useState("");
   const [showList, setShowList] = useState(false);
+  // A whole month is the usual question; a range is for the times it is not —
+  // a season, or the week either side of a delivery.
+  const [mode, setMode] = useState<"month" | "range">("month");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
-  const load = useCallback((m?: string, q?: string) => {
+  const load = useCallback((m?: string, q?: string, range?: { from: string; to: string } | null) => {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams();
-    if (m) params.set("month", m);
+    if (range?.from && range?.to) {
+      params.set("date_from", range.from);
+      params.set("date_to", range.to);
+    } else if (m) {
+      params.set("month", m);
+    }
     if (q && q.trim()) params.set("q", q.trim());
     apiClient
       .get<Movement>(`/api/v1/admin/reports/stock-movement?${params.toString()}`)
-      .then(res => { setData(res); setMonth(res.period.value); })
+      .then(res => {
+        setData(res);
+        if (res.period.value) setMonth(res.period.value);
+        if (res.period.from && !from) setFrom(res.period.from);
+        if (res.period.to && !to) setTo(res.period.to);
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Couldn't load the report."))
       .finally(() => setLoading(false));
   }, []);
@@ -86,29 +101,73 @@ export default function StockMovementPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Stock Movement</h1>
         <p className="text-sm text-gray-500 mt-1">
-          For every variant: what you started the month with, what sold, what arrived, and what is still on order.
+          For every variant: what you started the period with, what sold, what arrived, and what is still on order.
         </p>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Month</span>
-          <select value={month} onChange={e => { setMonth(e.target.value); load(e.target.value, search); }}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm min-w-[160px]">
-            {(data?.available_months ?? []).map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+          <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Period</span>
+          <select
+            value={mode}
+            onChange={e => {
+              const next = e.target.value as "month" | "range";
+              setMode(next);
+              if (next === "month") load(month, search, null);
+            }}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+          >
+            <option value="month">A month</option>
+            <option value="range">Between two dates</option>
           </select>
         </label>
+
+        {mode === "month" ? (
+          <label className="text-sm">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Month</span>
+            <select
+              value={month}
+              onChange={e => { setMonth(e.target.value); load(e.target.value, search, null); }}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm min-w-[160px]"
+            >
+              {(data?.available_months ?? []).map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <>
+            <label className="text-sm">
+              <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">From</span>
+              <input type="date" value={from} max={to || undefined}
+                onChange={e => setFrom(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">To</span>
+              <input type="date" value={to} min={from || undefined}
+                onChange={e => setTo(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm" />
+            </label>
+          </>
+        )}
         <label className="text-sm flex-1 min-w-[240px]">
           <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Product, colour or size</span>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") load(month, search); }}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                load(month, search, mode === "range" && from && to ? { from, to } : null);
+              }
+            }}
             placeholder="e.g. 1001 pink 3XL"
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
           />
         </label>
-        <button onClick={() => load(month, search)} disabled={loading}
+        <button
+          onClick={() => load(month, search, mode === "range" && from && to ? { from, to } : null)}
+          disabled={loading || (mode === "range" && !(from && to))}
           className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
           {loading ? "Loading…" : "Show"}
         </button>
@@ -120,7 +179,7 @@ export default function StockMovementPage() {
         <div className="text-center py-12 text-gray-500">Loading…</div>
       ) : data && s ? (
         <>
-          {/* The whole month as one line of arithmetic */}
+          {/* The whole period as one line of arithmetic */}
           <div className="bg-white border border-gray-200 rounded-lg p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
               {data.period.label} — all {n(s.variants)} variants
@@ -257,7 +316,7 @@ export default function StockMovementPage() {
             <p className="mb-2">
               Every variant balances: <strong>Opening + Received − Sold ± Adjustments = In hand</strong>.
               Each box shows <strong>stock in hand</strong> on top, then <span className="text-blue-600 font-semibold">↓ sold</span>
-              this month and, where there is any, <span className="text-amber-600 font-semibold">+ on order</span>.
+              this period and, where there is any, <span className="text-amber-600 font-semibold">+ on order</span>.
               A <strong>·</strong> means that colour and size combination doesn&rsquo;t exist.
             </p>
             <p className="mb-2">
