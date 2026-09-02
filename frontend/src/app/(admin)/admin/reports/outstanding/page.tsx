@@ -18,6 +18,11 @@ interface OpenOrder {
   due: number;
   payment_status: string;
   payment_terms: string | null;
+  /** What the customer sees on their invoice — the order number. */
+  invoice_number: string;
+  /** QuickBooks' own reference for that invoice, once it has been raised. */
+  qb_invoice_id: string | null;
+  invoice_sent_at: string | null;
 }
 
 import type { ReminderDraft } from "@/components/admin/PaymentReminderDialog";
@@ -302,9 +307,17 @@ export default function OutstandingReportPage() {
                             <td className="px-5 py-2 pl-12">
                               <Link href={`/admin/orders/${o.order_id}`}
                                 className="font-semibold text-blue-700 hover:underline">
-                                {o.order_number}
+                                Invoice {o.invoice_number}
                               </Link>
                               <span className="text-gray-400"> · {o.date ?? "—"}</span>
+                              <div className="text-[11px] text-gray-400">
+                                {o.qb_invoice_id
+                                  ? `QuickBooks #${o.qb_invoice_id}`
+                                  : "not in QuickBooks yet"}
+                                {o.invoice_sent_at
+                                  ? ` · emailed ${new Date(o.invoice_sent_at).toLocaleDateString()}`
+                                  : " · not emailed yet"}
+                              </div>
                             </td>
                             <td className="px-5 py-2 text-gray-500">
                               {o.payment_terms ?? "—"}
