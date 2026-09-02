@@ -178,11 +178,13 @@ export default function QuickBooksPage() {
           </p>
           {data.needs_switch ? (
             <p className="mt-2 text-sm text-amber-900">
-              Syncing is paused. The customer and item references we hold were made
-              in company&nbsp;{data.ids_realm}, and those numbers mean something
-              different here. Check the name above is the company you want, then
-              press <strong>Switch to Connected Company</strong>. Invoices already
-              raised stay where they are and will not be touched again.
+              Syncing is paused.{" "}
+              {data.ids_realm
+                ? `The customer and item references we hold were made in company ${data.ids_realm}, and those numbers mean something different here.`
+                : "Nothing has been synced to this company yet, and the references we hold were made somewhere else."}{" "}
+              Check the name above is the company you want, then press{" "}
+              <strong>Switch to Connected Company</strong>. Invoices already raised
+              stay where they are and will not be touched again.
             </p>
           ) : (
             <p className="mt-2 text-sm text-emerald-900">
