@@ -16,6 +16,11 @@ interface QBStatus {
   last_sync_at: string | null;
   synced_today: number;
   failed_syncs: FailedSync[];
+  connected: boolean;
+  connected_realm: string | null;
+  company_name: string | null;
+  ids_realm: string | null;
+  needs_switch: boolean;
 }
 
 export default function QuickBooksPage() {
@@ -150,6 +155,42 @@ export default function QuickBooksPage() {
           </button>
         </div>
       </div>
+
+      {/* Which company we are pointed at. Shown before anything else, because
+          "Switch to Connected Company" clears every customer reference and is
+          not a thing to press while guessing which books are on the other end. */}
+      {data?.connected && (
+        <div
+          className={`rounded-lg border p-4 ${
+            data.needs_switch
+              ? "bg-amber-50 border-amber-300"
+              : "bg-emerald-50 border-emerald-200"
+          }`}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Connected to
+          </p>
+          <p className="mt-1 text-lg font-semibold text-gray-900">
+            {data.company_name || "QuickBooks"}
+            <span className="ml-2 text-xs font-normal text-gray-500">
+              company&nbsp;{data.connected_realm}
+            </span>
+          </p>
+          {data.needs_switch ? (
+            <p className="mt-2 text-sm text-amber-900">
+              Syncing is paused. The customer and item references we hold were made
+              in company&nbsp;{data.ids_realm}, and those numbers mean something
+              different here. Check the name above is the company you want, then
+              press <strong>Switch to Connected Company</strong>. Invoices already
+              raised stay where they are and will not be touched again.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-emerald-900">
+              Set up and syncing normally.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Instructions box for when QB is rate-limited */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
