@@ -345,6 +345,11 @@ export default function AdminOrderDetailPage() {
   const [allLabels, setAllLabels] = useState<BoxLabel[]>([]);
 
   const [isVerifyingAch, setIsVerifyingAch] = useState(false);
+  const [reminder, setReminder] = useState<{
+    to_email: string; subject: string; message: string;
+    amount_due: number; account_due: number;
+  } | null>(null);
+  const [reminderBusy, setReminderBusy] = useState(false);
   const [isResendingInvoice, setIsResendingInvoice] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
 
@@ -890,6 +895,44 @@ The existing label is NOT refunded — if it was a real one, request the refund 
     } finally { setIsCapturing(false); }
   }
 
+  /**
+   * Fetch the reminder as the server would send it, then let it be edited.
+   *
+   * Drafted server-side rather than assembled here so the wording lives in one
+   * place, and so what is shown in the box is what actually leaves.
+   */
+  async function openReminder() {
+    setReminderBusy(true); setMsg(null);
+    try {
+      const d = await apiClient.get<{
+        to_email: string; subject: string; message: string;
+        amount_due: number; account_due: number;
+      }>(`/api/v1/admin/orders/${order?.id ?? id}/payment-reminder`);
+      setReminder(d);
+    } catch (err: unknown) {
+      setMsg({ text: err instanceof Error ? err.message : "Couldn't prepare the reminder.", ok: false });
+    } finally { setReminderBusy(false); }
+  }
+
+  async function sendReminder() {
+    if (!reminder) return;
+    setReminderBusy(true);
+    try {
+      const r = await apiClient.post<{ message: string }>(
+        `/api/v1/admin/orders/${order?.id ?? id}/payment-reminder`,
+        { to_email: reminder.to_email, subject: reminder.subject, message: reminder.message },
+      );
+      setReminder(null);
+      setMsg({ text: r.message || "Reminder sent.", ok: true });
+      // The order records that it was chased, so re-read it and the note shows.
+      adminService.getOrder(order?.id ?? id)
+        .then(fresh => setOrder(fresh as AdminOrder))
+        .catch(() => { /* the send stands either way */ });
+    } catch (err: unknown) {
+      setMsg({ text: err instanceof Error ? err.message : "The reminder could not be sent.", ok: false });
+    } finally { setReminderBusy(false); }
+  }
+
   async function handleVerifyAch() {
     setIsVerifyingAch(true); setMsg(null);
     try {
@@ -1185,8 +1228,59 @@ The existing label is NOT refunded — if it was a real one, request the refund 
   const avatarInitial = order.customer_name?.[0]?.toUpperCase() ?? order.company_name?.[0]?.toUpperCase() ?? "C";
   const mapQuery = [addr?.address_line1, addr?.city, addr?.state].filter(Boolean).join(", ");
 
+  const reminderModal = reminder ? (
+    <div
+      onClick={() => !reminderBusy && setReminder(null)}
+      style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: "#fff", borderRadius: "12px", width: "100%", maxWidth: "620px", padding: "24px", boxShadow: "0 20px 50px rgba(0,0,0,.25)" }}>
+        <h3 style={{ margin: "0 0 4px", fontSize: "18px", fontWeight: 800, color: "#2A2830" }}>
+          Send payment reminder
+        </h3>
+        <p style={{ margin: "0 0 18px", fontSize: "13px", color: "#7A7880" }}>
+          ${reminder.amount_due.toFixed(2)} outstanding on this order
+          {reminder.account_due > reminder.amount_due + 0.005
+            ? ` · $${reminder.account_due.toFixed(2)} across all their open orders`
+            : ""}
+        </p>
+
+        <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#7A7880", marginBottom: "4px" }}>To</label>
+        <input value={reminder.to_email}
+          onChange={e => setReminder({ ...reminder, to_email: e.target.value })}
+          style={{ width: "100%", padding: "9px 11px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", marginBottom: "14px" }} />
+
+        <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#7A7880", marginBottom: "4px" }}>Subject</label>
+        <input value={reminder.subject}
+          onChange={e => setReminder({ ...reminder, subject: e.target.value })}
+          style={{ width: "100%", padding: "9px 11px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", marginBottom: "14px" }} />
+
+        <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#7A7880", marginBottom: "4px" }}>
+          Message <span style={{ fontWeight: 400 }}>— change it however you like</span>
+        </label>
+        <textarea value={reminder.message} rows={13}
+          onChange={e => setReminder({ ...reminder, message: e.target.value })}
+          style={{ width: "100%", padding: "11px", border: "1px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", lineHeight: 1.6, fontFamily: "inherit", resize: "vertical" }} />
+        <p style={{ margin: "6px 0 0", fontSize: "11px", color: "#9A9A9A" }}>
+          The order number, the amount and a link to the invoice are added below your message.
+        </p>
+
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "20px" }}>
+          <button onClick={() => setReminder(null)} disabled={reminderBusy}
+            style={{ background: "none", border: "1px solid #E2E0DA", padding: "9px 18px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, color: "#7A7880", cursor: "pointer" }}>
+            Cancel
+          </button>
+          <button onClick={sendReminder} disabled={reminderBusy || !reminder.to_email.trim()}
+            style={{ background: "#B45309", color: "#fff", border: "none", padding: "9px 20px", borderRadius: "6px", fontSize: "13px", fontWeight: 700, cursor: reminderBusy ? "not-allowed" : "pointer", opacity: reminderBusy ? 0.6 : 1 }}>
+            {reminderBusy ? "Sending…" : "Send reminder"}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div style={{ fontFamily: "var(--font-jakarta)", maxWidth: "1200px" }}>
+      {reminderModal}
       {/* ── Email composer (send to this order's customer) ────────────────── */}
       {showEmail && (
         <div onClick={() => !sendingEmail && setShowEmail(false)} className="no-print"
@@ -2102,6 +2196,15 @@ The existing label is NOT refunded — if it was a real one, request the refund 
               style={{ background: '#fff', color: '#1B3A5C', border: '1px solid #1B3A5C', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: isResendingInvoice ? 'not-allowed' : 'pointer', opacity: isResendingInvoice ? 0.6 : 1 }}>
               {isResendingInvoice ? 'Sending…' : (order.invoice_sent_at ? 'Resend Invoice' : 'Send Invoice')}
             </button>
+            {order.payment_status !== "paid" && (
+              <button
+                onClick={openReminder}
+                disabled={reminderBusy}
+                title="Email the customer about what is still owed on this order"
+                style={{ background: '#fff', color: '#B45309', border: '1px solid #B45309', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: reminderBusy ? 'not-allowed' : 'pointer', opacity: reminderBusy ? 0.6 : 1 }}>
+                {reminderBusy ? 'Preparing…' : '⏰ Send Payment Reminder'}
+              </button>
+            )}
             {order.payment_status !== "paid" && (
               <button
                 onClick={handleMarkAsPaid}
