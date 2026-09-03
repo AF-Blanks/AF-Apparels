@@ -147,7 +147,10 @@ export default function CustomerDetailPage() {
 
   // account / balance — lifetime figures across ALL orders (not just the 50 loaded)
   const [stats, setStats] = useState<CustomerStats | null>(null);
-  const [qbBalance, setQbBalance] = useState<{ synced: boolean; qb_balance?: number; reason?: string } | null>(null);
+  const [qbBalance, setQbBalance] = useState<{
+    synced: boolean; qb_balance?: number; reason?: string;
+    qb_customer_id?: string; qb_customer_name?: string; name_matches?: boolean;
+  } | null>(null);
   const [refreshingQb, setRefreshingQb] = useState(false);
 
   // tags
@@ -258,7 +261,10 @@ export default function CustomerDetailPage() {
   async function handleRefreshQb() {
     setRefreshingQb(true);
     try {
-      const r = await adminService.getCustomerQbBalance(id) as { synced: boolean; qb_balance?: number; reason?: string };
+      const r = await adminService.getCustomerQbBalance(id) as {
+        synced: boolean; qb_balance?: number; reason?: string;
+        qb_customer_id?: string; qb_customer_name?: string; name_matches?: boolean;
+      }
       setQbBalance(r);
       if (r.synced) showToast("Balance refreshed from QuickBooks");
       else showToast(r.reason || "QuickBooks not available", false);
@@ -793,12 +799,29 @@ export default function CustomerDetailPage() {
           <div style={{ marginTop: "12px", fontSize: "12px", color: qbBalance.synced ? "#1B3A5C" : "#7A7880", background: "#F7F6F3", border: "1px solid #E2E0DA", borderRadius: "8px", padding: "9px 12px" }}>
             {qbBalance.synced ? (
               <>
+                {/* Whose customer this company's orders are actually landing on
+                    in QuickBooks — a company id points at a record there, and
+                    that record's own name is the only proof it is the right
+                    one. A mismatch here means every invoice this company has
+                    raised went out under someone else's name. */}
+                {qbBalance.qb_customer_name && qbBalance.name_matches === false && (
+                  <div style={{ color: "#E8242A", fontWeight: 700, marginBottom: "4px" }}>
+                    ⚠ Linked to QuickBooks customer &ldquo;{qbBalance.qb_customer_name}&rdquo;
+                    (id {qbBalance.qb_customer_id}) — not this company&rsquo;s own name.
+                    Invoices for this company&rsquo;s orders are going out under that name.
+                  </div>
+                )}
+                {qbBalance.qb_customer_name && qbBalance.name_matches !== false && (
+                  <div style={{ color: "#7A7880", marginBottom: "4px" }}>
+                    QuickBooks customer: {qbBalance.qb_customer_name} (id {qbBalance.qb_customer_id})
+                  </div>
+                )}
                 QuickBooks open balance:{" "}
                 <b style={{ fontVariantNumeric: "tabular-nums" }}>
                   ${(qbBalance.qb_balance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </b>
                 {Math.abs((qbBalance.qb_balance ?? 0) - outstanding) > 0.01 && (
-                  <span style={{ color: "#E8242A" }}> — differs from the app total; a payment may have been recorded directly in QuickBooks.</span>
+                  <span style={{ color: "#E8242A" }}> — differs from the app total; a payment may have been recorded directly in QuickBooks</span>
                 )}
               </>
             ) : (
