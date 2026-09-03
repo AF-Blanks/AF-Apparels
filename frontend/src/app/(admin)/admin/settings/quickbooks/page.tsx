@@ -39,6 +39,28 @@ export default function QuickBooksPage() {
   const [retrying, setRetrying] = useState<string | null>(null);
   const [purging, setPurging] = useState(false);
   const [items, setItems] = useState<QBItem[] | null>(null);
+  const [audit, setAudit] = useState<{
+    checked: number;
+    mismatches: Array<{ order_number: string; our_company: string; qb_customer: string | null; qb_invoice_id: string }>;
+    errors: Array<{ order_number: string; error: string }>;
+  } | null>(null);
+  const [auditing, setAuditing] = useState(false);
+
+  async function runAudit() {
+    setAuditing(true);
+    setMessage(null);
+    try {
+      const r = await apiClient.get<typeof audit>("/api/v1/admin/orders/audit-qb-customers");
+      setAudit(r);
+    } catch (e) {
+      setMessage({
+        type: "error",
+        text: `Couldn't run the audit: ${e instanceof Error ? e.message : "unknown error"}`,
+      });
+    } finally {
+      setAuditing(false);
+    }
+  }
   const [loadingItems, setLoadingItems] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
@@ -319,6 +341,74 @@ export default function QuickBooksPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Whether every invoiced order actually landed on its own customer.
+          One order was found to have gone out under a name that was not its
+          own — the company's link to QuickBooks had been cleared by a switch
+          to a different company, and a fallback grabbed a leftover reference
+          from the old one. This checks every synced order the same way, so
+          the full extent is known rather than found one at a time. */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="font-semibold text-gray-900">Invoice customers</p>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Checks every synced order against who QuickBooks actually billed it to.
+            </p>
+          </div>
+          <button
+            onClick={runAudit}
+            disabled={auditing}
+            className="shrink-0 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+          >
+            {auditing ? "Checking…" : "Audit invoice customers"}
+          </button>
+        </div>
+
+        {audit && (
+          <div className="mt-4">
+            {audit.mismatches.length === 0 ? (
+              <p className="text-sm text-emerald-700">
+                Checked {audit.checked} order{audit.checked === 1 ? "" : "s"} — every one is billed to its own customer.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-red-700 font-semibold mb-3">
+                  {audit.mismatches.length} of {audit.checked} order{audit.checked === 1 ? "" : "s"} went out under the wrong customer:
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                        <th className="py-2 pr-4 font-semibold">Order</th>
+                        <th className="py-2 pr-4 font-semibold">Should be</th>
+                        <th className="py-2 pr-4 font-semibold">QuickBooks has it as</th>
+                        <th className="py-2 font-semibold">QB Invoice</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {audit.mismatches.map((m) => (
+                        <tr key={m.order_number} className="border-b border-gray-100">
+                          <td className="py-2 pr-4 font-semibold text-gray-900">{m.order_number}</td>
+                          <td className="py-2 pr-4 text-gray-700">{m.our_company}</td>
+                          <td className="py-2 pr-4 text-red-700 font-medium">{m.qb_customer || "—"}</td>
+                          <td className="py-2 font-mono text-xs text-gray-500">{m.qb_invoice_id}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {audit.errors.length > 0 && (
+              <p className="mt-3 text-xs text-gray-400">
+                {audit.errors.length} order{audit.errors.length === 1 ? "" : "s"} couldn&rsquo;t be checked
+                (invoice not reachable in QuickBooks right now).
+              </p>
             )}
           </div>
         )}
