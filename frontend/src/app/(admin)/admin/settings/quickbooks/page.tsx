@@ -43,6 +43,7 @@ export default function QuickBooksPage() {
     checked: number;
     mismatches: Array<{ order_number: string; our_company: string; qb_customer: string | null; qb_invoice_id: string }>;
     errors: Array<{ order_number: string; error: string }>;
+    skipped_other_company?: number;
   } | null>(null);
   const [auditing, setAuditing] = useState(false);
 
@@ -403,6 +404,12 @@ export default function QuickBooksPage() {
                   </table>
                 </div>
               </>
+            )}
+            {!!audit.skipped_other_company && (
+              <p className="mt-3 text-xs text-gray-500">
+                {audit.skipped_other_company} order{audit.skipped_other_company === 1 ? "" : "s"} skipped —
+                invoiced in a QuickBooks company other than the one connected now, so not checkable from here.
+              </p>
             )}
             {audit.errors.length > 0 && (
               <p className="mt-3 text-xs text-gray-400">
