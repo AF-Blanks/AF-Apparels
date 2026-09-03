@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import Link from "next/link";
 import { adminService } from "@/services/admin.service";
 
@@ -43,6 +44,8 @@ export default function AdminOrdersPage() {
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("");
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string; order_count: number }>>([]);
   const [activeTab, setActiveTab] = useState<"all" | "guest">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -57,6 +60,7 @@ export default function AdminOrdersPage() {
       const params: Record<string, string | undefined> = {
         q: q || undefined,
         status: statusFilter || undefined,
+        company_id: companyFilter || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         page: String(page),
@@ -68,7 +72,16 @@ export default function AdminOrdersPage() {
     } finally { setIsLoading(false); }
   }
 
-  useEffect(() => { load(); }, [q, statusFilter, activeTab, dateFrom, dateTo, page]);
+  useEffect(() => { load(); }, [q, statusFilter, companyFilter, activeTab, dateFrom, dateTo, page]);
+
+  // Only companies that have actually placed one — a company sitting in the
+  // dropdown with nothing behind it is a dead end dressed up as a choice.
+  // Loaded once: who has ordered does not change while this page is open.
+  useEffect(() => {
+    apiClient.get<Array<{ id: string; name: string; order_count: number }>>(
+      "/api/v1/admin/orders/companies"
+    ).then(setCompanies).catch(() => {});
+  }, []);
 
   async function handleExport() {
     setExportLoading(true);
@@ -76,6 +89,7 @@ export default function AdminOrdersPage() {
       await adminService.exportOrdersCsv({
         q: q || undefined,
         status: statusFilter || undefined,
+        company_id: companyFilter || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       });
@@ -83,10 +97,10 @@ export default function AdminOrdersPage() {
   }
 
   function clearFilters() {
-    setQ(""); setStatusFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
+    setQ(""); setStatusFilter(""); setCompanyFilter(""); setDateFrom(""); setDateTo(""); setPage(1);
   }
 
-  const hasFilters = q || statusFilter || dateFrom || dateTo;
+  const hasFilters = q || statusFilter || companyFilter || dateFrom || dateTo;
   const pages = Math.ceil(total / PAGE_SIZE);
 
   return (
@@ -138,6 +152,15 @@ export default function AdminOrdersPage() {
           <option value="shipped">Shipped</option>
           <option value="delivered">Delivered</option>
           <option value="cancelled">Cancelled</option>
+        </select>
+        <select
+          value={companyFilter}
+          onChange={(e) => { setCompanyFilter(e.target.value); setPage(1); }}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm max-w-[220px]">
+          <option value="">All companies</option>
+          {companies.map(c => (
+            <option key={c.id} value={c.id}>{c.name} ({c.order_count})</option>
+          ))}
         </select>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-500 font-medium whitespace-nowrap">From</label>

@@ -364,10 +364,11 @@ export const adminService = {
     return apiClient.get(`/api/v1/admin/orders${qs ? `?${qs}` : ""}`);
   },
 
-  async exportOrdersCsv(params?: { q?: string; status?: string; date_from?: string; date_to?: string }) {
+  async exportOrdersCsv(params?: { q?: string; status?: string; company_id?: string; date_from?: string; date_to?: string }) {
     const query = new URLSearchParams();
     if (params?.q) query.set("q", params.q);
     if (params?.status) query.set("status", params.status);
+    if (params?.company_id) query.set("company_id", params.company_id);
     if (params?.date_from) query.set("date_from", params.date_from);
     if (params?.date_to) query.set("date_to", params.date_to);
     const qs = query.toString();
