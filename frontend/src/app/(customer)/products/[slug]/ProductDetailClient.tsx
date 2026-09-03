@@ -1216,21 +1216,13 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                 : isOOS ? "Out of Stock"
                                 : stockNum >= 9999 ? "In Stock"
                                 : `${remaining.toLocaleString()} in stock`;
-                              // What is still on its way, shown under the count
-                              // for sizes that have stock — the shopper buying
-                              // more than the shelf holds needs it just as much.
-                              const alsoComing = variant.allow_backorder && !onBackorder
-                                ? shortIncoming(variant.incoming as Incoming[] | undefined)
-                                : null;
+                              // What is still on its way is answered once, in the
+                              // Coming table under the colour — not repeated per size
+                              // here as well, which said the same thing twice.
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
                                 <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked ? "#fafafa" : "transparent" }}>
                                   <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", lineHeight: 1.25 }}>{stockLabel}</span>
-                                  {alsoComing && (
-                                    <span style={{ display: "block", fontSize: "10px", color: "#D97706", fontWeight: 600, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px" }}>
-                                      {alsoComing}
-                                    </span>
-                                  )}
                                   <span style={{ display: "block", fontSize: "12px", color: blocked ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
                                   <input
                                     type="number"
@@ -1269,22 +1261,44 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                           </div>
 
                           {/* What is still to come for this colour, a row per
-                              delivery, lined up under the sizes above. The
-                              per-box note answers one size; a buyer spreading an
-                              order across eight of them needs the whole picture. */}
+                              delivery. The date leads on the left as a heading —
+                              read that first — with the per-size counts and a
+                              running total following it, headed the same way the
+                              sizes above are, so nothing here is a bare number. */}
                           {(() => {
                             const rows = incomingByDate(group.variants, uniqueSizes);
                             if (rows.length === 0) return null;
+                            const LABEL_COL = "104px";
                             return (
                               <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px dashed #E2E2DE" }}>
                                 <span style={{ display: "block", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 700, color: "#7A7880", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "6px" }}>
                                   Coming
                                 </span>
+
+                                {/* Column headings, so a count is never read before
+                                    what it counts. */}
+                                <div style={{ display: "grid", gridTemplateColumns: `${LABEL_COL} repeat(${uniqueSizes.length}, minmax(0, 1fr)) 70px`, gap: "4px", padding: "0 0 4px" }}>
+                                  <span />
+                                  {uniqueSizes.map(size => (
+                                    <span key={size} style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "10px", fontWeight: 700, color: "#9A9890", textTransform: "uppercase" }}>
+                                      {size}
+                                    </span>
+                                  ))}
+                                  <span style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "10px", fontWeight: 700, color: "#9A9890", textTransform: "uppercase" }}>
+                                    Total
+                                  </span>
+                                </div>
+
                                 {rows.map(row => (
                                   <div
                                     key={row.date}
-                                    style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, minmax(0, 1fr)) 80px 90px`, gap: "4px", alignItems: "center", padding: "3px 0" }}
+                                    style={{ display: "grid", gridTemplateColumns: `${LABEL_COL} repeat(${uniqueSizes.length}, minmax(0, 1fr)) 70px`, gap: "4px", alignItems: "center", padding: "3px 0" }}
                                   >
+                                    {/* The heading for this row, read before any of
+                                        its numbers — ETA first, count after. */}
+                                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 700, color: "#D97706", whiteSpace: "nowrap" }}>
+                                      ETA {etaLabel(row.date)}
+                                    </span>
                                     {uniqueSizes.map(size => {
                                       const n = row.perSize[size] ?? 0;
                                       return (
@@ -1298,9 +1312,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                     })}
                                     <span style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 700, color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
                                       {row.total.toLocaleString()}
-                                    </span>
-                                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 600, color: "#D97706", whiteSpace: "nowrap", paddingLeft: "6px" }}>
-                                      ETA {etaLabel(row.date)}
                                     </span>
                                   </div>
                                 ))}
