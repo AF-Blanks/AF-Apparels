@@ -234,6 +234,7 @@ export default function CommissionReportPage() {
                   <tfoot className="bg-gray-50 font-bold text-gray-900">
                     <tr style={{ fontVariantNumeric: "tabular-nums" }}>
                       <td className="px-6 py-3" colSpan={3}>Total</td>
+                      <td className="px-4 py-3 text-right">{money(t.order_total ?? 0)}</td>
                       <td className="px-4 py-3 text-right">{money(t.special_base)}</td>
                       <td className="px-4 py-3 text-right">{money(t.special_commission)}</td>
                       <td className="px-4 py-3 text-right">{money(t.other_base)}</td>
