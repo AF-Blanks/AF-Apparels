@@ -208,6 +208,40 @@ function BracketEditor({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+interface RateCardSize {
+  band: string | null;
+  price: number | null;
+  count: number;
+  retail: number;
+}
+
+interface RateCardProduct {
+  product_code: string;
+  product_name: string;
+  in_card: boolean;
+  matched_by_name: boolean;
+  card_row: string | null;
+  sizes: Record<string, RateCardSize>;
+  variants: number;
+  priced: number;
+  untouched: number;
+}
+
+interface RateCardPlan {
+  tiers: string[];
+  groups: Array<{ id: string; title: string; tag: string | null }>;
+  products: RateCardProduct[];
+  totals: {
+    groups: number;
+    products_in_card: number;
+    products_not_in_card: number;
+    variants_priced: number;
+    overrides: number;
+  };
+}
+
+const SIZE_ORDER_RC = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "XXL", "3XL", "4XL", "5XL"];
+
 export default function DiscountGroupsPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
@@ -581,6 +615,40 @@ export default function DiscountGroupsPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  // ── The agreed rate card ────────────────────────────────────────────────
+  const [rcPlan, setRcPlan] = useState<RateCardPlan | null>(null);
+  const [rcOpen, setRcOpen] = useState(false);
+  const [rcBusy, setRcBusy] = useState(false);
+  const [rcDone, setRcDone] = useState<string | null>(null);
+
+  async function loadRateCard() {
+    setRcBusy(true);
+    setRcDone(null);
+    try {
+      const plan = await apiClient.get<RateCardPlan>("/api/v1/admin/discount-groups/rate-card");
+      setRcPlan(plan);
+      setRcOpen(true);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Couldn't read the rate card", false);
+    } finally {
+      setRcBusy(false);
+    }
+  }
+
+  async function applyRateCard() {
+    setRcBusy(true);
+    try {
+      const res = await apiClient.post<{ message: string }>(
+        "/api/v1/admin/discount-groups/rate-card/apply", {}
+      );
+      setRcDone(res.message);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Couldn't apply the rate card", false);
+    } finally {
+      setRcBusy(false);
+    }
+  }
+
   return (
     <div style={{ fontFamily: "var(--font-jakarta)" }}>
 
@@ -606,6 +674,135 @@ export default function DiscountGroupsPage() {
           <button onClick={handleSaveVariantPricing} disabled={vpSaving} style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: vpSaving ? 0.6 : 1 }}>
             {vpSaving ? "Saving…" : "Save Pricing"}
           </button>
+        )}
+      </div>
+
+      {/* The agreed card for the top tiers. Shown before it is applied,
+          because a price list written straight onto a live catalogue is only
+          found to be wrong on somebody's invoice. */}
+      <div style={{ border: "1px solid #E2E0DA", borderRadius: "10px", background: "#fff", padding: "18px 20px", marginBottom: "18px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: "15px", color: "#2A2830", margin: 0 }}>
+              Tier 4 &amp; Tier 5 rate card
+            </p>
+            <p style={{ fontSize: "13px", color: "#7A7880", margin: "4px 0 0", lineHeight: 1.6, maxWidth: "640px" }}>
+              The agreed price per product and size band. Applying it sets those prices
+              for every customer in Tier 4 and Tier 5 — and commission, being worked
+              out on what they are billed, follows from them.
+            </p>
+          </div>
+          <button
+            onClick={loadRateCard}
+            disabled={rcBusy}
+            style={{ padding: "9px 18px", border: "1px solid #D9D7D0", borderRadius: "8px", background: "#fff", fontWeight: 600, fontSize: "13px", cursor: rcBusy ? "wait" : "pointer", whiteSpace: "nowrap" }}
+          >
+            {rcBusy && !rcPlan ? "Checking…" : rcOpen ? "Refresh" : "Review rate card"}
+          </button>
+        </div>
+
+        {rcOpen && rcPlan && (
+          <div style={{ marginTop: "18px", borderTop: "1px solid #EFEDE8", paddingTop: "16px" }}>
+            {rcDone ? (
+              <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: "8px", padding: "16px 18px" }}>
+                <p style={{ margin: 0, fontWeight: 700, color: "#065F46", fontSize: "14px" }}>Applied.</p>
+                <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#047857", lineHeight: 1.6 }}>{rcDone}</p>
+              </div>
+            ) : (
+              <>
+                <p style={{ fontSize: "13px", color: "#4B5563", margin: "0 0 14px", lineHeight: 1.7 }}>
+                  Would set <strong>{rcPlan.totals.overrides.toLocaleString()}</strong> prices
+                  across <strong>{rcPlan.groups.map(g => g.title).join(" and ") || "no group"}</strong>
+                  {" "}— {rcPlan.totals.variants_priced.toLocaleString()} variants in each.
+                  {rcPlan.totals.products_not_in_card > 0 && (
+                    <> {rcPlan.totals.products_not_in_card} product{rcPlan.totals.products_not_in_card === 1 ? " is" : "s are"} not on the card and {rcPlan.totals.products_not_in_card === 1 ? "is" : "are"} left alone.</>
+                  )}
+                </p>
+
+                <div style={{ overflowX: "auto", border: "1px solid #EFEDE8", borderRadius: "8px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ background: "#FAFAF8", textAlign: "left" }}>
+                        <th style={{ padding: "9px 12px", fontSize: "11px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880" }}>Product</th>
+                        <th style={{ padding: "9px 12px", fontSize: "11px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880" }}>Prices by size</th>
+                        <th style={{ padding: "9px 12px", fontSize: "11px", textTransform: "uppercase", letterSpacing: ".04em", color: "#7A7880", textAlign: "right", whiteSpace: "nowrap" }}>Variants</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rcPlan.products.map(p => {
+                        const sizes = Object.entries(p.sizes).sort(
+                          (a, b) => (SIZE_ORDER_RC.indexOf(a[0]) + 1 || 99) - (SIZE_ORDER_RC.indexOf(b[0]) + 1 || 99)
+                        );
+                        return (
+                          <tr key={p.product_code || p.product_name} style={{ borderTop: "1px solid #F2F0EB", background: p.in_card ? "#fff" : "#FCFBF9" }}>
+                            <td style={{ padding: "10px 12px", verticalAlign: "top" }}>
+                              <div style={{ fontWeight: 600, color: p.in_card ? "#2A2830" : "#9A9890" }}>{p.product_name}</div>
+                              {p.matched_by_name && (
+                                <div style={{ fontSize: "11px", color: "#B45309", marginTop: "3px" }}>
+                                  matched to card row &ldquo;{p.card_row}&rdquo;
+                                </div>
+                              )}
+                              {!p.in_card && (
+                                <div style={{ fontSize: "11px", color: "#9A9890", marginTop: "3px" }}>
+                                  not on the card — prices unchanged
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: "10px 12px" }}>
+                              {p.in_card ? (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                                  {sizes.map(([sz, info]) => (
+                                    <span
+                                      key={sz}
+                                      title={info.price === null ? "The card says nothing about this size — its price is left alone" : undefined}
+                                      style={{
+                                        border: "1px solid " + (info.price === null ? "#EFEDE8" : "#CFE3D2"),
+                                        background: info.price === null ? "#FAFAF8" : "#F3FAF4",
+                                        color: info.price === null ? "#9A9890" : "#166534",
+                                        borderRadius: "6px", padding: "3px 8px", fontSize: "12px",
+                                        whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+                                      }}
+                                    >
+                                      {sz} {info.price === null ? "—" : `$${info.price.toFixed(2)}`}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span style={{ color: "#C9C7C0" }}>—</span>
+                              )}
+                            </td>
+                            <td style={{ padding: "10px 12px", textAlign: "right", color: "#7A7880", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                              {p.priced > 0 ? `${p.priced} priced` : "—"}
+                              {p.untouched > 0 && <div style={{ fontSize: "11px", color: "#B0AEA6" }}>{p.untouched} left alone</div>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
+                  <button
+                    onClick={applyRateCard}
+                    disabled={rcBusy || rcPlan.groups.length === 0}
+                    style={{ padding: "10px 22px", border: "none", borderRadius: "8px", background: rcPlan.groups.length ? "#1B3A5C" : "#E2E0DA", color: rcPlan.groups.length ? "#fff" : "#9A9890", fontWeight: 700, fontSize: "13px", cursor: rcPlan.groups.length ? "pointer" : "not-allowed" }}
+                  >
+                    {rcBusy ? "Applying…" : `Apply to ${rcPlan.groups.map(g => g.title).join(" & ") || "nothing"}`}
+                  </button>
+                  <button
+                    onClick={() => setRcOpen(false)}
+                    style={{ padding: "10px 18px", border: "1px solid #D9D7D0", borderRadius: "8px", background: "#fff", fontWeight: 600, fontSize: "13px", cursor: "pointer" }}
+                  >
+                    Close
+                  </button>
+                  <span style={{ fontSize: "12px", color: "#9A9890" }}>
+                    Orders already placed keep the prices they were billed at.
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
 
