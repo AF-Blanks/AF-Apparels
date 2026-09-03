@@ -619,31 +619,15 @@ export default function DiscountGroupsPage() {
   const [rcPlan, setRcPlan] = useState<RateCardPlan | null>(null);
   const [rcOpen, setRcOpen] = useState(false);
   const [rcBusy, setRcBusy] = useState(false);
-  const [rcDone, setRcDone] = useState<string | null>(null);
 
   async function loadRateCard() {
     setRcBusy(true);
-    setRcDone(null);
     try {
       const plan = await apiClient.get<RateCardPlan>("/api/v1/admin/discount-groups/rate-card");
       setRcPlan(plan);
       setRcOpen(true);
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Couldn't read the rate card", false);
-    } finally {
-      setRcBusy(false);
-    }
-  }
-
-  async function applyRateCard() {
-    setRcBusy(true);
-    try {
-      const res = await apiClient.post<{ message: string }>(
-        "/api/v1/admin/discount-groups/rate-card/apply", {}
-      );
-      setRcDone(res.message);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Couldn't apply the rate card", false);
     } finally {
       setRcBusy(false);
     }
@@ -687,9 +671,10 @@ export default function DiscountGroupsPage() {
               Tier 4 &amp; Tier 5 rate card
             </p>
             <p style={{ fontSize: "13px", color: "#7A7880", margin: "4px 0 0", lineHeight: 1.6, maxWidth: "640px" }}>
-              The agreed price per product and size band. Applying it sets those prices
-              for every customer in Tier 4 and Tier 5 — and commission, being worked
-              out on what they are billed, follows from them.
+              The agreed price per product and size band, for reference. Commission
+              for Tier 4 and Tier 5 is worked out on these figures — 10% on 1000 and
+              1001, 18% on everything else. Nothing here changes what a customer is
+              billed; set that in Individual Variant Pricing.
             </p>
           </div>
           <button
@@ -703,19 +688,13 @@ export default function DiscountGroupsPage() {
 
         {rcOpen && rcPlan && (
           <div style={{ marginTop: "18px", borderTop: "1px solid #EFEDE8", paddingTop: "16px" }}>
-            {rcDone ? (
-              <div style={{ background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: "8px", padding: "16px 18px" }}>
-                <p style={{ margin: 0, fontWeight: 700, color: "#065F46", fontSize: "14px" }}>Applied.</p>
-                <p style={{ margin: "6px 0 0", fontSize: "13px", color: "#047857", lineHeight: 1.6 }}>{rcDone}</p>
-              </div>
-            ) : (
-              <>
+            <>
                 <p style={{ fontSize: "13px", color: "#4B5563", margin: "0 0 14px", lineHeight: 1.7 }}>
-                  Would set <strong>{rcPlan.totals.overrides.toLocaleString()}</strong> prices
-                  across <strong>{rcPlan.groups.map(g => g.title).join(" and ") || "no group"}</strong>
-                  {" "}— {rcPlan.totals.variants_priced.toLocaleString()} variants in each.
+                  <strong>{rcPlan.totals.products_in_card}</strong> product{rcPlan.totals.products_in_card === 1 ? "" : "s"} priced
+                  on the card, covering{" "}
+                  {rcPlan.totals.variants_priced.toLocaleString()} variant{rcPlan.totals.variants_priced === 1 ? "" : "s"}.
                   {rcPlan.totals.products_not_in_card > 0 && (
-                    <> {rcPlan.totals.products_not_in_card} product{rcPlan.totals.products_not_in_card === 1 ? " is" : "s are"} not on the card and {rcPlan.totals.products_not_in_card === 1 ? "is" : "are"} left alone.</>
+                    <> {rcPlan.totals.products_not_in_card} product{rcPlan.totals.products_not_in_card === 1 ? " is" : "s are"} not on the card — those earn commission on what the order was billed instead.</>
                   )}
                 </p>
 
@@ -784,24 +763,17 @@ export default function DiscountGroupsPage() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "16px", flexWrap: "wrap" }}>
                   <button
-                    onClick={applyRateCard}
-                    disabled={rcBusy || rcPlan.groups.length === 0}
-                    style={{ padding: "10px 22px", border: "none", borderRadius: "8px", background: rcPlan.groups.length ? "#1B3A5C" : "#E2E0DA", color: rcPlan.groups.length ? "#fff" : "#9A9890", fontWeight: 700, fontSize: "13px", cursor: rcPlan.groups.length ? "pointer" : "not-allowed" }}
-                  >
-                    {rcBusy ? "Applying…" : `Apply to ${rcPlan.groups.map(g => g.title).join(" & ") || "nothing"}`}
-                  </button>
-                  <button
                     onClick={() => setRcOpen(false)}
                     style={{ padding: "10px 18px", border: "1px solid #D9D7D0", borderRadius: "8px", background: "#fff", fontWeight: 600, fontSize: "13px", cursor: "pointer" }}
                   >
                     Close
                   </button>
                   <span style={{ fontSize: "12px", color: "#9A9890" }}>
-                    Orders already placed keep the prices they were billed at.
+                    Nothing here changes what anyone is billed — these are the figures
+                    commission is worked out on.
                   </span>
                 </div>
-              </>
-            )}
+            </>
           </div>
         )}
       </div>
