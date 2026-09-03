@@ -428,6 +428,45 @@ function describeIncoming(incoming?: Incoming[] | null): string | null {
  * it is a wedge — it cannot wrap, so the column grows to fit it and everything
  * beside it gives way. Here the soonest delivery is the answer, short.
  */
+/** Every delivery due for one colour, as a row per date.
+ *
+ * The stock figures answer "what can I have today". These answer the question
+ * that follows it — "and when can I have the rest" — for the whole colour at
+ * once, so a buyer ordering across sizes reads one table instead of hovering
+ * each box in turn.
+ */
+function incomingByDate(
+  variants: Array<{ size?: string | null; allow_backorder?: boolean; incoming?: Incoming[] | null }>,
+  sizes: string[],
+): Array<{ date: string; perSize: Record<string, number>; total: number }> {
+  const byDate = new Map<string, Record<string, number>>();
+
+  for (const v of variants) {
+    if (!v?.allow_backorder || !v.size) continue;
+    for (const inc of v.incoming ?? []) {
+      if (!inc?.expected_date || !(inc.quantity > 0)) continue;
+      const row = byDate.get(inc.expected_date) ?? {};
+      row[v.size] = (row[v.size] ?? 0) + inc.quantity;
+      byDate.set(inc.expected_date, row);
+    }
+  }
+
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, perSize]) => ({
+      date,
+      perSize,
+      total: sizes.reduce((t, sz) => t + (perSize[sz] ?? 0), 0),
+    }));
+}
+
+/** 9/23/2026 — the way a delivery date is written on a packing schedule. */
+function etaLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
 function shortIncoming(incoming?: Incoming[] | null): string | null {
   const rows = (incoming ?? []).filter(i => i?.expected_date && i.quantity > 0);
   if (!rows.length) return null;
@@ -1228,6 +1267,46 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               </span>
                             </div>
                           </div>
+
+                          {/* What is still to come for this colour, a row per
+                              delivery, lined up under the sizes above. The
+                              per-box note answers one size; a buyer spreading an
+                              order across eight of them needs the whole picture. */}
+                          {(() => {
+                            const rows = incomingByDate(group.variants, uniqueSizes);
+                            if (rows.length === 0) return null;
+                            return (
+                              <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px dashed #E2E2DE" }}>
+                                <span style={{ display: "block", fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 700, color: "#7A7880", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "6px" }}>
+                                  Coming
+                                </span>
+                                {rows.map(row => (
+                                  <div
+                                    key={row.date}
+                                    style={{ display: "grid", gridTemplateColumns: `repeat(${uniqueSizes.length}, minmax(0, 1fr)) 80px 90px`, gap: "4px", alignItems: "center", padding: "3px 0" }}
+                                  >
+                                    {uniqueSizes.map(size => {
+                                      const n = row.perSize[size] ?? 0;
+                                      return (
+                                        <span
+                                          key={size}
+                                          style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: n > 0 ? 700 : 400, color: n > 0 ? "#1A1A1A" : "#C9C7C0", fontVariantNumeric: "tabular-nums" }}
+                                        >
+                                          {n > 0 ? n.toLocaleString() : "—"}
+                                        </span>
+                                      );
+                                    })}
+                                    <span style={{ textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 700, color: "#1A1A1A", fontVariantNumeric: "tabular-nums" }}>
+                                      {row.total.toLocaleString()}
+                                    </span>
+                                    <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 600, color: "#D97706", whiteSpace: "nowrap", paddingLeft: "6px" }}>
+                                      ETA {etaLabel(row.date)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
