@@ -36,6 +36,7 @@ interface DashboardState {
   dailyCounts: number[];
   conversionRate: number;
   totalTaxCollected: number;
+  totalCommission: number;
   moneyReceived: number;
   outstandingAmount: number;
   totalCustomers: number;
@@ -216,6 +217,7 @@ export default function AdminDashboard() {
         avgOrderValue: ov.average_order_value ?? 0,
         conversionRate: ov.conversion_rate ?? 0,
         totalTaxCollected: ov.total_tax_collected ?? 0,
+        totalCommission: ov.total_commission ?? 0,
         moneyReceived: ov.money_received ?? 0,
         outstandingAmount: ov.outstanding_amount ?? 0,
         totalCustomers: ov.total_customers ?? 0,
@@ -301,6 +303,15 @@ export default function AdminDashboard() {
       change: "",
       up: true,
       sub: "synced to QuickBooks",
+    },
+    {
+      // Tier 4/5 commission, same rate-card figure the Commission report
+      // shows — one number here rather than the full per-customer table.
+      label: "Total Commission",
+      value: `$${(state.totalCommission ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      change: "",
+      up: true,
+      sub: "Tier 4 & 5, this period",
     },
   ];
 

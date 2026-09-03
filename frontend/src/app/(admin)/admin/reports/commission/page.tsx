@@ -16,6 +16,7 @@ interface CommissionOrder {
   total_commission: number;
   payment_status?: string;
   paid?: boolean;
+  order_total?: number;
 }
 
 interface CommissionCustomer {
@@ -29,6 +30,7 @@ interface CommissionCustomer {
   other_commission: number;
   total_commission: number;
   unpaid_commission?: number;
+  order_total?: number;
   orders: CommissionOrder[];
 }
 
@@ -48,6 +50,7 @@ interface CommissionReport {
     other_commission: number;
     total_commission: number;
     unpaid_commission?: number;
+    order_total?: number;
   };
   customers: CommissionCustomer[];
   warning?: string;
@@ -208,6 +211,7 @@ export default function CommissionReportPage() {
                     <th className="px-6 py-3 text-left">Customer</th>
                     <th className="px-4 py-3 text-left">Tier</th>
                     <th className="px-4 py-3 text-right">Orders</th>
+                    <th className="px-4 py-3 text-right">Order total</th>
                     <th className="px-4 py-3 text-right">{r?.special_codes.join("/")} goods</th>
                     <th className="px-4 py-3 text-right">@ {r?.special_percent}%</th>
                     <th className="px-4 py-3 text-right">Other goods</th>
@@ -262,6 +266,7 @@ function CustomerRows({ c, open, onToggle }: {
         </td>
         <td className="px-4 py-3 text-gray-600">{c.tier}</td>
         <td className="px-4 py-3 text-right text-gray-600">{c.order_count}</td>
+        <td className="px-4 py-3 text-right font-semibold text-gray-900">{money(c.order_total ?? 0)}</td>
         <td className="px-4 py-3 text-right text-gray-600">{money(c.special_base)}</td>
         <td className="px-4 py-3 text-right text-gray-900">{money(c.special_commission)}</td>
         <td className="px-4 py-3 text-right text-gray-600">{money(c.other_base)}</td>
@@ -283,7 +288,7 @@ function CustomerRows({ c, open, onToggle }: {
             )}
           </td>
           <td className="px-4 py-2 text-gray-400">{o.units} pcs</td>
-          <td className="px-4 py-2"></td>
+          <td className="px-4 py-2 text-right font-medium text-gray-700">{money(o.order_total ?? 0)}</td>
           <td className="px-4 py-2 text-right text-gray-500">{money(o.special_base)}</td>
           <td className="px-4 py-2 text-right text-gray-700">{money(o.special_commission)}</td>
           <td className="px-4 py-2 text-right text-gray-500">{money(o.other_base)}</td>
