@@ -6,6 +6,9 @@ import { accountService } from "@/services/account.service";
 
 interface QBInvoice {
   id: string;
+  // The order's own number — the payment page is addressed by that, not by
+  // QuickBooks' invoice id.
+  order_number?: string | null;
   doc_number: string | null;
   txn_date: string | null;
   due_date: string | null;
@@ -123,6 +126,7 @@ export default function InvoicesPage() {
                 <th style={{ textAlign: "right", padding: "10px 16px", fontWeight: 600, color: "#374151" }}>Amount</th>
                 <th style={{ textAlign: "right", padding: "10px 16px", fontWeight: 600, color: "#374151" }}>Balance</th>
                 <th style={{ textAlign: "center", padding: "10px 16px", fontWeight: 600, color: "#374151" }}>Status</th>
+                <th style={{ textAlign: "right", padding: "10px 16px", fontWeight: 600, color: "#374151" }}></th>
               </tr>
             </thead>
             <tbody>
@@ -159,6 +163,23 @@ export default function InvoicesPage() {
                       }}>
                         {st.label}
                       </span>
+                    </td>
+                    {/* Somewhere to pay it from. This page listed what was owed
+                        and offered no way to settle any of it — a customer on
+                        terms could see the balance and nothing else. */}
+                    <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                      {inv.balance > 0 && inv.order_number && (
+                        <a
+                          href={`/checkout/invoice/${inv.order_number}`}
+                          style={{
+                            display: "inline-block", background: "#1B3A5C", color: "#fff",
+                            padding: "6px 14px", borderRadius: "6px", fontSize: "12px",
+                            fontWeight: 700, textDecoration: "none",
+                          }}
+                        >
+                          Pay {money(inv.balance)}
+                        </a>
+                      )}
                     </td>
                   </tr>
                 );

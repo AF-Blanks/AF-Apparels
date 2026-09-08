@@ -442,8 +442,12 @@ export default function OrderDetailPage() {
         </div>
       )}
 
-      {/* Pay Now banner for unpaid draft invoice orders */}
-      {(order.is_draft || order.order_number?.startsWith('DRAFT-')) && order.payment_status !== 'paid' && (
+      {/* Somewhere to pay from.
+          This used to require a draft order, so a customer on Net 30 or Net 7 —
+          the people who by definition have a balance to settle — saw nothing at
+          all. Neither the payment page nor the endpoint behind it ever cared
+          whether an order was a draft; only this line did. */}
+      {order.payment_status !== 'paid' && Number(order.total) - Number(order.amount_paid || 0) > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center">
           <p className="text-sm font-semibold text-gray-800 mb-3">Invoice payment pending</p>
           <a

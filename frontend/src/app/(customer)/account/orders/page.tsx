@@ -16,6 +16,7 @@ interface Order {
   item_count: number;
   created_at: string;
   return_status?: string | null;
+  amount_paid?: string | number | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -170,7 +171,19 @@ export default function AccountOrdersPage() {
                   <td className="px-4 py-3 text-gray-500 text-xs">
                     {new Date(o.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {/* Somewhere to pay from without opening the order first.
+                        A customer on terms is here to settle something; making
+                        them find it a click deeper is how an invoice ages. */}
+                    {o.payment_status !== "paid" &&
+                      Number(o.total) - Number(o.amount_paid || 0) > 0 && (
+                        <Link
+                          href={`/checkout/invoice/${o.order_number}`}
+                          className="mr-3 rounded-md bg-brand-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-brand-800"
+                        >
+                          Pay
+                        </Link>
+                      )}
                     <Link
                       href={`/account/orders/${o.order_number}`}
                       className="text-xs font-medium text-brand-600 hover:text-brand-800"
