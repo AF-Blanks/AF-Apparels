@@ -61,7 +61,6 @@ function newAttemptKey(): string {
 
 export default function StripePaymentForm(props: Props) {
   const [stripePromise, setStripePromise] = useState<Promise<Stripe | null> | null>(null);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,18 +78,8 @@ export default function StripePaymentForm(props: Props) {
           return;
         }
 
-        // A SetupIntent, not a PaymentIntent: this form only collects details.
-        // The charge is raised server-side when the order is placed, against a
-        // total the server works out itself — a client that could name its own
-        // amount is a client that can pay a dollar for a thousand.
-        const si = await apiClient.post<{ client_secret: string }>(
-          "/api/v1/stripe/setup-intent",
-          {}
-        );
-
         if (cancelled) return;
         setStripePromise(loadStripe(cfg.publishable_key));
-        setClientSecret(si.client_secret);
       } catch (e) {
         if (!cancelled) {
           setBootError(
@@ -117,7 +106,7 @@ export default function StripePaymentForm(props: Props) {
     );
   }
 
-  if (!stripePromise || !clientSecret) {
+  if (!stripePromise) {
     return (
       <div className="rounded-md border border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
         Loading payment form…
@@ -129,7 +118,23 @@ export default function StripePaymentForm(props: Props) {
     <Elements
       stripe={stripePromise}
       options={{
-        clientSecret,
+        // Deferred mode, not a client secret.
+        //
+        // The charge is raised server-side against a total the server works out
+        // itself — a browser that could name its own amount is a browser that
+        // can pay a dollar for a thousand. That means this form's job is only to
+        // turn what the customer typed into a payment method id, which is what
+        // `createPaymentMethod` does — and Stripe only permits that when the
+        // Elements instance was created this way. Handing it a SetupIntent's
+        // client secret instead is what produced "your elements instance must be
+        // created with paymentMethodCreation: 'manual'".
+        //
+        // The amount here is for display and for deciding which methods to
+        // offer. It is never what gets charged.
+        mode: "payment",
+        currency: "usd",
+        amount: Math.max(50, Math.round((props.amount || 0) * 100)),
+        paymentMethodCreation: "manual",
         appearance: {
           theme: "stripe",
           variables: { colorPrimary: "#1B3A5C", borderRadius: "6px" },
