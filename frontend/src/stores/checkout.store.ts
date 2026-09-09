@@ -66,6 +66,14 @@ interface CheckoutState {
   // Step 2 — payment (QB Payments)
   qbToken: string | null;
   savedCardId: string | null;
+  // Step 2 — payment (Stripe). Collected on the payment step and spent on the
+  // review step, exactly as qbToken is: the payment method id stands in for the
+  // card or bank account, which never reach us. attemptKey is made once per form
+  // and carried through, so a second press of Place Order is recognised as the
+  // same press rather than charged again.
+  stripePaymentMethodId: string | null;
+  stripeMethodType: string | null;
+  attemptKey: string | null;
   // Stripe (legacy)
   paymentIntentId: string | null;
   clientSecret: string | null;
@@ -110,6 +118,7 @@ interface CheckoutState {
   setPoNumber: (po: string) => void;
   setOrderNotes: (notes: string) => void;
   setQbToken: (token: string | null) => void;
+  setStripeMethod: (m: { paymentMethodId: string; methodType: string; attemptKey: string } | null) => void;
   setSavedCardId: (id: string | null) => void;
   setPaymentIntent: (id: string, secret: string) => void;
   setConfirmedOrder: (order: {
@@ -157,6 +166,9 @@ const initialState = {
   orderNotes: "",
   qbToken: null,
   savedCardId: null,
+  stripePaymentMethodId: null,
+  stripeMethodType: null,
+  attemptKey: null,
   paymentIntentId: null,
   clientSecret: null,
   confirmedOrderId: null,
@@ -203,6 +215,17 @@ export const useCheckoutStore = create<CheckoutState>()(
       setPoNumber: (po) => set({ poNumber: po }),
       setOrderNotes: (notes) => set({ orderNotes: notes }),
       setQbToken: (token) => set({ qbToken: token, savedCardId: null }),
+      // One provider at a time: taking a Stripe method clears the QuickBooks
+      // token and the saved-card choice, so two payment paths can never both
+      // look armed when the order is placed.
+      setStripeMethod: (m) =>
+        set({
+          stripePaymentMethodId: m?.paymentMethodId ?? null,
+          stripeMethodType: m?.methodType ?? null,
+          attemptKey: m?.attemptKey ?? null,
+          qbToken: null,
+          savedCardId: null,
+        }),
       setSavedCardId: (id) => set({ savedCardId: id, qbToken: null }),
       setPaymentIntent: (id, secret) => set({ paymentIntentId: id, clientSecret: secret }),
       setConfirmedOrder: ({ id, number, total, units, colorSummary, productName, shippingMethod, shippingCost, paymentMethod }) =>

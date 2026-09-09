@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/stores/auth.store'
 import { apiClient } from '@/lib/api-client'
 import { QBPaymentForm } from '@/components/checkout/QBPaymentForm'
+import StripePaymentForm, { type StripeResult } from '@/components/checkout/StripePaymentForm'
 
 interface OrderItem {
   product_name: string
@@ -38,6 +39,13 @@ export default function InvoicePaymentPage() {
   const [error, setError] = useState('')
   const [paying, setPaying] = useState(false)
   const [paid, setPaid] = useState(false)
+  // Paid, or merely started? A bank debit clears over days, and telling someone
+  // their invoice is settled when the money has not moved is the same mistake
+  // that put a declined transfer on the books as PAID.
+  const [settled, setSettled] = useState(true)
+  // Who is taking payment today — asked of the server, never assumed, so the
+  // switch that moves the shop to Stripe moves this page with it.
+  const [stripeOn, setStripeOn] = useState<boolean | null>(null)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
   useEffect(() => {
@@ -68,6 +76,36 @@ export default function InvoicePaymentPage() {
     }
     load()
   }, [isLoading, orderNumber]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    apiClient
+      .get<{ active: boolean }>('/api/v1/stripe/config')
+      .then((c) => setStripeOn(!!c?.active))
+      .catch(() => setStripeOn(false))
+  }, [])
+
+  async function handleStripe(r: StripeResult) {
+    if (!order) return
+    setPaying(true)
+    try {
+      const res = await apiClient.post<{ settled?: boolean }>(
+        `/api/v1/orders/${order.id}/pay-invoice`,
+        {
+          stripe_payment_method_id: r.paymentMethodId,
+          payment_method: r.methodType === 'us_bank_account' ? 'ach' : 'card',
+          // A bank debit needs the customer's say-so on record; the form does
+          // not offer that method without the box ticked.
+          ach_authorized: r.methodType === 'us_bank_account',
+          attempt_key: r.attemptKey,
+        }
+      )
+      setSettled(res?.settled !== false)
+      setPaid(true)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Payment failed. Please try again.')
+      setPaying(false)
+    }
+  }
 
   async function handleToken(token: string) {
     if (!order) return
@@ -118,10 +156,14 @@ export default function InvoicePaymentPage() {
           ✓
         </div>
         <h1 style={{ fontFamily: 'var(--font-bebas)', fontSize: '28px', color: '#1B3A5C', margin: '0 0 8px', letterSpacing: '.04em' }}>
-          PAYMENT COMPLETE
+          {settled ? 'PAYMENT COMPLETE' : 'TRANSFER STARTED'}
         </h1>
         <p style={{ color: '#374151', fontSize: '14px', margin: '0 0 24px' }}>
-          Thank you! Order {order.order_number} has been paid in full.
+          {settled
+            ? `Thank you! Order ${order.order_number} has been paid in full.`
+            : `Thank you. The bank transfer for order ${order.order_number} has been started. ` +
+              `It takes 3–5 business days to clear, and the invoice stays open until it does — ` +
+              `we'll email you when the money lands.`}
         </p>
         <button
           onClick={() => router.push('/account/orders')}
@@ -215,13 +257,23 @@ export default function InvoicePaymentPage() {
       ) : (
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '20px' }}>
           <p style={{ margin: '0 0 14px', fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '.08em' }}>
-            Card Details
+            {stripeOn ? 'Payment Details' : 'Card Details'}
           </p>
-          <QBPaymentForm
-            onToken={handleToken}
-            onBack={() => router.push('/account/orders')}
-            submitLabel={amountPaid > 0 ? `Pay Balance $${balanceDue.toFixed(2)}` : `Pay $${balanceDue.toFixed(2)}`}
-          />
+          {stripeOn === null ? (
+            <p style={{ margin: 0, fontSize: '13px', color: '#888' }}>Loading payment…</p>
+          ) : stripeOn ? (
+            <StripePaymentForm
+              amount={balanceDue}
+              onReady={handleStripe}
+              placing={paying}
+            />
+          ) : (
+            <QBPaymentForm
+              onToken={handleToken}
+              onBack={() => router.push('/account/orders')}
+              submitLabel={amountPaid > 0 ? `Pay Balance $${balanceDue.toFixed(2)}` : `Pay $${balanceDue.toFixed(2)}`}
+            />
+          )}
         </div>
       )}
     </div>

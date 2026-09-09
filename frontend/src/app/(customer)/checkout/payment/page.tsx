@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { QBPaymentForm } from "@/components/checkout/QBPaymentForm";
+import StripePaymentForm, { type StripeResult } from "@/components/checkout/StripePaymentForm";
 import CouponField from "@/components/checkout/CouponField";
 import { useCheckoutStore } from "@/stores/checkout.store";
 import { useAuthStore } from "@/stores/auth.store";
@@ -60,7 +61,7 @@ const sectionLabelStyle: React.CSSProperties = {
 export default function CheckoutPaymentPage() {
   const router = useRouter();
   const {
-    shippingAddress, shippingMethod, shippingCost, setSavedCardId, setQbToken,
+    shippingAddress, shippingMethod, shippingCost, setSavedCardId, setQbToken, setStripeMethod,
     taxAmount: storedTaxAmount, taxRate: storedTaxRate, taxRegion: storedTaxRegion,
     setPaymentMethod, setAchInfo, setConvenienceFee,
   } = useCheckoutStore();
@@ -194,6 +195,31 @@ export default function CheckoutPaymentPage() {
     setConvenienceFee(convenienceFeeEarly);
     setPaymentMethod("card");
     setSavedCardId(selectedCardId);
+    router.push("/checkout/review");
+  }
+
+  // Who is taking payment today. Asked of the server rather than assumed, so
+  // the one switch that moves the shop to Stripe moves this page with it.
+  const [stripeOn, setStripeOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    apiClient
+      .get<{ active: boolean }>("/api/v1/stripe/config")
+      .then((c) => setStripeOn(!!c?.active))
+      .catch(() => setStripeOn(false));
+  }, []);
+
+  // Stripe collected a card or a bank account. Nothing is charged here — the
+  // review step places the order, which is where the money moves, so the
+  // customer still sees what they are agreeing to before it does.
+  function handleStripeMethod(r: StripeResult) {
+    const isBank = r.methodType === "us_bank_account";
+    setConvenienceFee(isBank ? 0 : convenienceFeeEarly);
+    setPaymentMethod(isBank ? "ach" : "card");
+    setStripeMethod({
+      paymentMethodId: r.paymentMethodId,
+      methodType: r.methodType,
+      attemptKey: r.attemptKey,
+    });
     router.push("/checkout/review");
   }
 
@@ -699,14 +725,21 @@ export default function CheckoutPaymentPage() {
                 {/* New card form */}
                 {showNewCardForm && (
                   <div style={{ borderTop: savedCards.length > 0 ? "1px solid #E2E2DE" : "none", paddingTop: savedCards.length > 0 ? "16px" : "0" }}>
-                    <QBPaymentForm
-                      onToken={handleNewCardToken}
-                      onBack={
-                        savedCards.length > 0
-                          ? () => { setShowNewCardForm(false); setSelectedCardId(savedCards.find(c => c.is_default)?.id ?? savedCards[0]?.id ?? null); }
-                          : () => router.push("/checkout/address")
-                      }
-                    />
+                    {stripeOn ? (
+                      <StripePaymentForm
+                        amount={total}
+                        onReady={handleStripeMethod}
+                      />
+                    ) : (
+                      <QBPaymentForm
+                        onToken={handleNewCardToken}
+                        onBack={
+                          savedCards.length > 0
+                            ? () => { setShowNewCardForm(false); setSelectedCardId(savedCards.find(c => c.is_default)?.id ?? savedCards[0]?.id ?? null); }
+                            : () => router.push("/checkout/address")
+                        }
+                      />
+                    )}
                   </div>
                 )}
 

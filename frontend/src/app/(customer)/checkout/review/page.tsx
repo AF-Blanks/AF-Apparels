@@ -64,7 +64,7 @@ export default function CheckoutReviewPage() {
     shippingAddress, companyName, contactName, shippingPhone, shippingMethod,
     shippingCost,
     addressId, poNumber, orderNotes, setPoNumber, setOrderNotes,
-    savedCardId, qbToken,
+    savedCardId, qbToken, stripePaymentMethodId, stripeMethodType, attemptKey,
     setConfirmedOrder,
     taxRegion: storedTaxRegion,
     taxRate: storedTaxRate,
@@ -114,10 +114,10 @@ export default function CheckoutReviewPage() {
   useEffect(() => {
     if (!shippingAddress) {
       router.replace("/checkout/address");
-    } else if (!savedCardId && !qbToken && paymentMethod !== "ach" && paymentMethod !== "net_30" && paymentMethod !== "net_7") {
+    } else if (!savedCardId && !qbToken && !stripePaymentMethodId && paymentMethod !== "ach" && paymentMethod !== "net_30" && paymentMethod !== "net_7") {
       router.replace("/checkout/payment");
     }
-  }, [shippingAddress, savedCardId, qbToken, paymentMethod, router]);
+  }, [shippingAddress, savedCardId, qbToken, stripePaymentMethodId, paymentMethod, router]);
 
   useEffect(() => {
     if (!isGuest) {
@@ -247,6 +247,12 @@ export default function CheckoutReviewPage() {
           shipping_method: shippingMethod || "standard",
           payment_method: paymentMethod,
           qb_token: paymentMethod === "card" ? qbToken : undefined,
+          // Stripe, when Stripe is the one taking money. The server decides
+          // which of these it reads; sending both would be sending two
+          // payments. The attempt key is what makes a second press of Place
+          // Order the same press rather than a second charge.
+          stripe_payment_method_id: stripePaymentMethodId || undefined,
+          attempt_key: attemptKey || undefined,
           ach_bank_name: paymentMethod === "ach" ? achBankName : undefined,
           ach_account_holder: paymentMethod === "ach" ? achAccountHolder : undefined,
           ach_routing_number: paymentMethod === "ach" ? achRoutingNumber : undefined,
@@ -260,7 +266,12 @@ export default function CheckoutReviewPage() {
           ach_first_name: paymentMethod === "ach" ? achFirstName : undefined,
           ach_last_name: paymentMethod === "ach" ? achLastName : undefined,
           ach_phone: paymentMethod === "ach" ? achPhone : undefined,
-          ach_authorized: paymentMethod === "ach" ? achAuthorized : undefined,
+          ach_authorized:
+            paymentMethod !== "ach"
+              ? undefined
+              : stripeMethodType === "us_bank_account"
+                ? true
+                : achAuthorized,
           ach_authorization_text: paymentMethod === "ach" ? ACH_AUTHORIZATION_TEXT : undefined,
           order_notes: orderNotes || undefined,
           discount_code: appliedCoupon?.code || undefined,
