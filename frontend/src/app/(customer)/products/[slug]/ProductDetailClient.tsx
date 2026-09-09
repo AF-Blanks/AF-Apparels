@@ -512,7 +512,7 @@ function getStockLabel(
   // In stock and more on the way. Somebody ordering beyond what is on the shelf
   // needs the same date, and on a shelf that is holding it reads as reassurance
   // rather than an apology — so it is worded as an addition, not a shortage.
-  const have = (stock as number) >= 9999 ? "In Stock" : `${stock} left`;
+  const have = `${(stock as number).toLocaleString()} left`;
   return arriving ? `${have} · ${arriving} more` : have;
 }
 
@@ -708,7 +708,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
         return;
       }
       const maxStock = v.stock_quantity as number;
-      if (!isBackorderable(v) && maxStock < 9999 && quantity > maxStock) {
+      if (!isBackorderable(v) && quantity > maxStock) {
         setCartMsg({ type: "error", text: `Only ${maxStock} left for ${v.color ?? ""}${v.size ? ` / ${v.size}` : ""}` });
         return;
       }
@@ -1138,12 +1138,13 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                       const rowTotal = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0) * Number(v.effective_price ?? v.retail_price ?? 0), 0);
                       const allRowOOS = group.variants.every(v => isOutOfStock(v.stock_quantity) && !isBackorderable(v));
                       // Total stock for this colour = sum across all its sizes.
-                      // 9999+ is the "untracked / unlimited" sentinel, so if any size
-                      // is untracked we show "In Stock" rather than a misleading sum.
-                      const rowUnlimited = group.variants.some(v => Number(v.stock_quantity ?? 0) >= 9999);
+                      // There is no "unlimited" to allow for: stock_quantity is always
+                      // a real count, summed from the inventory records. Sizes sold
+                      // past zero go negative — what we owe, not what is on the shelf
+                      // — so they add nothing to a shelf total.
                       const rowStock = group.variants.reduce((s, v) => {
                         const n = Number(v.stock_quantity ?? 0);
-                        return s + (n >= 9999 || n < 0 ? 0 : n);
+                        return s + (n < 0 ? 0 : n);
                       }, 0);
                       return (
                         <div
@@ -1214,7 +1215,6 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                         ? `Expected ${formatRestock(variant.expected_restock_date)}`
                                         : "On backorder"))
                                 : isOOS ? "Out of Stock"
-                                : stockNum >= 9999 ? "In Stock"
                                 : `${remaining.toLocaleString()} in stock`;
                               // What is still on its way is answered once, in the
                               // Coming table under the colour — not repeated per size
@@ -1255,7 +1255,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                             {/* Total column: this colour's combined stock across all sizes */}
                             <div style={{ gridColumn: "span 2", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "8px" }}>
                               <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 700, color: allRowOOS ? "#cc0000" : "#1A1A1A", whiteSpace: "nowrap" }}>
-                                {rowUnlimited ? "In Stock" : `${Math.max(0, rowStock - rowQty).toLocaleString()} in stock`}
+                                {`${Math.max(0, rowStock - rowQty).toLocaleString()} in stock`}
                               </span>
                             </div>
                           </div>
