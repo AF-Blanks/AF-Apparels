@@ -119,6 +119,16 @@ export default function CheckoutReviewPage() {
     }
   }, [shippingAddress, savedCardId, qbToken, stripePaymentMethodId, paymentMethod, router]);
 
+  // The same question the redirect above asks, kept in one place so the button
+  // and the redirect can never disagree about whether this order can be paid.
+  const hasPaymentMethod =
+    !!savedCardId ||
+    !!qbToken ||
+    !!stripePaymentMethodId ||
+    paymentMethod === "ach" ||
+    paymentMethod === "net_30" ||
+    paymentMethod === "net_7";
+
   useEffect(() => {
     if (!isGuest) {
       cartService.getCart().then(setCart).catch(() => {});
@@ -633,6 +643,28 @@ export default function CheckoutReviewPage() {
               </p>
             </div>
 
+            {/* Is there anything to pay with?
+                The redirect above sends an unarmed checkout back to the payment
+                step, but a page that has been sitting open — or reloaded, which
+                empties the in-memory card details on purpose — can still show
+                this button. Pressing it then sent an order with no payment
+                method and came back with the server's own words about which
+                fields it wanted, which is nobody's idea of an explanation. */}
+            {!hasPaymentMethod && (
+              <div style={{
+                marginBottom: "12px", padding: "12px 14px", borderRadius: "8px",
+                background: "#FEF3F2", border: "1px solid #FDA29B",
+                fontSize: "13px", color: "#B42318",
+                fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6,
+              }}>
+                Your payment details aren&apos;t entered yet.{" "}
+                <a href="/checkout/payment" style={{ color: "#B42318", fontWeight: 700 }}>
+                  Go back and enter them
+                </a>{" "}
+                — nothing has been charged.
+              </div>
+            )}
+
             {/* ── Place Order ── */}
             <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
               <a
@@ -646,16 +678,16 @@ export default function CheckoutReviewPage() {
               <button
                 type="button"
                 onClick={handlePlaceOrder}
-                disabled={isPlacing}
+                disabled={isPlacing || !hasPaymentMethod}
                 style={{
                   flex: 1, padding: "14px",
-                  background: isPlacing ? "#E2E2DE" : "#1C3557",
-                  color: isPlacing ? "#aaa" : "#fff",
+                  background: (isPlacing || !hasPaymentMethod) ? "#E2E2DE" : "#1C3557",
+                  color: (isPlacing || !hasPaymentMethod) ? "#aaa" : "#fff",
                   border: "none",
                   fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500,
-                  cursor: isPlacing ? "not-allowed" : "pointer", transition: "opacity .15s",
+                  cursor: (isPlacing || !hasPaymentMethod) ? "not-allowed" : "pointer", transition: "opacity .15s",
                 }}
-                onMouseEnter={e => { if (!isPlacing) (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+                onMouseEnter={e => { if (!isPlacing && hasPaymentMethod) (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
               >
                 {isPlacing ? "Placing Order…" : "Place Order"}
