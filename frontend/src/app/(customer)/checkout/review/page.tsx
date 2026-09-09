@@ -376,9 +376,15 @@ export default function CheckoutReviewPage() {
               ach_first_name: achFirstName || undefined,
               ach_last_name: achLastName || undefined,
               ach_phone: achPhone || undefined,
-              ach_authorized: achAuthorized,
+              // On the Stripe path the customer's authorisation is the button
+              // they pressed on the payment form, not this page's old tickbox —
+              // which they never saw, because Stripe collected the bank details.
+              ach_authorized:
+                stripeMethodType === "us_bank_account" ? true : achAuthorized,
               ach_authorization_text: ACH_AUTHORIZATION_TEXT,
               ach_account_type: achAccountType || undefined,
+              stripe_payment_method_id: stripePaymentMethodId || undefined,
+              attempt_key: attemptKey || undefined,
             }
           : (paymentMethod === "net_30" || paymentMethod === "net_7")
           ? {
@@ -390,6 +396,12 @@ export default function CheckoutReviewPage() {
               payment_method: "card",
               qb_token: qbToken ?? undefined,
               saved_card_id: savedCardId ?? undefined,
+              // The signed-in path had none of this. Only the guest payload
+              // carried the Stripe fields, so every logged-in customer reached
+              // the server with no payment method at all and was told to supply
+              // one — while the card sat collected in the store, unsent.
+              stripe_payment_method_id: stripePaymentMethodId || undefined,
+              attempt_key: attemptKey || undefined,
             }
       );
 

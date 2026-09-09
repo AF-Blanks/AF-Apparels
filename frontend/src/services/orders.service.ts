@@ -13,6 +13,14 @@ export interface ConfirmOrderPayload {
   // QB Payments flow
   qb_token?: string;
   saved_card_id?: string;
+  /** A card or bank account collected in the browser by Stripe Elements. The
+   *  raw numbers never reach us; this id stands in for them. */
+  stripe_payment_method_id?: string;
+  /** Charge a card the customer already saved with Stripe, by its id. */
+  stripe_saved_method_id?: string;
+  /** Made once when the payment form opens and reused on every retry of that
+   *  attempt, so the server can tell one press of Pay from two. */
+  attempt_key?: string;
   qb_customer_id?: string;
   save_card?: boolean;
   // Stripe flow (legacy)
