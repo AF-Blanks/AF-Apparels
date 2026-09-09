@@ -342,7 +342,12 @@ export default function CheckoutPaymentPage() {
             <div style={{ marginBottom: "32px" }}>
               <div style={{ ...sectionLabelStyle, marginTop: 0 }}>Payment Method</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {(["card", "ach"] as const).map(type => {
+                {/* Stripe's own form offers card and bank as tabs, so asking the
+                    same question again above it is one question too many. These
+                    two are hidden when Stripe is taking payment; the fee follows
+                    whichever tab the customer picks in there. Net 30 and Net 7
+                    stay either way — those are our terms, not a Stripe method. */}
+                {(stripeOn ? [] : (["card", "ach"] as const)).map(type => {
                   const isSelected = paymentType === type;
                   return (
                     <div key={type}>
@@ -394,8 +399,15 @@ export default function CheckoutPaymentPage() {
               </div>
             </div>
 
-            {/* ── ACH section ── */}
-            {paymentType === "ach" && (
+            {/* Bank, when Stripe is the one taking it.
+                The form below this asks for a routing and account number, which
+                is what QuickBooks needs to raise the debit itself. Stripe
+                collects those on its own — the customer picks their bank and
+                signs in — and hands us an id. Showing the old form here left the
+                customer typing numbers nobody would use, and the order refused
+                for want of the id they were never asked for. */}
+            {/* ── ACH section (QuickBooks) ── */}
+            {paymentType === "ach" && !stripeOn && (
               <div style={{ marginBottom: "32px" }}>
                 <div style={sectionLabelStyle}>Bank Account Details</div>
 
@@ -643,7 +655,11 @@ export default function CheckoutPaymentPage() {
             )}
 
             {/* ── Card payment section (when card type selected) ── */}
-            {paymentType === "card" && (
+            {/* On Stripe this one section holds both methods, so it must survive
+                the customer switching to the bank tab — which sets paymentType
+                to "ach" so the fee updates. Without the second clause, choosing
+                Bank would unmount the very form they were choosing it in. */}
+            {(paymentType === "card" || (stripeOn && paymentType === "ach")) && (
               <div style={{ marginBottom: "32px" }}>
                 {!isGuest && <div style={sectionLabelStyle}>Card Details</div>}
 
@@ -729,6 +745,13 @@ export default function CheckoutPaymentPage() {
                       <StripePaymentForm
                         amount={total}
                         onReady={handleStripeMethod}
+                        // The fee is 3% on a card and nothing on a bank transfer,
+                        // and the summary shows it while the customer is still
+                        // choosing — so the tab they pick has to reach this page
+                        // as they pick it, not when they submit.
+                        onMethodChange={(t) =>
+                          setPaymentType(t === "us_bank_account" ? "ach" : "card")
+                        }
                       />
                     ) : (
                       <QBPaymentForm

@@ -46,6 +46,13 @@ interface Props {
   onReady: (result: StripeResult) => void | Promise<void>;
   /** True while the parent is placing the order, so the button stays disabled. */
   placing?: boolean;
+  /** Offer one method only, when the page has already chosen for the customer. */
+  only?: "card" | "us_bank_account";
+  /** Told as soon as the customer switches tab inside this form, before they pay.
+   *  The convenience fee is 3% on a card and nothing on a bank transfer, and the
+   *  order summary shows it while they are still deciding — so the page has to
+   *  hear about the choice when it is made, not when it is submitted. */
+  onMethodChange?: (methodType: string) => void;
   disabled?: boolean;
 }
 
@@ -135,6 +142,11 @@ export default function StripePaymentForm(props: Props) {
         currency: "usd",
         amount: Math.max(50, Math.round((props.amount || 0) * 100)),
         paymentMethodCreation: "manual",
+        // Only the two we take and have tested end to end. Left to itself the
+        // element also offers whatever else the Stripe account has switched on —
+        // Cash App, Amazon Pay, Klarna — none of which the order flow behind
+        // this understands.
+        paymentMethodTypes: props.only ? [props.only] : ["card", "us_bank_account"],
         appearance: {
           theme: "stripe",
           variables: { colorPrimary: "#1B3A5C", borderRadius: "6px" },
@@ -146,13 +158,13 @@ export default function StripePaymentForm(props: Props) {
   );
 }
 
-function Inner({ amount, onReady, placing = false, disabled = false }: Props) {
+function Inner({ amount, onReady, placing = false, disabled = false, only, onMethodChange }: Props) {
   const stripe = useStripe();
   const elements = useElements();
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [method, setMethod] = useState<string>("card");
+  const [method, setMethod] = useState<string>(only ?? "card");
 
   // Made once for the life of this form. Every submit — first press, second
   // press, a retry after a decline — carries this same value, which is what
@@ -220,7 +232,11 @@ function Inner({ amount, onReady, placing = false, disabled = false }: Props) {
     <form onSubmit={submit} className="space-y-4">
       <PaymentElement
         options={{ layout: "tabs" }}
-        onChange={(e) => setMethod(e.value?.type ?? "card")}
+        onChange={(e) => {
+          const t = e.value?.type ?? "card";
+          setMethod(t);
+          onMethodChange?.(t);
+        }}
       />
 
       {/* A bank debit clears over days. Saying so here is the difference between
