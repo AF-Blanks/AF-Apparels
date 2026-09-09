@@ -87,6 +87,25 @@ export default function ReceiveItemsPage() {
     setRows(r => r.map(row => row.po_line_item_id === lineItemId ? { ...row, [field]: value } : row));
   }
 
+  // A delivery that arrives complete is the ordinary case, and typing the same
+  // number into thirty-eight boxes to say so is not. This fills each line with
+  // what is still outstanding on it; anything short of that the admin then
+  // types down by hand. Lines already fully received stay at zero — filling
+  // them would be asking to receive a delivery twice.
+  function receiveAll() {
+    if (!po) return;
+    setRows(r => r.map(row => {
+      const li = po.line_items.find(l => l.id === row.po_line_item_id);
+      if (!li) return row;
+      const remaining = li.qty_ordered - alreadyReceived(po, li.id);
+      return { ...row, qty_receiving: Math.max(0, remaining) };
+    }));
+  }
+
+  function clearAll() {
+    setRows(r => r.map(row => ({ ...row, qty_receiving: 0 })));
+  }
+
   // Who is waiting on what just arrived. Held here rather than emailed on the
   // spot: a receiving entered against the wrong line is a normal mistake and an
   // easy one to correct, and an email that has gone to a customer is neither.
@@ -148,6 +167,12 @@ export default function ReceiveItemsPage() {
 
   if (loading) return <div style={{ padding: "32px", color: "#9CA3AF" }}>Loading…</div>;
   if (!po) return <div style={{ padding: "32px", color: "#EF4444" }}>PO not found.</div>;
+
+  // What is left to arrive on the whole order, and what is typed against it.
+  const totalOutstanding = po.line_items.reduce(
+    (sum, li) => sum + Math.max(0, li.qty_ordered - alreadyReceived(po, li.id)), 0
+  );
+  const totalReceiving = rows.reduce((sum, r) => sum + (r.qty_receiving || 0), 0);
 
   // The stock is booked in either way. What is still open is whether the people
   // who have been waiting for it are told, and that is a decision, not a step.
@@ -280,6 +305,32 @@ export default function ReceiveItemsPage() {
           </div>
         </div>
 
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "12px", color: "#6B7280" }}>
+            {totalReceiving > 0
+              ? <>Receiving <strong style={{ color: "#111827" }}>{totalReceiving.toLocaleString()}</strong> of {totalOutstanding.toLocaleString()} outstanding</>
+              : <>{totalOutstanding.toLocaleString()} still outstanding on this order</>}
+          </span>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={receiveAll}
+              disabled={totalOutstanding === 0}
+              style={{ padding: "8px 16px", background: totalOutstanding === 0 ? "#E5E7EB" : "#1B3A5C", color: totalOutstanding === 0 ? "#9CA3AF" : "#fff", border: "none", borderRadius: "7px", fontSize: "12px", fontWeight: 700, cursor: totalOutstanding === 0 ? "not-allowed" : "pointer" }}
+            >
+              Receive all
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              disabled={totalReceiving === 0}
+              style={{ padding: "8px 16px", background: "#fff", color: totalReceiving === 0 ? "#9CA3AF" : "#374151", border: "1px solid #D1D5DB", borderRadius: "7px", fontSize: "12px", fontWeight: 600, cursor: totalReceiving === 0 ? "not-allowed" : "pointer" }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#F9FAFB", borderBottom: "1px solid #E5E7EB" }}>
@@ -306,7 +357,12 @@ export default function ReceiveItemsPage() {
                     <input
                       type="number" min={0} max={remaining}
                       value={row?.qty_receiving ?? 0}
-                      onChange={e => updateRow(li.id, "qty_receiving", parseInt(e.target.value) || 0)}
+                      onChange={e => {
+                        // Short is normal; over is not. The number input's own
+                        // max is advisory for typed values, so it is held here.
+                        const typed = parseInt(e.target.value, 10) || 0;
+                        updateRow(li.id, "qty_receiving", Math.max(0, Math.min(typed, Math.max(0, remaining))));
+                      }}
                       style={{ ...INPUT, width: "80px" }}
                     />
                     {remaining > 0 && <span style={{ fontSize: "11px", color: "#9CA3AF", marginLeft: "6px" }}>of {remaining} remaining</span>}
