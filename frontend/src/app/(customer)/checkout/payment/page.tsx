@@ -272,6 +272,13 @@ export default function CheckoutPaymentPage() {
   function isValidRoutingNumber(routing: string): boolean {
     const d = routing.replace(/\D/g, "");
     if (d.length !== 9) return false;
+    // Nine of the same digit is nobody's bank. All zeros satisfies the checksum
+    // below — nought times any weight is nought — so it used to sail through.
+    if (new Set(d).size === 1) return false;
+    // The first two digits name the Federal Reserve district that issued it.
+    // Anything outside these ranges was never issued to a bank.
+    const p = Number(d.slice(0, 2));
+    if (!((p >= 0 && p <= 12) || (p >= 21 && p <= 32) || (p >= 61 && p <= 72) || p === 80)) return false;
     const w = [3, 7, 1, 3, 7, 1, 3, 7, 1];
     return d.split("").reduce((sum, c, i) => sum + Number(c) * w[i]!, 0) % 10 === 0;
   }
