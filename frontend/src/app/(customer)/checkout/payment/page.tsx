@@ -230,17 +230,40 @@ export default function CheckoutPaymentPage() {
     router.push("/checkout/review");
   }
 
-  function handleAchContinue() {
+  /**
+   * What is wrong with these bank details, if anything.
+   *
+   * Kept as one pure function so three things can ask it and never disagree:
+   * the field the customer just left, the Continue button, and Continue itself.
+   * Bad details used to get all the way to the bank before anyone said so — a
+   * routing number of nine zeros reached QuickBooks twice and was declined a day
+   * later, by which time an order existed.
+   */
+  function validateAch(f: typeof achForm): Partial<Record<keyof typeof achForm, string>> {
     const errors: Partial<Record<keyof typeof achForm, string>> = {};
-    if (!achForm.bankName.trim()) errors.bankName = "Required";
-    if (!achForm.firstName.trim()) errors.firstName = "Required";
-    if (!achForm.lastName.trim()) errors.lastName = "Required";
-    if (!/^\d{9}$/.test(achForm.routingNumber.trim())) errors.routingNumber = "Must be exactly 9 digits";
-    else if (!isValidRoutingNumber(achForm.routingNumber)) errors.routingNumber = "That routing number isn't valid — please check it";
-    if (!achForm.accountNumber.trim()) errors.accountNumber = "Required";
-    else if (achForm.accountNumber.replace(/\D/g, "").length < 4) errors.accountNumber = "Account number too short";
-    if (achForm.phone.replace(/\D/g, "").length < 10) errors.phone = "Enter a 10-digit phone number";
-    if (!achForm.authorized) errors.authorized = "Please authorise the transfer to continue";
+    const acct = f.accountNumber.replace(/\D/g, "");
+    if (!f.bankName.trim()) errors.bankName = "Required";
+    if (!f.firstName.trim()) errors.firstName = "Required";
+    if (!f.lastName.trim()) errors.lastName = "Required";
+    if (!/^\d{9}$/.test(f.routingNumber.trim())) errors.routingNumber = "Must be exactly 9 digits";
+    else if (!isValidRoutingNumber(f.routingNumber)) errors.routingNumber = "That routing number isn't valid — please check it";
+    if (!f.accountNumber.trim()) errors.accountNumber = "Required";
+    else if (acct.length < 4) errors.accountNumber = "Account number too short";
+    else if (new Set(acct).size === 1) errors.accountNumber = "That account number isn't valid — please check it";
+    if (f.phone.replace(/\D/g, "").length < 10) errors.phone = "Enter a 10-digit phone number";
+    if (!f.authorized) errors.authorized = "Please authorise the transfer to continue";
+    return errors;
+  }
+
+  /** Check one field the moment the customer leaves it, rather than making them
+   *  fill the whole form to find out the first line was wrong. */
+  function checkAchField(field: keyof typeof achForm) {
+    const found = validateAch(achForm)[field];
+    setAchErrors(p => ({ ...p, [field]: found }));
+  }
+
+  function handleAchContinue() {
+    const errors = validateAch(achForm);
     if (Object.keys(errors).length > 0) { setAchErrors(errors); return; }
     const last4 = achForm.accountNumber.replace(/\D/g, "").slice(-4);
     setConvenienceFee(0);
@@ -328,6 +351,11 @@ export default function CheckoutPaymentPage() {
   const shipping = shippingCost;
   const taxAmountDisplay = storedTaxAmount > 0 ? storedTaxAmount : 0;
   const convenienceFee = (isWholesale && paymentType === "card") ? Math.round(subtotal * 0.03 * 100) / 100 : 0;
+
+  // Whether the bank details are sound enough to send. The button and the
+  // handler read the same answer, so the button can never invite a press the
+  // handler is going to refuse.
+  const achReady = Object.keys(validateAch(achForm)).length === 0;
   const total = subtotal + shipping + taxAmountDisplay - couponDiscount + convenienceFee;
 
   const SHIPPING_LABELS: Record<string, string> = {
@@ -498,32 +526,32 @@ export default function CheckoutPaymentPage() {
                     <div className="checkout-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
                       <div>
                         <label style={lbl}>Bank Name <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.bankName ? "#E8242A" : "#E2E2DE" }} value={achForm.bankName} onChange={e => { setAchForm(p => ({ ...p, bankName: e.target.value })); setAchErrors(p => ({ ...p, bankName: undefined })); }} placeholder="Chase, Wells Fargo, etc." />
+                        <input style={{ ...inp, borderColor: achErrors.bankName ? "#E8242A" : "#E2E2DE" }} value={achForm.bankName} onChange={e => { setAchForm(p => ({ ...p, bankName: e.target.value })); setAchErrors(p => ({ ...p, bankName: undefined })); }} onBlur={() => checkAchField("bankName")} placeholder="Chase, Wells Fargo, etc." />
                         {achErrors.bankName && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.bankName}</p>}
                       </div>
                       <div>
                         <label style={lbl}>First Name on Account <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.firstName ? "#E8242A" : "#E2E2DE" }} value={achForm.firstName} onChange={e => { setAchForm(p => ({ ...p, firstName: e.target.value })); setAchErrors(p => ({ ...p, firstName: undefined })); }} placeholder="First name" />
+                        <input style={{ ...inp, borderColor: achErrors.firstName ? "#E8242A" : "#E2E2DE" }} value={achForm.firstName} onChange={e => { setAchForm(p => ({ ...p, firstName: e.target.value })); setAchErrors(p => ({ ...p, firstName: undefined })); }} onBlur={() => checkAchField("firstName")} placeholder="First name" />
                         {achErrors.firstName && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.firstName}</p>}
                       </div>
                       <div>
                         <label style={lbl}>Last Name on Account <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.lastName ? "#E8242A" : "#E2E2DE" }} value={achForm.lastName} onChange={e => { setAchForm(p => ({ ...p, lastName: e.target.value })); setAchErrors(p => ({ ...p, lastName: undefined })); }} placeholder="Last name" />
+                        <input style={{ ...inp, borderColor: achErrors.lastName ? "#E8242A" : "#E2E2DE" }} value={achForm.lastName} onChange={e => { setAchForm(p => ({ ...p, lastName: e.target.value })); setAchErrors(p => ({ ...p, lastName: undefined })); }} onBlur={() => checkAchField("lastName")} placeholder="Last name" />
                         {achErrors.lastName && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.lastName}</p>}
                       </div>
                       <div>
                         <label style={lbl}>Phone <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.phone ? "#E8242A" : "#E2E2DE" }} value={achForm.phone} onChange={e => { setAchForm(p => ({ ...p, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })); setAchErrors(p => ({ ...p, phone: undefined })); }} placeholder="10-digit phone number" maxLength={10} />
+                        <input style={{ ...inp, borderColor: achErrors.phone ? "#E8242A" : "#E2E2DE" }} value={achForm.phone} onChange={e => { setAchForm(p => ({ ...p, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })); setAchErrors(p => ({ ...p, phone: undefined })); }} onBlur={() => checkAchField("phone")} placeholder="10-digit phone number" maxLength={10} />
                         {achErrors.phone && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.phone}</p>}
                       </div>
                       <div>
                         <label style={lbl}>Routing Number <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.routingNumber ? "#E8242A" : "#E2E2DE" }} value={achForm.routingNumber} onChange={e => { setAchForm(p => ({ ...p, routingNumber: e.target.value.replace(/\D/g, "").slice(0, 9) })); setAchErrors(p => ({ ...p, routingNumber: undefined })); }} placeholder="9-digit routing number" maxLength={9} />
+                        <input style={{ ...inp, borderColor: achErrors.routingNumber ? "#E8242A" : "#E2E2DE" }} value={achForm.routingNumber} onChange={e => { setAchForm(p => ({ ...p, routingNumber: e.target.value.replace(/\D/g, "").slice(0, 9) })); setAchErrors(p => ({ ...p, routingNumber: undefined })); }} onBlur={() => checkAchField("routingNumber")} placeholder="9-digit routing number" maxLength={9} />
                         {achErrors.routingNumber && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.routingNumber}</p>}
                       </div>
                       <div>
                         <label style={lbl}>Account Number <span style={{ color: "#E8242A" }}>*</span></label>
-                        <input style={{ ...inp, borderColor: achErrors.accountNumber ? "#E8242A" : "#E2E2DE" }} value={achForm.accountNumber} onChange={e => { setAchForm(p => ({ ...p, accountNumber: e.target.value.replace(/\D/g, "") })); setAchErrors(p => ({ ...p, accountNumber: undefined })); }} placeholder="Account number" type="text" />
+                        <input style={{ ...inp, borderColor: achErrors.accountNumber ? "#E8242A" : "#E2E2DE" }} value={achForm.accountNumber} onChange={e => { setAchForm(p => ({ ...p, accountNumber: e.target.value.replace(/\D/g, "") })); setAchErrors(p => ({ ...p, accountNumber: undefined })); }} onBlur={() => checkAchField("accountNumber")} placeholder="Account number" type="text" />
                         {achErrors.accountNumber && <p style={{ fontSize: "11px", color: "#E8242A", marginTop: "3px" }}>{achErrors.accountNumber}</p>}
                       </div>
                       <div style={{ gridColumn: "1 / -1" }}>
@@ -593,7 +621,7 @@ export default function CheckoutPaymentPage() {
                   >
                     ← Back to Shipping
                   </a>
-                  <button type="button" onClick={handleAchContinue} style={{ flex: 1, padding: "14px", background: "#1C3557", color: "#fff", border: "none", fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500, cursor: "pointer", transition: "opacity .15s" }}
+                  <button type="button" onClick={handleAchContinue} disabled={!achReady} title={achReady ? undefined : "Please complete the bank details above"} style={{ flex: 1, padding: "14px", background: achReady ? "#1C3557" : "#E2E2DE", color: achReady ? "#fff" : "#aaa", border: "none", fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500, cursor: achReady ? "pointer" : "not-allowed", transition: "opacity .15s" }}
                     onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
                   >
