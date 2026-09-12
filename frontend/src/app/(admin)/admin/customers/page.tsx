@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminService } from "@/services/admin.service";
 import { UsersIcon, CheckCircleIcon, BarChartIcon, DollarSignIcon, DownloadIcon } from "@/components/ui/icons";
+import { shopDate } from "@/lib/utils";
 
 interface CompanyRow {
   id: string;
@@ -517,7 +518,7 @@ export default function AdminCustomersPage() {
                   <td style={{ padding: "13px 14px", textAlign: "right", fontFamily: "var(--font-bebas)", fontSize: "18px", color: "#2A2830" }}>
                     ${Number(co.total_spend).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </td>
-                  <td style={{ padding: "13px 14px", fontSize: "12px", color: "#7A7880" }}>{new Date(co.created_at).toLocaleDateString()}</td>
+                  <td style={{ padding: "13px 14px", fontSize: "12px", color: "#7A7880" }}>{shopDate(co.created_at)}</td>
                   <td style={{ padding: "13px 14px" }}>
                     <span style={{ padding: "3px 9px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, background: statusCfg.bg, color: statusCfg.color, textTransform: "capitalize" }}>
                       {co.status}

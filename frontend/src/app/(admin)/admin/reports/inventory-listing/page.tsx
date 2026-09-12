@@ -3,6 +3,7 @@ import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { PackageIcon } from "@/components/ui/icons";
+import { shopDate } from "@/lib/utils";
 
 interface InventoryItem {
   variant_id: string;
@@ -235,7 +236,7 @@ export default function AdminInventoryListingPage() {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden" id="print-area">
           <div className="hidden print:block px-5 py-4 border-b">
             <h2 className="text-lg font-bold">AF Apparels — Inventory Listing Report</h2>
-            <p className="text-sm text-gray-500">Generated: {new Date().toLocaleDateString()}</p>
+            <p className="text-sm text-gray-500">Generated: {shopDate()}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: "480px" }}>

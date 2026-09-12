@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
+import { shopDate } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   draft:      { bg: "#F3F4F6", color: "#6B7280" },
@@ -104,8 +105,8 @@ export default function PurchaseOrdersPage() {
                 >
                   <td style={{ padding: "14px 16px", fontWeight: 700, color: "#1B3A5C", fontSize: "13px" }}>{po.po_number}</td>
                   <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>{po.manufacturer_name || "—"}</td>
-                  <td style={{ padding: "14px 16px", fontSize: "13px", color: "#6B7280" }}>{po.order_date ? new Date(po.order_date).toLocaleDateString() : "—"}</td>
-                  <td style={{ padding: "14px 16px", fontSize: "13px", color: "#6B7280" }}>{po.expected_delivery ? new Date(po.expected_delivery).toLocaleDateString() : "—"}</td>
+                  <td style={{ padding: "14px 16px", fontSize: "13px", color: "#6B7280" }}>{po.order_date ? shopDate(po.order_date) : "—"}</td>
+                  <td style={{ padding: "14px 16px", fontSize: "13px", color: "#6B7280" }}>{po.expected_delivery ? shopDate(po.expected_delivery) : "—"}</td>
                   <td style={{ padding: "14px 16px", fontSize: "13px", color: "#374151" }}>{po.item_count}</td>
                   <td style={{ padding: "14px 16px", fontSize: "13px", fontWeight: 600, color: "#374151" }}>{fmt(po.total_expected)}</td>
                   <td style={{ padding: "14px 16px" }}>

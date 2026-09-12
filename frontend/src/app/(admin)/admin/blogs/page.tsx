@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
+import { shopDate } from "@/lib/utils";
 
 interface BlogPost {
   id: string;
@@ -106,7 +107,7 @@ export default function AdminBlogsPage() {
                     </span>
                   </td>
                   <td style={{ ...tdSt, fontSize: "13px", color: "#7A7880" }}>
-                    {post.published_date ? new Date(post.published_date).toLocaleDateString() : "—"}
+                    {post.published_date ? shopDate(post.published_date) : "—"}
                   </td>
                   <td style={tdSt}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>

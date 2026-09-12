@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
 import { adminService } from "@/services/admin.service";
 import { FileTextIcon } from "@/components/ui/icons";
+import { shopDate } from "@/lib/utils";
 
 interface DraftOrder {
   id: string;
@@ -759,7 +760,7 @@ export default function DraftOrdersPage() {
                 <td style={{ padding: "13px 16px", color: "#7A7880" }}>{o.po_number ?? "—"}</td>
                 <td style={{ padding: "13px 16px", color: "#2A2830" }}>{o.item_count}</td>
                 <td style={{ padding: "13px 16px", textAlign: "right" as const, fontWeight: 700, color: "#2A2830" }}>${Number(o.total).toFixed(2)}</td>
-                <td style={{ padding: "13px 16px", color: "#7A7880" }}>{new Date(o.created_at).toLocaleDateString()}</td>
+                <td style={{ padding: "13px 16px", color: "#7A7880" }}>{shopDate(o.created_at)}</td>
                 <td style={{ padding: "13px 16px" }}>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" as const }}>
                     {o.status === "pending" && (

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import { PackageIcon, TruckIcon, CheckCircleIcon, TagIcon, DownloadIcon, PrinterIcon, FileTextIcon } from "@/components/ui/icons";
+import { shopDate } from "@/lib/utils";
 
 interface ShippingLabel {
   id: string;
@@ -248,7 +249,7 @@ export default function ShippingLabelsPage() {
 
                 {/* Shipped At */}
                 <td style={{ padding: "12px 14px", color: "#7A7880", fontSize: "12px", whiteSpace: "nowrap" as const }}>
-                  {l.shipped_at ? new Date(l.shipped_at).toLocaleDateString() : "—"}
+                  {l.shipped_at ? shopDate(l.shipped_at) : "—"}
                 </td>
 
                 {/* Actions */}

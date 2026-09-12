@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import Link from "next/link";
 import { PackageIcon, ClipboardIcon, AlertTriangleIcon } from "@/components/ui/icons";
+import { shopDate } from "@/lib/utils";
 
 interface RecentOrder {
   id: string;
@@ -460,7 +461,7 @@ export default function AdminDashboard() {
                   </td>
                   <td style={{ padding: "12px 16px", color: "#2A2830" }}>{order.company_name}</td>
                   <td style={{ padding: "12px 16px", color: "#7A7880" }}>
-                    {order.created_at ? new Date(order.created_at).toLocaleDateString() : "—"}
+                    {order.created_at ? shopDate(order.created_at) : "—"}
                   </td>
                   <td style={{ padding: "12px 16px", color: "#7A7880" }}>{order.items_count ?? "—"}</td>
                   <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#2A2830" }}>${Number(order.total).toFixed(2)}</td>
@@ -507,7 +508,7 @@ export default function AdminDashboard() {
                   <td style={{ padding: "12px 16px", fontWeight: 600, color: "#2A2830" }}>{app.company_name}</td>
                   <td style={{ padding: "12px 16px", color: "#7A7880" }}>{app.business_type}</td>
                   <td style={{ padding: "12px 16px", color: "#7A7880" }}>
-                    {app.created_at ? new Date(app.created_at).toLocaleDateString() : "—"}
+                    {app.created_at ? shopDate(app.created_at) : "—"}
                   </td>
                   <td style={{ padding: "12px 16px" }}><StatusBadge status={app.status} /></td>
                   <td style={{ padding: "12px 16px" }}>

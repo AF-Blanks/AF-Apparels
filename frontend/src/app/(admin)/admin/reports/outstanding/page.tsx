@@ -26,6 +26,7 @@ interface OpenOrder {
 }
 
 import type { ReminderDraft } from "@/components/admin/PaymentReminderDialog";
+import { shopDate } from "@/lib/utils";
 
 interface Row {
   company_id: string;
@@ -315,7 +316,7 @@ export default function OutstandingReportPage() {
                                   ? `QuickBooks #${o.qb_invoice_id}`
                                   : "not in QuickBooks yet"}
                                 {o.invoice_sent_at
-                                  ? ` · emailed ${new Date(o.invoice_sent_at).toLocaleDateString()}`
+                                  ? ` · emailed ${shopDate(o.invoice_sent_at)}`
                                   : " · not emailed yet"}
                               </div>
                             </td>

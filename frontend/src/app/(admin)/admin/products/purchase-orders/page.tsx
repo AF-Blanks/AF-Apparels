@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { ClipboardIcon, TruckIcon, CheckCircleIcon, DollarSignIcon, DownloadIcon } from '@/components/ui/icons'
+import { shopDate } from "@/lib/utils";
 
 interface PurchaseOrderItem {
   id: string
@@ -311,7 +312,7 @@ export default function PurchaseOrdersPage() {
                     <div style={{ fontWeight: 700, color: '#1A5CFF', fontSize: '14px', cursor: 'pointer' }} onClick={() => setSelectedPO(po)}>
                       {po.po_number}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#aaa' }}>{new Date(po.created_at).toLocaleDateString()}</div>
+                    <div style={{ fontSize: '11px', color: '#aaa' }}>{shopDate(po.created_at)}</div>
                   </td>
                   <td style={{ padding: '14px 16px' }}>
                     <div style={{ fontWeight: 600, fontSize: '14px', color: '#2A2830' }}>{po.supplier_name}</div>
@@ -321,7 +322,7 @@ export default function PurchaseOrdersPage() {
                     {po.items.length} items · {po.items.reduce((s, i) => s + i.quantity_ordered, 0)} units
                   </td>
                   <td style={{ padding: '14px 16px', fontSize: '13px', color: '#2A2830' }}>
-                    {po.expected_date ? new Date(po.expected_date).toLocaleDateString() : '—'}
+                    {po.expected_date ? shopDate(po.expected_date) : '—'}
                   </td>
                   <td style={{ padding: '14px 16px', fontFamily: 'var(--font-bebas)', fontSize: '18px', color: '#2A2830' }}>
                     ${po.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
@@ -509,8 +510,8 @@ export default function PurchaseOrdersPage() {
             <div className="checkout-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', background: '#F4F3EF', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
               {[
                 { label: 'Supplier', value: selectedPO.supplier_name },
-                { label: 'Expected Date', value: selectedPO.expected_date ? new Date(selectedPO.expected_date).toLocaleDateString() : '—' },
-                { label: 'Created', value: new Date(selectedPO.created_at).toLocaleDateString() },
+                { label: 'Expected Date', value: selectedPO.expected_date ? shopDate(selectedPO.expected_date) : '—' },
+                { label: 'Created', value: shopDate(selectedPO.created_at) },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: '#aaa', marginBottom: '4px' }}>{label}</div>

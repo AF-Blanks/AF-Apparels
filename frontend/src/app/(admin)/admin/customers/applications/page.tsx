@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { adminService } from "@/services/admin.service";
 import { ApprovalModal } from "@/components/admin/ApprovalModal";
+import { shopDate } from "@/lib/utils";
 
 interface Application {
   id: string;
@@ -136,7 +137,7 @@ function DetailModal({ app, onClose }: { app: Application; onClose: () => void }
                   </span>
                 </dd>
               </div>
-              <DetailField label="Submitted" value={new Date(app.created_at).toLocaleDateString()} />
+              <DetailField label="Submitted" value={shopDate(app.created_at)} />
               {app.rejection_reason && <div className="col-span-2"><DetailField label="Rejection Reason" value={app.rejection_reason} /></div>}
               {app.admin_notes && <div className="col-span-2"><DetailField label="Admin Notes" value={app.admin_notes} /></div>}
             </dl>
@@ -245,7 +246,7 @@ export default function AdminApplicationsPage() {
                       {app.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{new Date(app.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-gray-500">{shopDate(app.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
                       <button

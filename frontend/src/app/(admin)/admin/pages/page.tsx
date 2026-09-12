@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api-client";
+import { shopDate } from "@/lib/utils";
 
 interface PageSeoRow {
   page_slug: string;
@@ -77,7 +78,7 @@ export default function AdminPagesPage() {
                   <td style={tdSt}>
                     {row.updated_at ? (
                       <span style={{ fontSize: "13px", color: "#7A7880" }}>
-                        {new Date(row.updated_at).toLocaleDateString()}
+                        {shopDate(row.updated_at)}
                       </span>
                     ) : (
                       <span style={{ color: "#bbb", fontSize: "13px", fontStyle: "italic" }}>Never</span>

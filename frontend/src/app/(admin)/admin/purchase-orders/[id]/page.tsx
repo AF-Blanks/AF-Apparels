@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiClient, ApiClientError } from "@/lib/api-client";
+import { shopDate } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   draft:     { bg: "#F3F4F6", color: "#6B7280" },
@@ -147,7 +148,7 @@ export default function PODetailPage() {
             </span>
           </div>
           <div style={{ fontSize: "13px", color: "#6B7280", marginTop: "4px" }}>
-            {po.manufacturer_name} {po.expected_delivery ? `· Expected ${new Date(po.expected_delivery).toLocaleDateString()}` : ""}
+            {po.manufacturer_name} {po.expected_delivery ? `· Expected ${shopDate(po.expected_delivery)}` : ""}
           </div>
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -193,8 +194,8 @@ export default function PODetailPage() {
       {/* PO Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
         {[
-          { label: "Order Date", value: po.order_date ? new Date(po.order_date).toLocaleDateString() : new Date().toLocaleDateString() },
-          { label: "Expected Delivery", value: po.expected_delivery ? new Date(po.expected_delivery).toLocaleDateString() : "—" },
+          { label: "Order Date", value: po.order_date ? shopDate(po.order_date) : shopDate(new Date()) },
+          { label: "Expected Delivery", value: po.expected_delivery ? shopDate(po.expected_delivery) : "—" },
           { label: "Total Expected", value: fmt(po.total_expected) },
           { label: "Total Received", value: fmt(po.total_received) },
         ].map(c => (
@@ -275,7 +276,7 @@ export default function PODetailPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <div>
                   <span style={{ fontWeight: 600, fontSize: "13px" }}>
-                    Received {r.received_date ? new Date(r.received_date).toLocaleDateString() : "—"}
+                    Received {r.received_date ? shopDate(r.received_date) : "—"}
                   </span>
                   {r.notes && <span style={{ color: "#6B7280", fontSize: "12px", marginLeft: "12px" }}>{r.notes}</span>}
                 </div>

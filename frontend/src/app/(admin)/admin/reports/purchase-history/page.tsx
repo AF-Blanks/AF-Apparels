@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { adminService } from "@/services/admin.service";
+import { shopDate } from "@/lib/utils";
 
 interface Company {
   id: string;
@@ -121,7 +122,7 @@ export default function AdminCustomerPurchaseHistoryPage() {
         String(item.quantity),
         `$${item.unit_price.toFixed(2)}`,
         `$${item.line_total.toFixed(2)}`,
-        item.ordered_at ? new Date(item.ordered_at).toLocaleDateString() : "—",
+        item.ordered_at ? shopDate(item.ordered_at) : "—",
       ]);
     } else {
       headers = ["Product", "Units Sold", "Total Revenue"];
@@ -394,7 +395,7 @@ export default function AdminCustomerPurchaseHistoryPage() {
                     <td className="px-4 py-2.5 text-right text-gray-700">${item.unit_price.toFixed(2)}</td>
                     <td className="px-4 py-2.5 text-right font-semibold text-gray-900">${item.line_total.toFixed(2)}</td>
                     <td className="px-4 py-2.5 text-gray-400 text-xs">
-                      {item.ordered_at ? new Date(item.ordered_at).toLocaleDateString() : "—"}
+                      {item.ordered_at ? shopDate(item.ordered_at) : "—"}
                     </td>
                   </tr>
                 ))}

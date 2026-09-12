@@ -87,3 +87,31 @@ export function sortVariantsBySize<T extends { size?: string | null }>(variants:
     return ai - bi;
   });
 }
+
+/**
+ * A date as the shop reckons it.
+ *
+ * The admin screens were formatting dates in whoever's timezone the browser
+ * happened to be in, while the dashboard counted its days in the shop's. Opened
+ * from Pakistan, an order taken on Thursday afternoon in Texas read as Friday in
+ * the list and was counted under Thursday in the totals — so four orders could
+ * sit on screen above a dashboard reporting no sales at all.
+ *
+ * Every admin screen reads the shop's day now, which is the one the warehouse,
+ * the invoices and the takings all agree on.
+ */
+export const SHOP_TIME_ZONE = "America/Chicago";
+
+export function shopDate(value: string | number | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { timeZone: SHOP_TIME_ZONE });
+}
+
+export function shopDateTime(value: string | number | Date | null | undefined): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", { timeZone: SHOP_TIME_ZONE });
+}

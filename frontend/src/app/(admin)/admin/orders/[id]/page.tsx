@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { adminService } from "@/services/admin.service";
 import { apiClient } from "@/lib/api-client";
 import PaymentReminderDialog from "@/components/admin/PaymentReminderDialog";
+import { shopDate } from "@/lib/utils";
 
 interface OrderItem {
   id: string;
@@ -1288,7 +1289,7 @@ The existing label is NOT refunded — if it was a real one, request the refund 
           <p style={{ fontSize: "13px", color: "#7A7880", marginTop: "6px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" as const }}>
             <span>{order.company_name}</span>
             <span>·</span>
-            <span>{new Date(order.created_at).toLocaleDateString()}</span>
+            <span>{shopDate(order.created_at)}</span>
             <span>·</span>
             <StatusBadge status={order.status} />
             <StatusBadge status={order.payment_status} />
@@ -1426,7 +1427,7 @@ The existing label is NOT refunded — if it was a real one, request the refund 
               <div style={{ fontSize: "12px", color: "#059669", fontWeight: 600, marginBottom: "14px", padding: "8px 12px", background: "rgba(5,150,105,.08)", borderRadius: "6px" }}>
                 ✓ Shipped via {courierDisplayName} {order.courier_service}
                 {order.tracking_number && ` · Tracking: ${order.tracking_number}`}
-                {order.shipped_at && ` · ${new Date(order.shipped_at).toLocaleDateString()}`}
+                {order.shipped_at && ` · ${shopDate(order.shipped_at)}`}
               </div>
             )}
 
@@ -2143,7 +2144,7 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                 {order.payment_status === "paid" && !order.invoice_sent_at
                   ? `Payment received via ${order.payment_method === "ach" ? "ACH / Bank Transfer" : "Card"}`
                   : order.invoice_sent_at
-                    ? `Invoice sent ${new Date(order.invoice_sent_at).toLocaleDateString()}`
+                    ? `Invoice sent ${shopDate(order.invoice_sent_at)}`
                     : 'Invoice not yet sent'}
                 {Number(order.amount_paid) > 0 && order.payment_status !== "paid" && (
                   <span style={{ color: '#D97706', marginLeft: '6px' }}>

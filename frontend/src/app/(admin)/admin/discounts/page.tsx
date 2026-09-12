@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, shopDate } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -294,13 +294,13 @@ export default function DiscountsPage() {
                   <td style={{ padding: "12px 16px" }}>
                     {dc.expires_at ? (
                       <div style={{ fontSize: "12px", color: new Date(dc.expires_at) < new Date() ? "#E8242A" : "#2A2830" }}>
-                        {new Date(dc.expires_at).toLocaleDateString()}
+                        {shopDate(dc.expires_at)}
                       </div>
                     ) : (
                       <span style={{ fontSize: "12px", color: "#bbb" }}>No expiry</span>
                     )}
                     {dc.starts_at && (
-                      <div style={{ fontSize: "11px", color: "#7A7880" }}>Starts: {new Date(dc.starts_at).toLocaleDateString()}</div>
+                      <div style={{ fontSize: "11px", color: "#7A7880" }}>Starts: {shopDate(dc.starts_at)}</div>
                     )}
                   </td>
                   {/* Eligibility */}

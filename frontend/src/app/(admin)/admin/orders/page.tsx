@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import Link from "next/link";
 import { adminService } from "@/services/admin.service";
+import { shopDate } from "@/lib/utils";
 
 interface AdminOrder {
   id: string;
@@ -247,7 +248,7 @@ export default function AdminOrdersPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right text-gray-700 font-medium">${Number(o.total).toFixed(2)}</td>
-                <td className="px-4 py-3 text-gray-500">{new Date(o.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-gray-500">{shopDate(o.created_at)}</td>
                 <td className="px-4 py-3">
                   <Link href={`/admin/orders/${o.order_number}`} className="text-xs text-blue-600 hover:text-blue-800 font-medium">View</Link>
                 </td>

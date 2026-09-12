@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { adminService, type AdminUser } from "@/services/admin.service";
 import { UsersIcon } from "@/components/ui/icons";
+import { shopDate } from "@/lib/utils";
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -463,12 +464,12 @@ export default function AdminUsersPage() {
 
                   {/* Joined */}
                   <td style={{ padding: "13px 14px", fontSize: "12px", color: "#7A7880" }}>
-                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}
+                    {user.created_at ? shopDate(user.created_at) : "—"}
                   </td>
 
                   {/* Last Login */}
                   <td style={{ padding: "13px 14px", fontSize: "12px", color: "#7A7880" }}>
-                    {user.last_login ? new Date(user.last_login).toLocaleDateString() : <span style={{ color: "#ccc" }}>Never</span>}
+                    {user.last_login ? shopDate(user.last_login) : <span style={{ color: "#ccc" }}>Never</span>}
                   </td>
 
                   {/* Actions */}

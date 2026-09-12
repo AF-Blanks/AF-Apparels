@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { adminService } from "@/services/admin.service";
+import { shopDate } from "@/lib/utils";
 
 interface RMAItem {
   id: string;
@@ -149,7 +150,7 @@ export default function AdminReturnsPage() {
                         ? "no charge to refund"
                         : "—"}
                 </td>
-                <td className="px-4 py-3 text-gray-500">{new Date(r.created_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-gray-500">{shopDate(r.created_at)}</td>
                 <td className="px-4 py-3">
                   {(r.status === "pending" || r.refund_status === "failed") && (
                     <button onClick={() => { setActionTarget(r); setActionStatus("approved"); setResultMessage(null); }} className="text-xs text-brand-600 hover:text-brand-800">
