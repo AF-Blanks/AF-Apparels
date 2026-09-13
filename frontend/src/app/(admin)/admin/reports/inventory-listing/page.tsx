@@ -236,7 +236,7 @@ export default function AdminInventoryListingPage() {
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden" id="print-area">
           <div className="hidden print:block px-5 py-4 border-b">
             <h2 className="text-lg font-bold">AF Apparels — Inventory Listing Report</h2>
-            <p className="text-sm text-gray-500">Generated: {shopDate()}</p>
+            <p className="text-sm text-gray-500">Generated: {shopDate(new Date())}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: "480px" }}>
