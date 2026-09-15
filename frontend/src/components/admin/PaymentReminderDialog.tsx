@@ -23,10 +23,13 @@ const money = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function PaymentReminderDialog({
-  draft, orderNumber, busy, onChange, onCancel, onSend,
+  draft, orderNumber, busy, onChange, onCancel, onSend, accountLabel,
 }: {
   draft: ReminderDraft;
   orderNumber?: string;
+  /** Set when the reminder covers a whole account ("7 invoices") rather than
+   *  one order, so the heading and summary do not call it "this order". */
+  accountLabel?: string;
   busy: boolean;
   onChange: (d: ReminderDraft) => void;
   onCancel: () => void;
@@ -44,13 +47,18 @@ export default function PaymentReminderDialog({
       <div onClick={e => e.stopPropagation()}
         className="bg-white rounded-xl w-full max-w-[620px] p-6 shadow-2xl">
         <h3 className="text-lg font-extrabold text-gray-900 mb-1">
-          Send payment reminder{orderNumber ? ` — order ${orderNumber}` : ""}
+          Send payment reminder
+          {accountLabel ? ` — whole account` : orderNumber ? ` — order ${orderNumber}` : ""}
         </h3>
         <p className="text-sm text-gray-500 mb-5">
-          {money(draft.amount_due)} outstanding on this order
-          {draft.account_due > draft.amount_due + 0.005
-            ? ` · ${money(draft.account_due)} across all their open orders`
-            : ""}
+          {accountLabel
+            ? `${money(draft.amount_due)} outstanding across ${accountLabel}`
+            : <>
+                {money(draft.amount_due)} outstanding on this order
+                {draft.account_due > draft.amount_due + 0.005
+                  ? ` · ${money(draft.account_due)} across all their open orders`
+                  : ""}
+              </>}
         </p>
 
         <label className={label}>To</label>

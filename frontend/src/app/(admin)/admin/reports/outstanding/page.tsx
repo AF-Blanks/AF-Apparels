@@ -71,7 +71,12 @@ export default function OutstandingReportPage() {
   const [loading, setLoading] = useState(true);
   const [includeSettled, setIncludeSettled] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<(ReminderDraft & { orderId: string; orderNumber: string }) | null>(null);
+  // A draft is about one order, or about everything a customer owes. Both go
+  // through the same dialog — the admin is writing the same kind of email
+  // either way — so the only difference carried here is where it will be sent.
+  const [draft, setDraft] = useState<
+    (ReminderDraft & { orderId?: string; orderNumber: string; companyId?: string }) | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
   const [search, setSearch] = useState("");
@@ -144,12 +149,31 @@ export default function OutstandingReportPage() {
     } finally { setBusy(false); }
   }
 
+  /** One reminder for everything this customer owes, instead of one per invoice. */
+  async function openAccountDraft(r: Row) {
+    setBusy(true); setNote(null);
+    try {
+      const d = await apiClient.get<ReminderDraft & { order_count: number }>(
+        `/api/v1/admin/customers/${r.company_id}/payment-reminder`);
+      setDraft({
+        ...d,
+        companyId: r.company_id,
+        orderNumber: `${d.order_count} invoice${d.order_count !== 1 ? "s" : ""}`,
+      });
+    } catch (err: unknown) {
+      setNote({ text: err instanceof Error ? err.message : "Couldn't prepare the reminder.", ok: false });
+    } finally { setBusy(false); }
+  }
+
   async function sendDraft() {
     if (!draft) return;
     setBusy(true);
     try {
+      const url = draft.companyId
+        ? `/api/v1/admin/customers/${draft.companyId}/payment-reminder`
+        : `/api/v1/admin/orders/${draft.orderId}/payment-reminder`;
       const r = await apiClient.post<{ message: string }>(
-        `/api/v1/admin/orders/${draft.orderId}/payment-reminder`,
+        url,
         { to_email: draft.to_email, subject: draft.subject, message: draft.message });
       setDraft(null);
       setNote({ text: r.message || "Reminder sent.", ok: true });
@@ -164,6 +188,7 @@ export default function OutstandingReportPage() {
         <PaymentReminderDialog
           draft={draft}
           orderNumber={draft.orderNumber}
+          accountLabel={draft.companyId ? draft.orderNumber : undefined}
           busy={busy}
           onChange={d => setDraft({ ...draft, ...d })}
           onCancel={() => setDraft(null)}
@@ -294,6 +319,18 @@ export default function OutstandingReportPage() {
                           )}
                         </td>
                           <td className="px-5 py-3 text-right whitespace-nowrap">
+                            {/* One reminder for the whole balance. A customer with
+                                seven unpaid invoices was otherwise chased seven
+                                times, and left to add up their own total. */}
+                            {r.unpaid_orders > 1 && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={e => { e.stopPropagation(); openAccountDraft(r); }}
+                                className="mr-3 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+                                ⏰ Remind all · {money(r.outstanding)}
+                              </button>
+                            )}
                             <Link href={`/admin/customers/${r.company_id}`}
                               onClick={e => e.stopPropagation()}
                               className="text-blue-600 text-xs font-semibold hover:underline">
