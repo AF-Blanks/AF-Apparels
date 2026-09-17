@@ -208,6 +208,23 @@ function BracketEditor({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/** Sizes in the order a person reads them, not the order the database returns.
+ *  Anything unrecognised keeps its place at the end, alphabetically. */
+const SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "XXL", "3XL", "4XL", "5XL", "6XL"];
+function sortSizes(sizes: string[]): string[] {
+  return [...sizes].sort((a, b) => {
+    const ia = SIZE_ORDER.indexOf(a.toUpperCase());
+    const ib = SIZE_ORDER.indexOf(b.toUpperCase());
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
+/** The sizes the rate sheet is written in, in the order a person reads them. */
+const COMMISSION_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+
 export default function DiscountGroupsPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
@@ -270,15 +287,14 @@ export default function DiscountGroupsPage() {
   // rest — read in place of whatever the customer was actually charged. A
   // variant left blank is not on the sheet, and its commission goes back to
   // being worked out from the sale.
-  const [cpPrices, setCpPrices] = useState<Record<string, string>>({});
+  const [cpPrices, setCpPrices] = useState<Record<string, Record<string, string>>>({});
   const [cpSaving, setCpSaving] = useState(false);
   const [cpSearch, setCpSearch] = useState("");
-  const [cpExpanded, setCpExpanded] = useState<Set<string>>(new Set());
   const [cpNote, setCpNote] = useState<{ text: string; ok: boolean } | null>(null);
 
   async function loadCommissionPrices() {
     const d = await apiClient
-      .get<Record<string, string>>("/api/v1/admin/commission-prices")
+      .get<Record<string, Record<string, string>>>("/api/v1/admin/commission-prices")
       .catch(() => ({}));
     setCpPrices(d ?? {});
   }
@@ -746,11 +762,11 @@ export default function DiscountGroupsPage() {
             </div>
             <div style={{ fontSize: "12px", color: "#7A6535", lineHeight: 1.7 }}>
               What a customer is charged does not change. When a <strong>Tier 4</strong> or{" "}
-              <strong>Tier 5</strong> customer buys a variant listed here, their commission is
-              worked out from the figure set below instead of from the sale — <strong>10%</strong>{" "}
-              on styles 1000 and 1001, <strong>18%</strong> on everything else. Leave a box empty
-              and that variant comes off the sheet, and its commission goes back to being worked
-              out from what was charged.
+              <strong>Tier 5</strong> customer buys a size priced here, their commission is worked
+              out from that figure instead of from the sale — <strong>10%</strong> on styles 1000
+              and 1001, <strong>18%</strong> on everything else. One figure covers every colour in
+              that size, so a colour added later is already priced. An empty box means the size is
+              not on the sheet, and its commission is worked out from what was charged, as before.
             </div>
           </div>
 
@@ -766,86 +782,84 @@ export default function DiscountGroupsPage() {
           <div style={{ display: "flex", gap: "10px", marginBottom: "16px", alignItems: "center" }}>
             <input value={cpSearch} onChange={e => setCpSearch(e.target.value)} placeholder="Search products…" style={{ ...inputStyle, maxWidth: "320px" }} />
             <span style={{ fontSize: "12px", color: "#7A7880" }}>
-              {Object.values(cpPrices).filter(v => String(v).trim() !== "").length} variants on the sheet
+              {Object.values(cpPrices).reduce((n, sizes) => n + Object.values(sizes || {}).filter(x => String(x).trim() !== "").length, 0)} sizes priced
             </span>
           </div>
 
           {vpLoading ? (
             <div style={{ textAlign: "center", padding: "60px", color: "#bbb", fontSize: "14px" }}>Loading…</div>
           ) : (
-            <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", overflow: "hidden" }}>
-              {vpProducts
-                .filter(p => !cpSearch.trim() || p.name.toLowerCase().includes(cpSearch.trim().toLowerCase()))
-                .map(p => {
-                  const open = cpExpanded.has(p.id);
-                  const setCount = (p.variants || []).filter(
-                    v => String(cpPrices[v.id] ?? "").trim() !== ""
-                  ).length;
-                  return (
-                    <div key={p.id} style={{ borderBottom: "1px solid #EFEDE7" }}>
-                      <button
-                        onClick={() => setCpExpanded(prev => {
-                          const next = new Set(prev);
-                          if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
-                          return next;
-                        })}
-                        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>
-                          {p.name}
-                          <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: 500, color: "#9A9890" }}>
-                            {(p.variants || []).length} variants
-                          </span>
-                          {setCount > 0 && (
-                            <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: 700, color: "#8A6100", background: "#FFF8E6", border: "1px solid #F5D98B", borderRadius: "999px", padding: "1px 8px" }}>
-                              {setCount} set
-                            </span>
-                          )}
-                        </span>
-                        <span style={{ fontSize: "11px", color: "#bbb" }}>{open ? "▲" : "▼"}</span>
-                      </button>
-
-                      {open && (
-                        <div style={{ padding: "0 18px 16px", overflowX: "auto" }}>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-                            <thead>
-                              <tr style={{ textAlign: "left", color: "#7A7880", fontSize: "11px", borderBottom: "1px solid #EFEDE7" }}>
-                                <th style={{ padding: "8px 8px 8px 0" }}>Colour</th>
-                                <th style={{ padding: "8px" }}>Size</th>
-                                <th style={{ padding: "8px", textAlign: "right" }}>Sells at</th>
-                                <th style={{ padding: "8px", textAlign: "right" }}>Commission price</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(p.variants || []).map(v => (
-                                <tr key={v.id} style={{ borderBottom: "1px solid #F6F5F1" }}>
-                                  <td style={{ padding: "7px 8px 7px 0" }}>{v.color || "—"}</td>
-                                  <td style={{ padding: "7px 8px" }}>{v.size || "—"}</td>
-                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#9A9890", fontVariantNumeric: "tabular-nums" }}>
-                                    {v.retail_price != null ? "$" + Number(v.retail_price).toFixed(2) : "—"}
-                                  </td>
-                                  <td style={{ padding: "7px 0 7px 8px", textAlign: "right" }}>
-                                    <input
-                                      value={cpPrices[v.id] ?? ""}
-                                      onChange={e => {
-                                        const val = e.target.value.replace(/[^0-9.]/g, "");
-                                        setCpPrices(prev => ({ ...prev, [v.id]: val }));
-                                      }}
-                                      placeholder="—"
-                                      inputMode="decimal"
-                                      style={{ width: "96px", padding: "5px 8px", border: "1px solid #D8D6CE", borderRadius: "6px", fontSize: "13px", textAlign: "right" }}
-                                    />
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", overflowX: "auto" }}>
+              {/* One row per product, one box per size — the shape the rate sheet
+                  is written in. Colour never appears, because the sheet does not
+                  price by colour and typing every colour of every size is how a
+                  sheet ends up half filled in. */}
+              <table style={{ borderCollapse: "separate", borderSpacing: 0, fontSize: "13px", width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th style={{ position: "sticky", left: 0, zIndex: 2, background: "#F9F8F4", textAlign: "left", padding: "10px 14px", fontSize: "11px", color: "#7A7880", borderBottom: "1px solid #E2E0DA", minWidth: "260px" }}>
+                      Product
+                    </th>
+                    {COMMISSION_SIZES.map(sz => (
+                      <th key={sz} style={{ padding: "10px 6px", fontSize: "11px", fontWeight: 700, color: "#7A7880", background: "#F9F8F4", borderBottom: "1px solid #E2E0DA", minWidth: "90px" }}>
+                        {sz}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {vpProducts
+                    .filter(p => !cpSearch.trim() || p.name.toLowerCase().includes(cpSearch.trim().toLowerCase()))
+                    .map((p, ri) => {
+                      const made = new Set((p.variants || []).map(v => (v.size || "").trim().toUpperCase()));
+                      const row = cpPrices[p.id] || {};
+                      return (
+                        <tr key={p.id} style={{ background: ri % 2 ? "#FCFBF8" : "#fff" }}>
+                          <td style={{ position: "sticky", left: 0, zIndex: 1, background: "inherit", padding: "8px 14px", fontWeight: 600, color: "#2A2830", borderBottom: "1px solid #F1EFE9" }}>
+                            {p.name}
+                          </td>
+                          {COMMISSION_SIZES.map(sz => {
+                            if (!made.has(sz)) {
+                              return (
+                                <td key={sz} style={{ padding: "8px 6px", textAlign: "center", color: "#D6D4CC", borderBottom: "1px solid #F1EFE9" }}>
+                                  –
+                                </td>
+                              );
+                            }
+                            const val = row[sz] ?? "";
+                            const has = String(val).trim() !== "";
+                            return (
+                              <td key={sz} style={{ padding: "6px", borderBottom: "1px solid #F1EFE9" }}>
+                                <input
+                                  value={val}
+                                  onChange={e => {
+                                    const v = e.target.value.replace(/[^0-9.]/g, "");
+                                    setCpPrices(prev => ({
+                                      ...prev,
+                                      [p.id]: { ...(prev[p.id] || {}), [sz]: v },
+                                    }));
+                                  }}
+                                  placeholder="—"
+                                  inputMode="decimal"
+                                  style={{
+                                    width: "78px", padding: "5px 8px", borderRadius: "6px", fontSize: "12px", textAlign: "right",
+                                    border: has ? "1px solid #7FB89B" : "1px solid #E4E2DA",
+                                    background: has ? "#F3FBF6" : "#fff",
+                                  }}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
             </div>
           )}
+          <p style={{ fontSize: "11px", color: "#9A9890", marginTop: "10px" }}>
+            A dash means the product is not made in that size.
+          </p>
         </div>
       )}
 
