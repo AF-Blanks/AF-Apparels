@@ -328,7 +328,7 @@ export default function OutstandingReportPage() {
                                 disabled={busy}
                                 onClick={e => { e.stopPropagation(); openAccountDraft(r); }}
                                 className="mr-3 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
-                                ⏰ Remind all · {money(r.outstanding)}
+                                ⏰ Send Total · {money(r.outstanding)}
                               </button>
                             )}
                             <Link href={`/admin/customers/${r.company_id}`}
