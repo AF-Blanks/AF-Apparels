@@ -211,7 +211,7 @@ function BracketEditor({
 export default function DiscountGroupsPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState<"groups" | "variants">(
+  const [activeTab, setActiveTab] = useState<"groups" | "variants" | "commission">(
     initialTab === "variants" ? "variants" : "groups"
   );
 
@@ -263,6 +263,44 @@ export default function DiscountGroupsPage() {
   const [vpSaving, setVpSaving] = useState(false);
   const [vpSearch, setVpSearch] = useState("");
   const [vpExpanded, setVpExpanded] = useState<Set<string>>(new Set());
+
+  // ── Commission rate sheet (Tier 4 & 5) ────────────────────────────────────
+  // These are not selling prices and never become one. They are the figures a
+  // Tier 4 or Tier 5 sale earns commission on — 10% on 1000/1001, 18% on the
+  // rest — read in place of whatever the customer was actually charged. A
+  // variant left blank is not on the sheet, and its commission goes back to
+  // being worked out from the sale.
+  const [cpPrices, setCpPrices] = useState<Record<string, string>>({});
+  const [cpSaving, setCpSaving] = useState(false);
+  const [cpSearch, setCpSearch] = useState("");
+  const [cpExpanded, setCpExpanded] = useState<Set<string>>(new Set());
+  const [cpNote, setCpNote] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function loadCommissionPrices() {
+    const d = await apiClient
+      .get<Record<string, string>>("/api/v1/admin/commission-prices")
+      .catch(() => ({}));
+    setCpPrices(d ?? {});
+  }
+
+  async function handleSaveCommissionPrices() {
+    setCpSaving(true);
+    setCpNote(null);
+    try {
+      const r = await apiClient.post<{ saved: number; cleared: number }>(
+        "/api/v1/admin/commission-prices", { prices: cpPrices });
+      setCpNote({
+        text: `${r.saved} price${r.saved !== 1 ? "s" : ""} saved`
+          + (r.cleared ? `, ${r.cleared} cleared` : "") + ".",
+        ok: true,
+      });
+      await loadCommissionPrices();
+    } catch (err: unknown) {
+      setCpNote({ text: err instanceof Error ? err.message : "Could not save.", ok: false });
+    } finally {
+      setCpSaving(false);
+    }
+  }
 
   async function loadGroups() {
     setGroupsLoading(true);
@@ -339,11 +377,12 @@ export default function DiscountGroupsPage() {
 
   useEffect(() => {
     loadGroups();
-    if (activeTab === "variants") loadVariantPricing();
+    if (activeTab === "variants" || activeTab === "commission") loadVariantPricing();
+    if (activeTab === "commission") loadCommissionPrices();
   }, []); // eslint-disable-line
 
   useEffect(() => {
-    if (activeTab === "variants" && vpProducts.length === 0) loadVariantPricing();
+    if ((activeTab === "variants" || activeTab === "commission") && vpProducts.length === 0) loadVariantPricing();
   }, [activeTab]); // eslint-disable-line
 
   // Assign-customer picker: search companies server-side (by company name OR the
@@ -602,6 +641,11 @@ export default function DiscountGroupsPage() {
             + Create Group
           </button>
         )}
+        {activeTab === "commission" && (
+          <button onClick={handleSaveCommissionPrices} disabled={cpSaving} style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: cpSaving ? 0.6 : 1 }}>
+            {cpSaving ? "Saving…" : "Save Commission Prices"}
+          </button>
+        )}
         {activeTab === "variants" && (
           <button onClick={handleSaveVariantPricing} disabled={vpSaving} style={{ padding: "10px 20px", background: "#059669", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: vpSaving ? 0.6 : 1 }}>
             {vpSaving ? "Saving…" : "Save Pricing"}
@@ -614,6 +658,7 @@ export default function DiscountGroupsPage() {
         {([
           { key: "groups", label: "Discount Groups" },
           { key: "variants", label: "Individual Variant Pricing" },
+          { key: "commission", label: "Special Tier 4 & 5 Commissions" },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             style={{
@@ -687,6 +732,118 @@ export default function DiscountGroupsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: Special Tier 4 & 5 Commissions ── */}
+      {activeTab === "commission" && (
+        <div>
+          <div style={{ background: "#FFF8E6", border: "1px solid #F5D98B", borderRadius: "10px", padding: "14px 18px", marginBottom: "18px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#8A6100", marginBottom: "4px" }}>
+              These are commission figures, not selling prices.
+            </div>
+            <div style={{ fontSize: "12px", color: "#7A6535", lineHeight: 1.7 }}>
+              What a customer is charged does not change. When a <strong>Tier 4</strong> or{" "}
+              <strong>Tier 5</strong> customer buys a variant listed here, their commission is
+              worked out from the figure set below instead of from the sale — <strong>10%</strong>{" "}
+              on styles 1000 and 1001, <strong>18%</strong> on everything else. Leave a box empty
+              and that variant comes off the sheet, and its commission goes back to being worked
+              out from what was charged.
+            </div>
+          </div>
+
+          {cpNote && (
+            <div style={{
+              marginBottom: "14px", padding: "10px 14px", borderRadius: "8px", fontSize: "13px",
+              background: cpNote.ok ? "#ECFDF3" : "#FEF3F2",
+              border: cpNote.ok ? "1px solid #A6F4C5" : "1px solid #FDA29B",
+              color: cpNote.ok ? "#05603A" : "#B42318",
+            }}>{cpNote.text}</div>
+          )}
+
+          <div style={{ display: "flex", gap: "10px", marginBottom: "16px", alignItems: "center" }}>
+            <input value={cpSearch} onChange={e => setCpSearch(e.target.value)} placeholder="Search products…" style={{ ...inputStyle, maxWidth: "320px" }} />
+            <span style={{ fontSize: "12px", color: "#7A7880" }}>
+              {Object.values(cpPrices).filter(v => String(v).trim() !== "").length} variants on the sheet
+            </span>
+          </div>
+
+          {vpLoading ? (
+            <div style={{ textAlign: "center", padding: "60px", color: "#bbb", fontSize: "14px" }}>Loading…</div>
+          ) : (
+            <div style={{ background: "#fff", border: "1px solid #E2E0DA", borderRadius: "10px", overflow: "hidden" }}>
+              {vpProducts
+                .filter(p => !cpSearch.trim() || p.name.toLowerCase().includes(cpSearch.trim().toLowerCase()))
+                .map(p => {
+                  const open = cpExpanded.has(p.id);
+                  const setCount = (p.variants || []).filter(
+                    v => String(cpPrices[v.id] ?? "").trim() !== ""
+                  ).length;
+                  return (
+                    <div key={p.id} style={{ borderBottom: "1px solid #EFEDE7" }}>
+                      <button
+                        onClick={() => setCpExpanded(prev => {
+                          const next = new Set(prev);
+                          if (next.has(p.id)) next.delete(p.id); else next.add(p.id);
+                          return next;
+                        })}
+                        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#2A2830" }}>
+                          {p.name}
+                          <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: 500, color: "#9A9890" }}>
+                            {(p.variants || []).length} variants
+                          </span>
+                          {setCount > 0 && (
+                            <span style={{ marginLeft: "8px", fontSize: "11px", fontWeight: 700, color: "#8A6100", background: "#FFF8E6", border: "1px solid #F5D98B", borderRadius: "999px", padding: "1px 8px" }}>
+                              {setCount} set
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "#bbb" }}>{open ? "▲" : "▼"}</span>
+                      </button>
+
+                      {open && (
+                        <div style={{ padding: "0 18px 16px", overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                            <thead>
+                              <tr style={{ textAlign: "left", color: "#7A7880", fontSize: "11px", borderBottom: "1px solid #EFEDE7" }}>
+                                <th style={{ padding: "8px 8px 8px 0" }}>Colour</th>
+                                <th style={{ padding: "8px" }}>Size</th>
+                                <th style={{ padding: "8px", textAlign: "right" }}>Sells at</th>
+                                <th style={{ padding: "8px", textAlign: "right" }}>Commission price</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(p.variants || []).map(v => (
+                                <tr key={v.id} style={{ borderBottom: "1px solid #F6F5F1" }}>
+                                  <td style={{ padding: "7px 8px 7px 0" }}>{v.color || "—"}</td>
+                                  <td style={{ padding: "7px 8px" }}>{v.size || "—"}</td>
+                                  <td style={{ padding: "7px 8px", textAlign: "right", color: "#9A9890", fontVariantNumeric: "tabular-nums" }}>
+                                    {v.retail_price != null ? "$" + Number(v.retail_price).toFixed(2) : "—"}
+                                  </td>
+                                  <td style={{ padding: "7px 0 7px 8px", textAlign: "right" }}>
+                                    <input
+                                      value={cpPrices[v.id] ?? ""}
+                                      onChange={e => {
+                                        const val = e.target.value.replace(/[^0-9.]/g, "");
+                                        setCpPrices(prev => ({ ...prev, [v.id]: val }));
+                                      }}
+                                      placeholder="—"
+                                      inputMode="decimal"
+                                      style={{ width: "96px", padding: "5px 8px", border: "1px solid #D8D6CE", borderRadius: "6px", fontSize: "13px", textAlign: "right" }}
+                                    />
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
