@@ -203,6 +203,7 @@ export function AdminSidebar() {
           <SubLink href="/admin/products" label="All Products" />
           <SubLink href="/admin/products/collections" label="Collections" />
           <SubLink href="/admin/products/reviews" label="Reviews" />
+          {!isStaff && <SubLink href="/admin/products/markdown" label="Markdown" />}
           <SubLink href="/admin/inventory" label="Inventory" />
         </div>
       )}
