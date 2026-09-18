@@ -41,6 +41,8 @@ interface CommissionReport {
     special_codes: string[];
     special_percent: number;
     default_percent: number;
+    /** How many products have a rate of their own, replacing the standing one. */
+    custom_rates?: number;
   };
   totals: {
     customers: number;
@@ -145,7 +147,9 @@ export default function CommissionReportPage() {
           {r.tiers.join(" and ")} customers earn{" "}
           <strong>{r.special_percent}%</strong> on products{" "}
           <strong>{r.special_codes.join(" and ")}</strong>, and{" "}
-          <strong>{r.default_percent}%</strong> on everything else. Worked out on the
+          <strong>{r.default_percent}%</strong> on everything else
+          {r.custom_rates ? <> — except the <strong>{r.custom_rates}</strong> product{r.custom_rates !== 1 ? "s" : ""} with a Rate % of their own in Special Tier 4 &amp; 5 Commissions</> : null}
+          . Worked out on the
           goods only — shipping, tax and fees earn nothing. Orders still on terms
           are counted and marked, so a total can be read as earned or as not yet
           collected.
@@ -188,10 +192,10 @@ export default function CommissionReportPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Tile label={`Products ${r?.special_codes.join(" & ")}`}
               value={money(t.special_commission)}
-              sub={`${money(t.special_base)} of goods at ${r?.special_percent}%`} />
+              sub={`${money(t.special_base)} of goods${r?.custom_rates ? "" : ` at ${r?.special_percent}%`}`} />
             <Tile label="All other products"
               value={money(t.other_commission)}
-              sub={`${money(t.other_base)} of goods at ${r?.default_percent}%`} />
+              sub={`${money(t.other_base)} of goods${r?.custom_rates ? "" : ` at ${r?.default_percent}%`}`} />
             <Tile label="Total commission" value={money(t.total_commission)}
               sub="for the dates shown" tone="good" />
             <Tile label="Customers" value={String(t.customers)} sub="earned something" />
@@ -213,9 +217,9 @@ export default function CommissionReportPage() {
                     <th className="px-4 py-3 text-right">Orders</th>
                     <th className="px-4 py-3 text-right">Order total</th>
                     <th className="px-4 py-3 text-right">{r?.special_codes.join("/")} goods</th>
-                    <th className="px-4 py-3 text-right">@ {r?.special_percent}%</th>
+                    <th className="px-4 py-3 text-right">{r?.custom_rates ? "Commission" : `@ ${r?.special_percent}%`}</th>
                     <th className="px-4 py-3 text-right">Other goods</th>
-                    <th className="px-4 py-3 text-right">@ {r?.default_percent}%</th>
+                    <th className="px-4 py-3 text-right">{r?.custom_rates ? "Commission" : `@ ${r?.default_percent}%`}</th>
                     <th className="px-4 py-3 text-right">Total</th>
                   </tr>
                 </thead>

@@ -288,6 +288,8 @@ export default function DiscountGroupsPage() {
   // variant left blank is not on the sheet, and its commission goes back to
   // being worked out from the sale.
   const [cpPrices, setCpPrices] = useState<Record<string, Record<string, string>>>({});
+  // productId -> percentage as typed. Empty means the standing rule applies.
+  const [cpRates, setCpRates] = useState<Record<string, string>>({});
   const [cpSaving, setCpSaving] = useState(false);
   const [cpSearch, setCpSearch] = useState("");
   const [cpNote, setCpNote] = useState<{ text: string; ok: boolean } | null>(null);
@@ -297,6 +299,10 @@ export default function DiscountGroupsPage() {
       .get<Record<string, Record<string, string>>>("/api/v1/admin/commission-prices")
       .catch(() => ({}));
     setCpPrices(d ?? {});
+    const rates = await apiClient
+      .get<Record<string, string>>("/api/v1/admin/commission-rates")
+      .catch(() => ({}));
+    setCpRates(rates ?? {});
   }
 
   async function handleSaveCommissionPrices() {
@@ -305,9 +311,12 @@ export default function DiscountGroupsPage() {
     try {
       const r = await apiClient.post<{ saved: number; cleared: number }>(
         "/api/v1/admin/commission-prices", { prices: cpPrices });
+      const rr = await apiClient.post<{ saved: number; cleared: number }>(
+        "/api/v1/admin/commission-rates", { rates: cpRates });
       setCpNote({
-        text: `${r.saved} price${r.saved !== 1 ? "s" : ""} saved`
-          + (r.cleared ? `, ${r.cleared} cleared` : "") + ".",
+        text: `${r.saved} size price${r.saved !== 1 ? "s" : ""} and `
+          + `${rr.saved} rate${rr.saved !== 1 ? "s" : ""} saved`
+          + (r.cleared + rr.cleared ? `, ${r.cleared + rr.cleared} cleared` : "") + ".",
         ok: true,
       });
       await loadCommissionPrices();
@@ -763,10 +772,10 @@ export default function DiscountGroupsPage() {
             <div style={{ fontSize: "12px", color: "#7A6535", lineHeight: 1.7 }}>
               What a customer is charged does not change. When a <strong>Tier 4</strong> or{" "}
               <strong>Tier 5</strong> customer buys a size priced here, their commission is worked
-              out from that figure instead of from the sale — <strong>10%</strong> on styles 1000
-              and 1001, <strong>18%</strong> on everything else. One figure covers every colour in
-              that size, so a colour added later is already priced. An empty box means the size is
-              not on the sheet, and its commission is worked out from what was charged, as before.
+              out as <strong>quantity × the size price × the product&apos;s Rate %</strong> — not
+              from what they were charged. One figure covers every colour in that size. Leave
+              <strong> Rate %</strong> empty and the standing rule applies: 10% on 1000 and 1001, 18% on
+              everything else. Leave a size empty and that size is worked out from the sale, as before.
             </div>
           </div>
 
@@ -800,6 +809,9 @@ export default function DiscountGroupsPage() {
                     <th style={{ position: "sticky", left: 0, zIndex: 2, background: "#F9F8F4", textAlign: "left", padding: "10px 14px", fontSize: "11px", color: "#7A7880", borderBottom: "1px solid #E2E0DA", minWidth: "260px" }}>
                       Product
                     </th>
+                    <th style={{ padding: "10px 6px", fontSize: "11px", fontWeight: 800, color: "#8A6100", background: "#FFF3D6", borderBottom: "1px solid #E2E0DA", minWidth: "90px" }}>
+                      Rate %
+                    </th>
                     {COMMISSION_SIZES.map(sz => (
                       <th key={sz} style={{ padding: "10px 6px", fontSize: "11px", fontWeight: 700, color: "#7A7880", background: "#F9F8F4", borderBottom: "1px solid #E2E0DA", minWidth: "90px" }}>
                         {sz}
@@ -817,6 +829,33 @@ export default function DiscountGroupsPage() {
                         <tr key={p.id} style={{ background: ri % 2 ? "#FCFBF8" : "#fff" }}>
                           <td style={{ position: "sticky", left: 0, zIndex: 1, background: "inherit", padding: "8px 14px", fontWeight: 600, color: "#2A2830", borderBottom: "1px solid #F1EFE9" }}>
                             {p.name}
+                          </td>
+                          <td style={{ padding: "6px", background: "#FFFBF0", borderBottom: "1px solid #F1EFE9" }}>
+                            {(() => {
+                              const std = /^(1000|1001)\b/.test(p.name.trim()) ? "10" : "18";
+                              const val = cpRates[p.id] ?? "";
+                              const has = String(val).trim() !== "";
+                              return (
+                                <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                                  <input
+                                    value={val}
+                                    onChange={e => {
+                                      const v = e.target.value.replace(/[^0-9.]/g, "");
+                                      setCpRates(prev => ({ ...prev, [p.id]: v }));
+                                    }}
+                                    placeholder={std}
+                                    title={has ? undefined : `Empty — the standing ${std}% applies`}
+                                    inputMode="decimal"
+                                    style={{
+                                      width: "58px", padding: "5px 7px", borderRadius: "6px", fontSize: "12px", textAlign: "right", fontWeight: 700,
+                                      border: has ? "1px solid #D9A93A" : "1px solid #EBDDB8",
+                                      background: has ? "#FFF3D6" : "#fff",
+                                    }}
+                                  />
+                                  <span style={{ fontSize: "11px", color: "#8A6100" }}>%</span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           {COMMISSION_SIZES.map(sz => {
                             if (!made.has(sz)) {
