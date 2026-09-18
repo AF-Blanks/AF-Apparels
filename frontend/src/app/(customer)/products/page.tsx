@@ -30,6 +30,7 @@ export default async function ProductsPage({ searchParams }: PageProps) {
     price_min: params.price_min ? Number(params.price_min) : undefined,
     price_max: params.price_max ? Number(params.price_max) : undefined,
     product_code: typeof params.product_code === "string" ? params.product_code : undefined,
+    on_markdown: params.on_markdown === "true" ? true : undefined,
   };
 
   const [categoriesResult, productsResult] = await Promise.allSettled([
@@ -62,9 +63,11 @@ export default async function ProductsPage({ searchParams }: PageProps) {
     )
   ).sort() as string[];
 
-  const collectionName = filters.category
-    ? (categories.find(c => c.slug === filters.category)?.name ?? "All Products")
-    : "All Products";
+  const collectionName = filters.on_markdown
+    ? "Markdown"
+    : filters.category
+      ? (categories.find(c => c.slug === filters.category)?.name ?? "All Products")
+      : "All Products";
 
   return (
     <div style={{ minHeight: "100vh", background: "#F8F8F6", fontFamily: "'DM Sans', sans-serif" }}>

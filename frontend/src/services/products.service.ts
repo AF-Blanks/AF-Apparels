@@ -15,6 +15,8 @@ export interface ProductFilters {
   in_stock?: boolean;
   product_code?: string;
   is_bestseller?: boolean;
+  /** Only products with a size marked below its list price. */
+  on_markdown?: boolean;
 }
 
 export const productsService = {
@@ -36,6 +38,7 @@ export const productsService = {
     if (filters.in_stock) params.set("in_stock", "true");
     if (filters.product_code) params.set("product_code", filters.product_code);
     if (filters.is_bestseller) params.set("is_bestseller", "true");
+    if (filters.on_markdown) params.set("on_markdown", "true");
 
     const query = params.toString();
     return apiClient.get<PaginatedResponse<ProductListItem>>(

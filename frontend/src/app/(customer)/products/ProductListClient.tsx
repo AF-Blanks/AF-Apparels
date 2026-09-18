@@ -89,6 +89,7 @@ export function ProductListClient({
   const currentPriceMax = searchParams.get("price_max") ?? "";
   const currentProductCode = searchParams.get("product_code") ?? "";
   const currentQ = searchParams.get("q") ?? "";
+  const currentOnMarkdown = searchParams.get("on_markdown") ?? "";
 
   // Client-side product state — initialized from SSR data (guest prices),
   // re-fetched with auth token on every navigation so wholesale prices appear.
@@ -119,12 +120,15 @@ export function ProductListClient({
     if (currentPriceMax) params.price_max = currentPriceMax;
     if (currentProductCode) params.product_code = currentProductCode;
     if (currentQ) params.q = currentQ;
+    // Kept on the re-fetch, or the Markdown page would show its marked products
+    // for a moment and then quietly swap them for the whole catalogue.
+    if (currentOnMarkdown) params.on_markdown = currentOnMarkdown;
     const qs = new URLSearchParams({ ...params, page_size: "24" }).toString();
     apiClient.get<{ items: ProductListItem[] }>(`/api/v1/products?${qs}`)
       .then((res) => { if (!cancelled && res?.items?.length) setProducts(res.items); })
       .catch(() => { });
     return () => { cancelled = true; };
-  }, [isAuthenticated, currentCategory, currentSize, currentColor, currentGender, currentInStock, currentPriceMin, currentPriceMax, currentProductCode, currentQ]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, currentCategory, currentSize, currentColor, currentGender, currentInStock, currentPriceMin, currentPriceMax, currentProductCode, currentQ, currentOnMarkdown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filter drawer state (mobile)
   const [filterOpen, setFilterOpen] = useState(false);

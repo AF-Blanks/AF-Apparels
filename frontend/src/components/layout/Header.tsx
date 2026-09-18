@@ -117,6 +117,7 @@ export function Header() {
               { href: "/products?category=t-shirts", label: "T-Shirts" },
               { href: "/products?category=hoodies", label: "Hoodies" },
               { href: "/products", label: "New" },
+              { href: "/products?on_markdown=true", label: "Markdown" },
             ] as { href: string; label: string }[]).map(({ href, label }) => (
               <Link key={label} href={href} style={navLinkStyle}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = "#1c3557"; }}
@@ -277,6 +278,7 @@ export function Header() {
                 { href: "/products", label: "Shop All" },
                 { href: "/products?category=t-shirts", label: "T-Shirts" },
                 { href: "/products?category=hoodies", label: "Hoodies" },
+                { href: "/products?on_markdown=true", label: "Markdown" },
                 { href: "/about", label: "About Us" },
                 { href: "/contact", label: "Contact" },
                 { href: "/blog", label: "Blog" },
