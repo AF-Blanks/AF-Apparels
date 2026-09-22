@@ -86,6 +86,8 @@ interface AdminOrder {
   qb_invoice_id: string | null;
   /** An invoice in QuickBooks is not the same as the money being recorded against it. */
   qb_payment_id?: string | null;
+  /** Why the invoice was held back: the QuickBooks customer is somebody else. */
+  qb_hold_reason?: string | null;
   /** Where the bank debit has got to — money moves over days, not at once. */
   qb_echeck_status?: string | null;
   /** Evidence the customer allowed the debit — produced if one is ever disputed. */
@@ -612,6 +614,25 @@ export default function AdminOrderDetailPage() {
       setMsg({ text: err instanceof Error ? err.message : "Failed to recreate invoice", ok: false });
     } finally {
       setRecreatingInvoice(false);
+    }
+  }
+
+  async function handleQbCustomerFix(action: "confirm" | "relink") {
+    if (!order) return;
+    const ask = action === "confirm"
+      ? "Only continue if you are sure the QuickBooks customer shown is really this customer, just under another name. Future invoices for this customer will go to that QuickBooks customer."
+      : `Link this customer to the QuickBooks customer named exactly "${order.company_name ?? "this company"}"? One is created in QuickBooks if none has that name. Nothing already in QuickBooks is changed.`;
+    if (!window.confirm(ask)) return;
+    setIsSyncing(true); setMsg(null);
+    try {
+      const r = await apiClient.post<{ message: string }>(
+        `/api/v1/admin/orders/${order.id ?? id}/qb-customer/${action}`, {});
+      setMsg({ text: r.message, ok: true });
+      setOrder(prev => prev ? { ...prev, qb_hold_reason: null } : prev);
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Could not update the QuickBooks link", ok: false });
+    } finally {
+      setIsSyncing(false);
     }
   }
 
@@ -2577,6 +2598,34 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                   )}
                 </div>
               </div>
+              {/* Held back instead of being billed to a stranger: the QuickBooks
+                  customer this company is linked to has another name (order 1118
+                  went to "AMG Maximana INC" this way). */}
+              {order.qb_hold_reason && (
+                <div style={{ fontSize: "12px", marginTop: "8px", padding: "10px 12px", background: "#FEF3F2", border: "1px solid #FDA29B", borderRadius: "6px", color: "#912018", lineHeight: 1.5 }}>
+                  <div style={{ fontWeight: 700, fontSize: "13px", marginBottom: "4px" }}>
+                    Invoice held: wrong QuickBooks customer
+                  </div>
+                  <div>{order.qb_hold_reason}</div>
+                  <div style={{ marginTop: "6px", color: "#7A271A" }}>
+                    Nothing was sent to QuickBooks. If someone renamed the customer in QuickBooks by mistake, change it back there and press Sync Now. Otherwise:
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "8px" }}>
+                    <button
+                      onClick={() => handleQbCustomerFix("relink")}
+                      disabled={isSyncing}
+                      style={{ background: "#1B3A5C", color: "#fff", border: "none", padding: "5px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 700, cursor: isSyncing ? "not-allowed" : "pointer", opacity: isSyncing ? 0.6 : 1 }}>
+                      Link to the right customer
+                    </button>
+                    <button
+                      onClick={() => handleQbCustomerFix("confirm")}
+                      disabled={isSyncing}
+                      style={{ background: "#fff", color: "#912018", border: "1px solid #FDA29B", padding: "5px 10px", borderRadius: "5px", fontSize: "11px", fontWeight: 700, cursor: isSyncing ? "not-allowed" : "pointer", opacity: isSyncing ? 0.6 : 1 }}>
+                      It is the same customer, send it
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Invoiced and settled here, but nothing recorded against it in the
                   books — the gap that left every ACH payment out of QuickBooks. */}
               {order.qb_invoice_id && order.payment_status === "paid" && !order.qb_payment_id && (
