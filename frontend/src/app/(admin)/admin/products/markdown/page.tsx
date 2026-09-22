@@ -3,11 +3,10 @@
 /**
  * Markdown — moving a price up or down without losing the old one.
  *
- * A marked price stands in for the list price everywhere it would have been
- * used. It does not reach past a price a customer has been given of their own:
- * anyone on an agreed rate through Individual Variant Pricing keeps that rate,
- * sale or no sale. Clearing a mark brings the list price straight back, so
- * nothing has to be typed in again from memory.
+ * A marked price is what everybody pays: guests and every customer, whatever
+ * tier discount, group price or Individual Variant Pricing they have. Clearing
+ * a mark brings their usual price straight back, so nothing has to be typed in
+ * again from memory.
  *
  * Marks are stored per variant, but they are decided by colour or by size — so
  * those are the handles this page offers, with a box per variant underneath for
@@ -133,8 +132,9 @@ export default function MarkdownPage() {
         <h1 className="text-2xl font-extrabold text-gray-900">Markdown</h1>
         <p className="text-sm text-gray-500 mt-1">
           Move a price up or down for a product, a colour, a size, or one variant.
-          The original is kept — clear a mark and it comes straight back. Customers
-          on their own agreed price are not affected.
+          Everyone pays the marked price — guests and every customer, whatever their
+          tier, group price or Individual Variant Pricing. Clear a mark and their usual
+          price comes straight back.
         </p>
       </div>
 
