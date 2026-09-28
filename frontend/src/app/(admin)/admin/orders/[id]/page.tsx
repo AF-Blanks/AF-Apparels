@@ -6,6 +6,7 @@ import { adminService } from "@/services/admin.service";
 import { apiClient } from "@/lib/api-client";
 import PaymentReminderDialog from "@/components/admin/PaymentReminderDialog";
 import { shopDate } from "@/lib/utils";
+import RecordPaymentDialog from "@/components/admin/RecordPaymentDialog";
 
 interface OrderItem {
   id: string;
@@ -134,6 +135,17 @@ interface AdminOrder {
   convenience_fee?: string | null;
   // Multi-box labels JSON string
   all_labels?: string | null;
+}
+
+/** One payment taken outside the website and recorded by hand. */
+interface OrderPaymentRow {
+  id: string;
+  amount: number;
+  method: string | null;
+  reference: string | null;
+  paid_on: string | null;
+  recorded_by: string | null;
+  qb_payment_id: string | null;
 }
 
 interface BoxSummary {
@@ -356,6 +368,10 @@ export default function AdminOrderDetailPage() {
   const [reminderBusy, setReminderBusy] = useState(false);
   const [isResendingInvoice, setIsResendingInvoice] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  // Payments taken outside the website, and the dialog for adding one.
+  const [payments, setPayments] = useState<OrderPaymentRow[]>([]);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payBusy, setPayBusy] = useState(false);
 
   // Notes state
   const [editingNote, setEditingNote] = useState(false);
@@ -408,6 +424,7 @@ export default function AdminOrderDetailPage() {
       .then(async (d) => {
         const o = d as AdminOrder;
         setOrder(o);
+        loadPayments(o.id ?? id);
         setStatus(o.status);
         setManualWeight(o.calculated_weight_lbs ?? 1.0);
         setTracking(o.tracking_number ?? "");
@@ -976,6 +993,46 @@ The existing label is NOT refunded — if it was a real one, request the refund 
     } catch {
       setMsg({ text: "Failed to send invoice email.", ok: false });
     } finally { setIsResendingInvoice(false); }
+  }
+
+  async function loadPayments(oid: string) {
+    try {
+      const r = await apiClient.get<{ payments: OrderPaymentRow[] }>(
+        `/api/v1/admin/orders/${oid}/payments`);
+      setPayments(r.payments ?? []);
+    } catch { /* the order still reads fine without its payment history */ }
+  }
+
+  async function savePayment(v: { amount: number; method: string; reference: string; paid_on: string }) {
+    const oid = order?.id ?? id;
+    setPayBusy(true); setMsg(null);
+    try {
+      const r = await apiClient.post<{ message: string }>(
+        `/api/v1/admin/orders/${oid}/payments`, v);
+      setPayOpen(false);
+      setMsg({ text: r.message, ok: true });
+      await loadPayments(oid);
+      const fresh = await adminService.getOrder(oid);
+      setOrder(fresh as AdminOrder);
+    } catch (err: unknown) {
+      setMsg({ text: err instanceof Error ? err.message : "The payment could not be recorded.", ok: false });
+    } finally { setPayBusy(false); }
+  }
+
+  async function removePayment(paymentId: string, amount: number) {
+    if (!confirm(`Remove the $${amount.toFixed(2)} payment? It is taken off this order and voided in QuickBooks.`)) return;
+    const oid = order?.id ?? id;
+    setPayBusy(true); setMsg(null);
+    try {
+      const r = await apiClient.delete<{ message: string }>(
+        `/api/v1/admin/orders/${oid}/payments/${paymentId}`);
+      setMsg({ text: r.message, ok: true });
+      await loadPayments(oid);
+      const fresh = await adminService.getOrder(oid);
+      setOrder(fresh as AdminOrder);
+    } catch (err: unknown) {
+      setMsg({ text: err instanceof Error ? err.message : "The payment could not be removed.", ok: false });
+    } finally { setPayBusy(false); }
   }
 
   async function handleMarkAsPaid() {
@@ -2191,6 +2248,15 @@ The existing label is NOT refunded — if it was a real one, request the refund 
             )}
             {order.payment_status !== "paid" && (
               <button
+                onClick={() => setPayOpen(true)}
+                disabled={payBusy}
+                title="Record money already received — a cheque, cash, a bank transfer. Part payments are fine."
+                style={{ background: '#fff', color: '#047857', border: '1px solid #047857', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: payBusy ? 'not-allowed' : 'pointer', opacity: payBusy ? 0.6 : 1 }}>
+                + Record Payment
+              </button>
+            )}
+            {order.payment_status !== "paid" && (
+              <button
                 onClick={handleMarkAsPaid}
                 disabled={isMarkingPaid}
                 style={{ background: '#10B981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: isMarkingPaid ? 'not-allowed' : 'pointer', opacity: isMarkingPaid ? 0.6 : 1 }}>
@@ -2198,6 +2264,54 @@ The existing label is NOT refunded — if it was a real one, request the refund 
               </button>
             )}
           </div>
+          )}
+
+          {/* Payments taken outside the website. Shown whatever the order's
+              status, because how an invoice was settled is part of its record. */}
+          {payments.length > 0 && (
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '14px 16px', marginTop: '12px' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 700, color: '#1B3A5C' }}>
+                Payments recorded
+              </p>
+              {payments.map(p => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 0', borderTop: '1px solid #F1EFE9', fontSize: '13px' }}>
+                  <span style={{ fontWeight: 700, color: '#047857', minWidth: '90px', fontVariantNumeric: 'tabular-nums' }}>
+                    ${Number(p.amount).toFixed(2)}
+                  </span>
+                  <span style={{ color: '#6B7280' }}>
+                    {(p.method ?? "other").replace("_", " ")}
+                    {p.reference ? " · " + p.reference : ""}
+                    {p.paid_on ? " · " + p.paid_on : ""}
+                  </span>
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '11px', color: p.qb_payment_id ? '#059669' : '#B45309' }}>
+                      {p.qb_payment_id ? "in QuickBooks" : "not in QuickBooks yet"}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#9CA3AF' }}>{p.recorded_by ?? ""}</span>
+                    <button
+                      onClick={() => removePayment(p.id, Number(p.amount))}
+                      disabled={payBusy}
+                      title="Remove this payment — it is taken off the order and voided in QuickBooks"
+                      style={{ background: 'none', border: 'none', color: '#B91C1C', fontSize: '13px', cursor: payBusy ? 'not-allowed' : 'pointer' }}>
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {payOpen && (
+            <RecordPaymentDialog
+              target={{
+                orderId: order.id ?? id,
+                orderNumber: order.order_number,
+                due: Math.max(0, Number(order.total ?? 0) - Number(order.amount_paid ?? 0)),
+              }}
+              busy={payBusy}
+              onCancel={() => setPayOpen(false)}
+              onSave={savePayment}
+            />
           )}
 
           {/* TIMELINE */}

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import PaymentReminderDialog from "@/components/admin/PaymentReminderDialog";
+import RecordPaymentDialog, { type RecordPaymentTarget } from "@/components/admin/RecordPaymentDialog";
 
 interface Aging { current: number; d30: number; d60: number; d90: number }
 
@@ -78,6 +79,8 @@ export default function OutstandingReportPage() {
     (ReminderDraft & { orderId?: string; orderNumber: string; companyId?: string }) | null
   >(null);
   const [busy, setBusy] = useState(false);
+  // The invoice a payment is being recorded against, if any.
+  const [payFor, setPayFor] = useState<RecordPaymentTarget | null>(null);
   const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("outstanding");
@@ -165,6 +168,27 @@ export default function OutstandingReportPage() {
     } finally { setBusy(false); }
   }
 
+  /** Money already received against one invoice — a cheque, cash, a transfer. */
+  async function savePayment(v: { amount: number; method: string; reference: string; paid_on: string }) {
+    if (!payFor) return;
+    setBusy(true);
+    try {
+      const r = await apiClient.post<{ message: string }>(
+        `/api/v1/admin/orders/${payFor.orderId}/payments`, v);
+      setPayFor(null);
+      setNote({ text: r.message, ok: true });
+      // The balance this page is about has just changed, so read it again
+      // rather than leaving a figure on screen that is no longer true.
+      setLoading(true);
+      apiClient
+        .get(`/api/v1/admin/reports/outstanding?include_settled=${includeSettled}`)
+        .then((d: any) => setData(d))
+        .finally(() => setLoading(false));
+    } catch (err: unknown) {
+      setNote({ text: err instanceof Error ? err.message : "The payment could not be recorded.", ok: false });
+    } finally { setBusy(false); }
+  }
+
   async function sendDraft() {
     if (!draft) return;
     setBusy(true);
@@ -193,6 +217,14 @@ export default function OutstandingReportPage() {
           onChange={d => setDraft({ ...draft, ...d })}
           onCancel={() => setDraft(null)}
           onSend={sendDraft}
+        />
+      )}
+      {payFor && (
+        <RecordPaymentDialog
+          target={payFor}
+          busy={busy}
+          onCancel={() => setPayFor(null)}
+          onSave={savePayment}
         />
       )}
       {note && (
@@ -372,6 +404,13 @@ export default function OutstandingReportPage() {
                               style={{ fontVariantNumeric: "tabular-nums" }}>{money(o.due)}</td>
                             <td className="px-5 py-2"></td>
                             <td className="px-5 py-2 text-right whitespace-nowrap">
+                              <button
+                                onClick={() => setPayFor({ orderId: o.order_id, orderNumber: o.invoice_number, due: o.due })}
+                                disabled={busy}
+                                title="Record money already received on this invoice — a cheque, cash, a transfer"
+                                className="mr-2 text-xs font-semibold px-2.5 py-1 rounded border border-green-600 text-green-700 hover:bg-green-50 disabled:opacity-50">
+                                + Payment
+                              </button>
                               <button onClick={() => openDraft(o)} disabled={busy}
                                 className="text-xs font-semibold px-2.5 py-1 rounded border border-amber-600 text-amber-700 hover:bg-amber-50 disabled:opacity-50">
                                 ⏰ Remind
