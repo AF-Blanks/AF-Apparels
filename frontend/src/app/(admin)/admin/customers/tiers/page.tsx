@@ -52,7 +52,13 @@ interface VPProduct {
 
 interface TierOverride { price: string; discount: string; }
 interface BrowseItem { id: string; name: string; }
-interface CustomerItem { id: string; name: string; tags: string[]; }
+interface CustomerItem {
+  id: string; name: string; tags: string[];
+  // Sent with a group's members, for the download. Absent on the picker's rows.
+  email?: string | null; phone?: string | null; contact_name?: string | null;
+  city?: string | null; state?: string | null; status?: string | null;
+  customer_since?: string | null;
+}
 
 const EMPTY_GROUP_FORM: Omit<DiscountGroup, "id" | "created_at" | "applies_to_ids" | "shipping_brackets" | "shipping_calc_type" | "shipping_cutoff_time"> = {
   title: "",
@@ -493,6 +499,28 @@ export default function DiscountGroupsPage() {
     } finally {
       setGroupCustomersLoading(false);
     }
+  }
+
+  /** Every member of the open group, as a spreadsheet. */
+  function downloadGroupCustomers() {
+    if (!groupCustomers.length) return;
+    const group = groupForm.title || groupForm.customer_tag || "group";
+    const head = ["Customer", "Contact", "Email", "Phone", "City", "State", "Status", "Customer since", "Discount group"];
+    const body = groupCustomers.map(c => [
+      c.name, c.contact_name ?? "", c.email ?? "", c.phone ?? "",
+      c.city ?? "", c.state ?? "", c.status ?? "", c.customer_since ?? "", group,
+    ]);
+    const csv = [head, ...body]
+      .map(line => line.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    // The BOM is what makes Excel read accented names as written.
+    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xFEFF) + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${group.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase()}-customers.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`${groupCustomers.length} customer${groupCustomers.length !== 1 ? "s" : ""} downloaded`);
   }
 
   async function toggleCustomerAssignment(customer: CustomerItem, assign: boolean) {
@@ -1123,11 +1151,21 @@ export default function DiscountGroupsPage() {
                   <label style={{ ...labelStyle, marginBottom: 0 }}>
                     Assigned Customers{groupCustomers.length > 0 ? ` (${groupCustomers.length})` : ""}
                   </label>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                  {groupCustomers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={downloadGroupCustomers}
+                      title="Download every customer in this group as a spreadsheet"
+                      style={{ padding: "5px 12px", background: "#fff", border: "1px solid #C9C7BF", color: "#2A2830", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+                    >⬇ Download all ({groupCustomers.length})</button>
+                  )}
                   <button
                     type="button"
                     onClick={() => { setShowAddPanel(p => !p); if (!showAddPanel) { loadAllCustomers(); setCustomerAssignSearch(""); } }}
                     style={{ padding: "5px 12px", background: showAddPanel ? "#E2E0DA" : "rgba(26,92,255,.08)", border: `1px solid ${showAddPanel ? "#ccc" : "rgba(26,92,255,.2)"}`, color: showAddPanel ? "#7A7880" : "#1A5CFF", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
                   >{showAddPanel ? "✕ Close" : "+ Add"}</button>
+                  </div>
                 </div>
 
                 {groupCustomersLoading ? (
