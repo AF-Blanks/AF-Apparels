@@ -40,6 +40,26 @@ const PAYMENT_COLORS: Record<string, string> = {
   failed:  "bg-red-100 text-red-700",
 };
 
+/** What the page was filtered by, read back from the address bar.
+ *
+ * Opening an order and pressing Back used to land on an unfiltered list: the
+ * filters lived only in React state, which a fresh mount does not have. Keeping
+ * them in the URL means the browser restores them, the page can be bookmarked,
+ * and a filtered list can be sent to somebody as a link.
+ */
+function filtersFromUrl() {
+  const p = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+  return {
+    q: p.get("q") ?? "",
+    status: p.get("status") ?? "",
+    company: p.get("company_id") ?? "",
+    from: p.get("from") ?? "",
+    to: p.get("to") ?? "",
+    tab: (p.get("tab") === "guest" ? "guest" : "all") as "all" | "guest",
+    page: Math.max(1, Number(p.get("page") ?? 1) || 1),
+  };
+}
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -51,9 +71,38 @@ export default function AdminOrdersPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
+  // The address bar is read once the page is in the browser, not while it is
+  // first drawn on the server, where there is no address bar to read. Nothing
+  // is written back or fetched until that has happened, or the first thing this
+  // page did would be to wipe the very filters it was about to restore.
+  const [ready, setReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const PAGE_SIZE = 50;
+
+  // Written with replaceState rather than a router push, so filtering does not
+  // fill the history with a step per keystroke — Back still goes where the
+  // admin came from, and returning from an order finds the list as it was.
+  useEffect(() => {
+    const f = filtersFromUrl();
+    setQ(f.q); setStatusFilter(f.status); setCompanyFilter(f.company);
+    setDateFrom(f.from); setDateTo(f.to); setActiveTab(f.tab); setPage(f.page);
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (statusFilter) p.set("status", statusFilter);
+    if (companyFilter) p.set("company_id", companyFilter);
+    if (dateFrom) p.set("from", dateFrom);
+    if (dateTo) p.set("to", dateTo);
+    if (activeTab === "guest") p.set("tab", "guest");
+    if (page > 1) p.set("page", String(page));
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [ready, q, statusFilter, companyFilter, dateFrom, dateTo, activeTab, page]);
 
   async function load() {
     setIsLoading(true);
@@ -73,7 +122,7 @@ export default function AdminOrdersPage() {
     } finally { setIsLoading(false); }
   }
 
-  useEffect(() => { load(); }, [q, statusFilter, companyFilter, activeTab, dateFrom, dateTo, page]);
+  useEffect(() => { if (ready) load(); }, [ready, q, statusFilter, companyFilter, activeTab, dateFrom, dateTo, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only companies that have actually placed one — a company sitting in the
   // dropdown with nothing behind it is a dead end dressed up as a choice.

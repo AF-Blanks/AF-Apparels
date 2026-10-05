@@ -482,12 +482,14 @@ export default function DiscountGroupsPage() {
   async function loadGroupCustomers(tag: string) {
     setGroupCustomersLoading(true);
     try {
-      const data = await adminService.listCompanies({ page_size: 200 }) as any;
-      const items: CustomerItem[] = data?.items ?? data ?? [];
-      const assigned = (Array.isArray(items) ? items : []).filter(c =>
-        Array.isArray(c.tags) && c.tags.includes(tag)
-      );
-      setGroupCustomers(assigned);
+      // Asked of the database by tag. This used to fetch the first 200 customers
+      // and pick the group's members out of them here, so with 1,400 customers
+      // on the books a group showed a handful of its members and hid the rest.
+      const items = await apiClient.get<CustomerItem[]>(
+        `/api/v1/admin/customers/companies-by-tag?tag=${encodeURIComponent(tag)}`);
+      setGroupCustomers(Array.isArray(items) ? items : []);
+    } catch {
+      setGroupCustomers([]);
     } finally {
       setGroupCustomersLoading(false);
     }
