@@ -486,7 +486,7 @@ export default function DiscountGroupsPage() {
       // and pick the group's members out of them here, so with 1,400 customers
       // on the books a group showed a handful of its members and hid the rest.
       const items = await apiClient.get<CustomerItem[]>(
-        `/api/v1/admin/customers/companies-by-tag?tag=${encodeURIComponent(tag)}`);
+        `/api/v1/admin/companies-by-tag?tag=${encodeURIComponent(tag)}`);
       setGroupCustomers(Array.isArray(items) ? items : []);
     } catch {
       setGroupCustomers([]);
