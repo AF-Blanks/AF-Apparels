@@ -93,6 +93,10 @@ export default function StockMovementPage() {
   const [mode, setMode] = useState<"month" | "range">("month");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // The search the figures on screen were actually fetched with. `search` is
+  // whatever is typed in the box, which may not have been applied yet — and the
+  // download has to be what is shown, not what is half-typed.
+  const [appliedQ, setAppliedQ] = useState("");
 
   const load = useCallback((m?: string, q?: string, range?: { from: string; to: string } | null) => {
     setLoading(true);
@@ -109,6 +113,7 @@ export default function StockMovementPage() {
       .get<Movement>(`/api/v1/admin/reports/stock-movement?${params.toString()}`)
       .then(res => {
         setData(res);
+        setAppliedQ((q ?? "").trim());
         if (res.period.value) setMonth(res.period.value);
         if (res.period.from && !from) setFrom(res.period.from);
         if (res.period.to && !to) setTo(res.period.to);
@@ -143,6 +148,41 @@ export default function StockMovementPage() {
   }, [data]);
 
   const s = data?.summary;
+
+  /** Exactly the rows on screen — same period, same search — one line per variant. */
+  function downloadCsv() {
+    if (!data || !data.rows.length) return;
+    const rows = [...data.rows].sort((a, b) =>
+      a.product_name.localeCompare(b.product_name)
+      || a.color.localeCompare(b.color)
+      || sizeRank(a.size) - sizeRank(b.size)
+      || a.size.localeCompare(b.size)
+    );
+    const head = ["Product", "Colour", "Size", "SKU", "Opening", "Received", "Sold", "Adjustments", "In hand", "Still on order"];
+    const body = rows.map(r => [
+      r.product_name, r.color ?? "", r.size ?? "", r.sku ?? "",
+      r.opening, r.received, r.sold, r.other, r.closing, r.on_order,
+    ]);
+    const csv = [head, ...body]
+      .map(line => line.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\r\n");
+    const period = data.period.from && data.period.to && !data.period.value
+      ? `${data.period.from}-to-${data.period.to}`
+      : data.period.value || data.period.label;
+    const name = ["stock-movement", period, appliedQ]
+      .filter(Boolean)
+      .join("-")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase();
+    // The BOM is what makes Excel read accented names as written.
+    const url = URL.createObjectURL(new Blob([String.fromCharCode(0xFEFF) + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-6">
@@ -218,6 +258,13 @@ export default function StockMovementPage() {
           disabled={loading || (mode === "range" && !(from && to))}
           className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
           {loading ? "Loading…" : "Show"}
+        </button>
+        <button
+          onClick={downloadCsv}
+          disabled={loading || !data || !data.rows.length}
+          title="Download what is shown, one line per variant"
+          className="px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50">
+          Download CSV
         </button>
       </div>
 
