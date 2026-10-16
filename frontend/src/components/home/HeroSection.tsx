@@ -33,6 +33,18 @@ export default function HeroSection() {
               Apply for Wholesale Account
             </Link>
           </div>
+          <div className="hero-sage" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "fit-content", gap: "6px", marginTop: "28px" }}>
+            <Image
+              src="/sage-logo.jpeg"
+              alt="SAGE"
+              width={121}
+              height={50}
+              style={{ height: "50px", width: "auto" }}
+            />
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "28px", fontWeight: 600, color: "#1A1A1A", letterSpacing: ".04em", lineHeight: 1 }}>
+              54022
+            </span>
+          </div>
         </div>
 
         {/* Right — image */}
