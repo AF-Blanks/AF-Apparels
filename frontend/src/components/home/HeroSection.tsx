@@ -13,6 +13,19 @@ export default function HeroSection() {
       <div style={{ maxWidth: "1500px", margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "64px", alignItems: "center" }} className="hero-inner-grid">
         {/* Left — text */}
         <div>
+          <div className="hero-sage" style={{ display: "flex", alignItems: "flex-end", gap: "10px", marginBottom: "12px" }}>
+            <Image
+              src="/sage-logo.jpeg"
+              alt="SAGE"
+              width={121}
+              height={50}
+              style={{ height: "50px", width: "auto" }}
+              priority
+            />
+            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "28px", fontWeight: 700, color: "#1A1A1A", letterSpacing: ".04em", lineHeight: 1 }}>
+              54022
+            </span>
+          </div>
           <h1 className="hero-headline" style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, color: "#1A1A1A", lineHeight: 1.1, marginBottom: "18px", letterSpacing: "-0.01em" }}>
             Premium Apparel Blanks. Factory Direct Wholesale & Distribution
           </h1>
@@ -32,18 +45,6 @@ export default function HeroSection() {
             >
               Apply for Wholesale Account
             </Link>
-          </div>
-          <div className="hero-sage" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "fit-content", gap: "6px", marginTop: "28px" }}>
-            <Image
-              src="/sage-logo.jpeg"
-              alt="SAGE"
-              width={121}
-              height={50}
-              style={{ height: "50px", width: "auto" }}
-            />
-            <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "28px", fontWeight: 600, color: "#1A1A1A", letterSpacing: ".04em", lineHeight: 1 }}>
-              54022
-            </span>
           </div>
         </div>
 
