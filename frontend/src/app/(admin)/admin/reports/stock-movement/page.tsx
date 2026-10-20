@@ -149,21 +149,38 @@ export default function StockMovementPage() {
 
   const s = data?.summary;
 
-  /** Exactly the rows on screen — same period, same search — one line per variant. */
+  /** Exactly what is on screen — same period, same search — laid out as the page's
+   *  grids: per product a size header, then each colour's In hand / Sold / On order. */
   function downloadCsv() {
     if (!data || !data.rows.length) return;
-    const rows = [...data.rows].sort((a, b) =>
-      a.product_name.localeCompare(b.product_name)
-      || a.color.localeCompare(b.color)
-      || sizeRank(a.size) - sizeRank(b.size)
-      || a.size.localeCompare(b.size)
-    );
-    const head = ["Product", "Colour", "Size", "SKU", "Opening", "Received", "Sold", "Adjustments", "In hand", "Still on order"];
-    const body = rows.map(r => [
-      r.product_name, r.color ?? "", r.size ?? "", r.sku ?? "",
-      r.opening, r.received, r.sold, r.other, r.closing, r.on_order,
-    ]);
-    const csv = [head, ...body]
+    const lines: (string | number)[][] = [];
+    // Products in the order the page lists them; colours and sizes as each grid shows them.
+    for (const g of productGroups) {
+      const grid = grids.find(x => x.product === g.product);
+      if (!grid) continue;
+      if (lines.length) lines.push([]);
+      lines.push(["", "", ...grid.sizes, "Total"]);
+      lines.push([grid.product]);
+      for (const colour of grid.colours) {
+        const figures: [string, (r: Row) => number][] = [
+          ["In hand", r => r.closing],
+          ["Sold", r => r.sold],
+          ["On order", r => r.on_order],
+        ];
+        figures.forEach(([label, pick], i) => {
+          let total = 0;
+          // A size this colour is not made in stays blank rather than reading as 0.
+          const cells = grid.sizes.map(size => {
+            const r = grid.cell.get(`${colour}|${size}`);
+            if (!r) return "";
+            total += pick(r);
+            return pick(r);
+          });
+          lines.push([i === 0 ? colour : "", label, ...cells, total]);
+        });
+      }
+    }
+    const csv = lines
       .map(line => line.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
     const period = data.period.from && data.period.to && !data.period.value
