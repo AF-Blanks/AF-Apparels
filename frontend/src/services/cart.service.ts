@@ -11,8 +11,12 @@ export const cartService = {
     return apiClient.get<Cart>("/api/v1/cart");
   },
 
-  async addMatrix(product_id: string, items: MatrixItem[]): Promise<Cart> {
-    return apiClient.post<Cart>("/api/v1/cart/add-matrix", { product_id, items });
+  /** `acknowledgeBackorder`: the customer ticked that backordered lines ship when
+   *  stock arrives. The server refuses backordered lines without it. */
+  async addMatrix(product_id: string, items: MatrixItem[], acknowledgeBackorder = false): Promise<Cart> {
+    return apiClient.post<Cart>("/api/v1/cart/add-matrix", {
+      product_id, items, acknowledge_backorder: acknowledgeBackorder,
+    });
   },
 
   async updateItem(item_id: string, quantity: number): Promise<Cart> {
@@ -27,7 +31,7 @@ export const cartService = {
     return apiClient.post("/api/v1/cart/save-template", { name });
   },
 
-  async quickOrder(items: { sku: string; quantity: number }[]) {
-    return apiClient.post("/api/v1/cart/quick-order", { items });
+  async quickOrder(items: { sku: string; quantity: number }[], acknowledgeBackorder = false) {
+    return apiClient.post("/api/v1/cart/quick-order", { items, acknowledge_backorder: acknowledgeBackorder });
   },
 };

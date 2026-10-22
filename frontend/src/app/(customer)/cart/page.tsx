@@ -7,6 +7,7 @@ import Link from "next/link";
 import { formatCurrency, sortSizes } from "@/lib/utils";
 import { cartService } from "@/services/cart.service";
 import { apiClient } from "@/lib/api-client";
+import { kindOf } from "@/lib/backorder";
 import { useAuthStore } from "@/stores/auth.store";
 import type { Cart, CartItem } from "@/types/order.types";
 
@@ -173,6 +174,13 @@ export default function CartPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+  // What is being typed in a quantity box, sent when the customer leaves it or
+  // presses Enter. Sending each keystroke made a backorder line impossible to
+  // retype: on the way from 900 to 1000 the box passes through 1, an in-stock
+  // quantity the cart refuses, and the edit was lost.
+  const [qtyDraft, setQtyDraft] = useState<Record<string, string>>({});
+  // Why a quantity change was refused (one kind of order per cart).
+  const [qtyMsg, setQtyMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -362,11 +370,32 @@ export default function CartPage() {
 
   async function handleUpdateItemQty(item: CartItem, quantity: number) {
     if (quantity <= 0) { await handleRemoveItem(item); return; }
+    setQtyMsg(null);
     try {
       if (isGuest) {
         const entries: GuestCartEntry[] = JSON.parse(localStorage.getItem("af_guest_cart") || "[]");
         const idx = entries.findIndex(e => e.variant_id === item.variant_id);
         if (idx >= 0) entries[idx]!.quantity = quantity;
+        // The same rule the server applies to an account's cart: an in-stock cart
+        // can't be pushed past the shelf, nor a backorder line edited into stock.
+        const kind = cart ? kindOf(cart.items.map(isBackordered)) : null;
+        if (kind === "in_stock" || kind === "backorder") {
+          const r = await apiClient.post<{ backordered_variant_ids?: string[]; on_hand?: Record<string, number> }>(
+            "/api/v1/guest/stock-check",
+            { items: entries.map(e => ({ variant_id: e.variant_id, quantity: e.quantity })) },
+          );
+          const nowWaiting = (r.backordered_variant_ids ?? []).includes(item.variant_id);
+          const have = (r.on_hand ?? {})[item.variant_id] ?? 0;
+          const label = `${item.product_name}${item.color || item.size ? ` — ${[item.color, item.size].filter(Boolean).join(" / ")}` : ""}`;
+          if (kind === "in_stock" && nowWaiting) {
+            setQtyMsg(`Only ${have.toLocaleString()} available in stock for ${label}. Your cart is for in-stock items, so the quantity can't go higher.`);
+            return;
+          }
+          if (kind === "backorder" && !nowWaiting) {
+            setQtyMsg(`${have.toLocaleString()} of ${label} are in stock, so this quantity can't be in a backorder order. Enter more than that, or remove it and order it separately.`);
+            return;
+          }
+        }
         localStorage.setItem("af_guest_cart", JSON.stringify(entries));
         setCart(buildGuestCart(entries));
         window.dispatchEvent(new Event("af_guest_cart_updated"));
@@ -375,7 +404,20 @@ export default function CartPage() {
         if (updated) setCart(updated);
         window.dispatchEvent(new Event("cart_updated"));
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setQtyMsg(err instanceof Error ? err.message : "Couldn't update the quantity.");
+    }
+  }
+
+  /** Send a typed quantity once the customer is done with the box. */
+  function commitQty(item: CartItem) {
+    const draft = qtyDraft[item.id];
+    setQtyDraft(prev => { const next = { ...prev }; delete next[item.id]; return next; });
+    if (draft === undefined) return;
+    const qty = parseInt(draft, 10);
+    if (!Number.isFinite(qty) || qty === item.quantity) return;
+    handleUpdateItemQty(item, qty);
   }
 
   if (isLoading) {
@@ -438,6 +480,13 @@ export default function CartPage() {
                     <BackorderGroup title="Ready to ship now" items={readyItems} accent="#1C3557" />
                     <BackorderGroup title="On backorder" items={waitingItems} accent="#B45309" />
                   </div>
+                </div>
+              )}
+
+              {qtyMsg && (
+                <div style={{ background: "rgba(232,36,42,.07)", border: "1.5px solid rgba(232,36,42,.25)", padding: "12px 16px", fontSize: "13px", color: "#B42318", marginBottom: "16px", display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                  <span>{qtyMsg}</span>
+                  <button onClick={() => setQtyMsg(null)} aria-label="Dismiss" style={{ background: "none", border: "none", color: "#B42318", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}>×</button>
                 </div>
               )}
 
@@ -515,8 +564,10 @@ export default function CartPage() {
                           <input
                             type="number"
                             min={1}
-                            value={item.quantity}
-                            onChange={e => handleUpdateItemQty(item, parseInt(e.target.value, 10) || 1)}
+                            value={qtyDraft[item.id] ?? item.quantity}
+                            onChange={e => setQtyDraft(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onBlur={() => commitQty(item)}
+                            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                             className="cart-qty-input"
                             style={{ width: "56px", border: "1px solid #E2E2DE", padding: "6px 8px", textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "13px", outline: "none" }}
                           />

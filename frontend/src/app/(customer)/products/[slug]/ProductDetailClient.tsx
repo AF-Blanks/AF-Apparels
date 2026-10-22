@@ -1,7 +1,7 @@
 // frontend/src/app/%28customer%29/products/%5Bslug%5D/ProductDetailClient.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SIZE_ORDER } from "@/lib/utils";
@@ -10,6 +10,15 @@ import { useAuthStore } from "@/stores/auth.store";
 import { apiClient } from "@/lib/api-client";
 import { cartService } from "@/services/cart.service";
 import { productsService } from "@/services/products.service";
+import {
+  type CartKind,
+  MIXED_SELECTION_MESSAGE,
+  backorderAckText,
+  cartKindMessage,
+  isBackorderLine,
+  loadCartKind,
+  shelf,
+} from "@/lib/backorder";
 
 function formatWeightGrams(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -554,6 +563,32 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cartMsg, setCartMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // ── One kind of order per cart (see lib/backorder.ts) ──────────────────────
+  // In stock or on backorder, never both: the cart's contents decide, and an
+  // empty cart takes its kind from the first box filled in on this page.
+  const [cartKind, setCartKind] = useState<CartKind | null>(null);
+  const [backorderAck, setBackorderAck] = useState(false);
+  const [ackFlash, setAckFlash] = useState(false);
+  // Why a box was capped or is refused, shown under its colour.
+  const [qtyNotice, setQtyNotice] = useState<Record<string, string>>({});
+  const ackRef = useRef<HTMLDivElement | null>(null);
+
+  const refreshCartKind = useCallback(() => {
+    loadCartKind(isAuthenticated).then(setCartKind);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (authIsLoading) return;
+    refreshCartKind();
+    // The cart can change in another tab or from the header — keep up with it.
+    window.addEventListener("cart_updated", refreshCartKind);
+    window.addEventListener("af_guest_cart_updated", refreshCartKind);
+    return () => {
+      window.removeEventListener("cart_updated", refreshCartKind);
+      window.removeEventListener("af_guest_cart_updated", refreshCartKind);
+    };
+  }, [authIsLoading, refreshCartKind]);
+
   // ── Other state ───────────────────────────────────────────────────────────
   const [assetMsg, setAssetMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("Description");
@@ -621,6 +656,54 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     [quantities, product?.variants]
   );
 
+  // Every box filled in, in the order it was first filled — the first one is
+  // what decides the kind of order when the cart is empty.
+  const selection = useMemo(() => {
+    const byId = new Map((product?.variants ?? []).map(v => [v.id, v]));
+    return Object.entries(quantities)
+      .filter(([, qty]) => qty > 0)
+      .map(([id, qty]) => {
+        const v = byId.get(id);
+        return { id, qty, v, backorder: isBackorderLine(v, qty) };
+      });
+  }, [quantities, product?.variants]);
+
+  const firstLine = selection[0];
+  const orderKind: CartKind | null =
+    cartKind ?? (firstLine ? (firstLine.backorder ? "backorder" : "in_stock") : null);
+  // Boxes holding the other kind of line from the order — they can't be added.
+  const conflictIds = useMemo(() => {
+    if (!orderKind) return new Set<string>();
+    if (orderKind === "mixed") return new Set(selection.map(l => l.id));
+    return new Set(
+      selection.filter(l => (l.backorder ? "backorder" : "in_stock") !== orderKind).map(l => l.id)
+    );
+  }, [orderKind, selection]);
+  const selectionHasBackorder = selection.some(l => l.backorder);
+
+  // The date the checkbox can promise: the whole order ships together, so it is
+  // the latest of each line's soonest delivery — and only if every line has one.
+  const ackEta = useMemo(() => {
+    const dates: string[] = [];
+    for (const l of selection) {
+      if (!l.backorder) continue;
+      const soonest = (l.v?.incoming ?? [])
+        .filter(i => i?.expected_date && i.quantity > 0)
+        .map(i => i.expected_date)
+        .sort()[0] ?? l.v?.expected_restock_date ?? null;
+      if (!soonest) return null;
+      dates.push(soonest);
+    }
+    const latest = dates.sort()[dates.length - 1];
+    return latest ? formatRestock(latest) : null;
+  }, [selection]);
+
+  // A tick covers the backordered lines it was given for; once there are none,
+  // the next backorder has to be confirmed afresh.
+  useEffect(() => {
+    if (!selectionHasBackorder) setBackorderAck(false);
+  }, [selectionHasBackorder]);
+
   if (productLoading || !product) {
     return (
       <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#7A7880" }}>
@@ -686,8 +769,34 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     return expandedColors.includes(group.color);
   }
 
+  // ── One kind of order per cart ─────────────────────────────────────────────
+  /** The kind a box must match: the cart's, or else the first *other* box filled.
+   *  Null means this box is free to decide — the cart is empty and nothing else is filled. */
+  function contextKind(variantId: string): CartKind | null {
+    if (cartKind) return cartKind;
+    const other = selection.find(l => l.id !== variantId);
+    return other ? (other.backorder ? "backorder" : "in_stock") : null;
+  }
+
+  /** Whether these lines may go in now. Says why not, or takes the customer to the
+   *  backorder checkbox when that is all that is missing. */
+  function canAdd(lines: Array<{ variant_id: string; quantity: number }>): boolean {
+    if (lines.some(l => conflictIds.has(l.variant_id))) {
+      setCartMsg({ type: "error", text: cartKind ? cartKindMessage(cartKind) : MIXED_SELECTION_MESSAGE });
+      return false;
+    }
+    const v = (id: string) => product?.variants?.find(x => x.id === id);
+    if (lines.some(l => isBackorderLine(v(l.variant_id), l.quantity)) && !backorderAck) {
+      ackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setAckFlash(true);
+      setTimeout(() => setAckFlash(false), 1800);
+      return false;
+    }
+    return true;
+  }
+
   // ── Handlers ──────────────────────────────────────────────────────────────
-  function getGuestCart(): Array<{ variant_id: string; quantity: number; product_id: string; product_name: string; slug: string; color: string | null; size: string | null; unit_price: number }> {
+  function getGuestCart():Array<{ variant_id: string; quantity: number; product_id: string; product_name: string; slug: string; color: string | null; size: string | null; unit_price: number }> {
     if (typeof window === "undefined") return [];
     try { return JSON.parse(localStorage.getItem("af_guest_cart") || "[]"); } catch { return []; }
   }
@@ -713,6 +822,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
         return;
       }
     }
+    if (!canAdd(items)) return;
 
     if (!isAuthenticated) {
       const guestCart = getGuestCart();
@@ -730,6 +840,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
       localStorage.setItem("af_guest_cart", JSON.stringify(guestCart));
       window.dispatchEvent(new Event("af_guest_cart_updated"));
       setQuantities({});
+      setQtyNotice({});
       setCartMsg({ type: "success", text: `${totalUnits} unit${totalUnits !== 1 ? "s" : ""} added to cart!` });
       setTimeout(() => setCartMsg(null), 4000);
       return;
@@ -740,13 +851,16 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     setIsSubmitting(true);
     setCartMsg(null);
     try {
-      await cartService.addMatrix(product.id, items);
+      await cartService.addMatrix(product.id, items, backorderAck);
       window.dispatchEvent(new Event("cart_updated"));
       setQuantities({});
+      setQtyNotice({});
       setCartMsg({ type: "success", text: `${totalUnits} units added to cart!` });
       setTimeout(() => setCartMsg(null), 4000);
     } catch (err) {
       setCartMsg({ type: "error", text: err instanceof Error ? err.message : "Failed to add to cart" });
+      // A refusal can mean the cart changed elsewhere; show its kind as it is now.
+      refreshCartKind();
     } finally {
       setIsSubmitting(false);
     }
@@ -772,6 +886,12 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
         return;
       }
     }
+    if (!canAdd(rowItems)) return;
+    const clearRowNotices = () => setQtyNotice(prev => {
+      const next = { ...prev };
+      rowItems.forEach(i => delete next[i.variant_id]);
+      return next;
+    });
     if (!isAuthenticated) {
       const guestCart = getGuestCart();
       for (const { variant_id, quantity } of rowItems) {
@@ -788,6 +908,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
       window.dispatchEvent(new Event("af_guest_cart_updated"));
       const added = rowItems.reduce((s, i) => s + i.quantity, 0);
       setQuantities(prev => { const next = { ...prev }; rowItems.forEach(i => delete next[i.variant_id]); return next; });
+      clearRowNotices();
       setCartMsg({ type: "success", text: `${added} unit${added !== 1 ? "s" : ""} added to cart!` });
       setTimeout(() => setCartMsg(null), 4000);
       return;
@@ -795,14 +916,16 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
     setIsSubmitting(true);
     setCartMsg(null);
     try {
-      await cartService.addMatrix(product!.id, rowItems);
+      await cartService.addMatrix(product!.id, rowItems, backorderAck);
       window.dispatchEvent(new Event("cart_updated"));
       const added = rowItems.reduce((s, i) => s + i.quantity, 0);
       setQuantities(prev => { const next = { ...prev }; rowItems.forEach(i => delete next[i.variant_id]); return next; });
+      clearRowNotices();
       setCartMsg({ type: "success", text: `${added} unit${added !== 1 ? "s" : ""} added to cart!` });
       setTimeout(() => setCartMsg(null), 4000);
     } catch (err) {
       setCartMsg({ type: "error", text: err instanceof Error ? err.message : "Failed to add to cart" });
+      refreshCartKind();
     } finally {
       setIsSubmitting(false);
     }
@@ -1119,6 +1242,18 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                 <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "13px", fontWeight: 600, color: "#1A1A1A", marginBottom: "8px" }}>
                   Select Sizes &amp; Quantities
                 </div>
+                {/* Which kind of order this is, and so which boxes are closed. */}
+                {cartKind ? (
+                  <div style={{ background: "#FFFBEB", border: "1px solid #F3D9A4", color: "#92400E", padding: "10px 12px", fontSize: "12.5px", lineHeight: 1.5, fontFamily: "'DM Sans', sans-serif", marginBottom: "10px" }}>
+                    {cartKindMessage(cartKind)}
+                  </div>
+                ) : orderKind ? (
+                  <p style={{ fontSize: "12px", color: "#6B6B6B", fontFamily: "'DM Sans', sans-serif", margin: "0 0 8px" }}>
+                    {orderKind === "backorder"
+                      ? "You're ordering backordered items — in-stock sizes are closed for this order."
+                      : "You're ordering in-stock items — backordered sizes are closed for this order."}
+                  </p>
+                ) : null}
                 <p className="block md:hidden" style={{ fontSize: "11px", color: "#6B6B6B", fontFamily: "'DM Sans', sans-serif", marginBottom: "8px", textAlign: "center" }}>
                   ← Scroll to see all sizes →
                 </p>
@@ -1137,6 +1272,11 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                       const rowQty = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0), 0);
                       const rowTotal = group.variants.reduce((s, v) => s + (quantities[v.id] ?? 0) * Number(v.effective_price ?? v.retail_price ?? 0), 0);
                       const allRowOOS = group.variants.every(v => isOutOfStock(v.stock_quantity) && !isBackorderable(v));
+                      // Greyed until it can go in — but still clickable, so a press
+                      // explains why (or takes the customer to the backorder tick).
+                      const rowWaiting = group.variants.some(v => conflictIds.has(v.id))
+                        || (!backorderAck && group.variants.some(v => isBackorderLine(v, quantities[v.id] ?? 0)));
+                      const rowReady = rowQty > 0 && !allRowOOS && !rowWaiting;
                       // Total stock for this colour = sum across all its sizes.
                       // There is no "unlimited" to allow for: stock_quantity is always
                       // a real count, summed from the inventory records. Sizes sold
@@ -1169,7 +1309,7 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               <button
                                 onClick={() => handleRowAddToCart(group)}
                                 disabled={rowQty === 0 || allRowOOS}
-                                style={{ background: "transparent", color: (rowQty > 0 && !allRowOOS) ? "#1C3557" : "#ccc", border: `1px solid ${(rowQty > 0 && !allRowOOS) ? "#1C3557" : "#E2E2DE"}`, padding: "5px 10px", fontSize: "11px", fontFamily: "'DM Sans', sans-serif", cursor: (rowQty > 0 && !allRowOOS) ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
+                                style={{ background: "transparent", color: rowReady ? "#1C3557" : "#ccc", border: `1px solid ${rowReady ? "#1C3557" : "#E2E2DE"}`, padding: "5px 10px", fontSize: "11px", fontFamily: "'DM Sans', sans-serif", cursor: (rowQty > 0 && !allRowOOS) ? "pointer" : "not-allowed", whiteSpace: "nowrap" }}
                               >
                                 Add to Cart
                               </button>
@@ -1206,6 +1346,18 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               // business has already bought the goods for.
                               const onBackorder = isOOS && isBackorderable(variant);
                               const blocked = isOOS && !onBackorder;
+                              // Closed because it is the other kind from this order:
+                              // an in-stock order shuts the sizes with nothing on the
+                              // shelf; a backorder order shuts every size that has
+                              // stock (unless this box already holds a backorder).
+                              const ctx = contextKind(variant.id);
+                              const closed = !blocked && (
+                                ctx === "mixed"
+                                || (ctx === "in_stock" && shelf(variant) <= 0)
+                                || (ctx === "backorder" && shelf(variant) > 0 && qty === 0)
+                              );
+                              const conflict = conflictIds.has(variant.id);
+                              const greyed = isOOS || closed;
                               const stockNum = variant.stock_quantity as number;
                               // Live remaining: what's left after the qty typed for this size.
                               const remaining = Math.max(0, stockNum - qty);
@@ -1221,17 +1373,27 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               // here as well, which said the same thing twice.
                               const price = Number(variant.effective_price ?? variant.retail_price ?? 0);
                               return (
-                                <div key={size} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked ? "#fafafa" : "transparent" }}>
+                                <div
+                                  key={size}
+                                  title={closed
+                                    ? (ctx === "in_stock"
+                                        ? "Backordered sizes can't be added to an in-stock order"
+                                        : ctx === "backorder"
+                                          ? "In-stock sizes can't be added to a backorder order"
+                                          : "Your cart has both kinds — remove one group first")
+                                    : undefined}
+                                  style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 4px", textAlign: "center", background: blocked || closed ? "#fafafa" : "transparent", opacity: closed ? 0.55 : 1 }}
+                                >
                                   <span style={{ display: "block", fontSize: "11px", color: blocked ? "#cc0000" : onBackorder ? "#D97706" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "2px", lineHeight: 1.25 }}>{stockLabel}</span>
                                   <span style={{ display: "block", fontSize: "12px", color: blocked ? "#999999" : "#1A1A1A", fontWeight: 700, fontFamily: "'DM Sans', sans-serif", marginBottom: "4px", whiteSpace: "nowrap" }}>${price.toFixed(2)}</span>
                                   <input
                                     type="number"
                                     min={0}
-                                    max={variant.allow_backorder ? undefined : (variant.stock_quantity ?? undefined)}
+                                    max={variant.allow_backorder && ctx !== "in_stock" ? undefined : (variant.stock_quantity ?? undefined)}
                                     value={qty === 0 ? "" : qty}
-                                    disabled={blocked}
+                                    disabled={blocked || closed}
                                     onChange={e => {
-                                      if (blocked) return;
+                                      if (blocked || closed) return;
                                       const raw = parseInt(e.target.value, 10) || 0;
                                       // A size sold past zero has no ceiling here.
                                       // Capping at what is on the shelf quietly
@@ -1239,15 +1401,30 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                                       // already out — so a backorder could be
                                       // offered, dated and priced, and then not
                                       // typed into the box.
-                                      const val = variant.allow_backorder
+                                      let val = variant.allow_backorder
                                         ? raw
                                         : Math.min(raw, variant.stock_quantity ?? 9999);
+                                      // …except in an in-stock order, where going past
+                                      // the shelf would make this a backorder. Hold it
+                                      // at what is there, and say so.
+                                      const have = shelf(variant);
+                                      const capped = contextKind(variant.id) === "in_stock" && !!variant.allow_backorder && val > have;
+                                      if (capped) val = have;
+                                      setQtyNotice(prev => {
+                                        const next = { ...prev };
+                                        if (capped) {
+                                          next[variant.id] = `Only ${have.toLocaleString()} available in stock for ${variant.size ?? "this size"}. This order is for in-stock items, so the quantity has been set to ${have.toLocaleString()}.`;
+                                        } else {
+                                          delete next[variant.id];
+                                        }
+                                        return next;
+                                      });
                                       setQuantities(prev => {
                                         if (val <= 0) { const next = { ...prev }; delete next[variant.id]; return next; }
                                         return { ...prev, [variant.id]: val };
                                       });
                                     }}
-                                    style={{ width: "52px", border: `1px solid ${isOOS ? "#e0e0e0" : qty > 0 ? "#1C3557" : "#E2E2DE"}`, padding: "5px 6px", textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "13px", outline: "none", cursor: isOOS ? "not-allowed" : "text", background: isOOS ? "#f0f0f0" : "#FFFFFF", color: isOOS ? "#aaaaaa" : "#1A1A1A" }}
+                                    style={{ width: "52px", border: `1px solid ${conflict ? "#E8242A" : greyed ? "#e0e0e0" : qty > 0 ? "#1C3557" : "#E2E2DE"}`, padding: "5px 6px", textAlign: "center", fontFamily: "'DM Sans', sans-serif", fontSize: "13px", outline: "none", cursor: greyed ? "not-allowed" : "text", background: greyed ? "#f0f0f0" : "#FFFFFF", color: greyed ? "#aaaaaa" : "#1A1A1A" }}
                                   />
                                 </div>
                               );
@@ -1259,6 +1436,28 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                               </span>
                             </div>
                           </div>
+
+                          {/* Why a box here was capped, or can't go in this order. */}
+                          {(() => {
+                            const notes: string[] = [];
+                            for (const v of group.variants) {
+                              const q = quantities[v.id] ?? 0;
+                              const have = shelf(v);
+                              if (conflictIds.has(v.id) && orderKind !== "mixed") {
+                                notes.push(orderKind === "backorder"
+                                  ? `${v.size}: ${have.toLocaleString()} are in stock, so ${q.toLocaleString()} can't go in a backorder order. Enter more than ${have.toLocaleString()}, or clear it.`
+                                  : `${v.size}: only ${have.toLocaleString()} in stock and this order is for in-stock items. Lower it to ${have.toLocaleString()}, or clear it.`);
+                              } else if (qtyNotice[v.id]) {
+                                notes.push(qtyNotice[v.id]!);
+                              }
+                            }
+                            if (!notes.length) return null;
+                            return (
+                              <div style={{ margin: "2px 0 6px", padding: "6px 10px", background: "rgba(232,36,42,.06)", border: "1px solid rgba(232,36,42,.18)", color: "#B42318", fontSize: "11.5px", lineHeight: 1.45, fontFamily: "'DM Sans', sans-serif" }}>
+                                {notes.map(n => <div key={n}>{n}</div>)}
+                              </div>
+                            );
+                          })()}
 
                           {/* What is still to come for this colour, a row per
                               delivery. The date leads on the left as a heading —
@@ -1341,14 +1540,39 @@ export function ProductDetailClient({ slug }: ProductDetailClientProps) {
                   </div>
                 )}
 
+                {/* Backorder confirmation — every backordered line needs it, and the
+                    Add to Cart buttons bring the customer here until it is ticked. */}
+                {selectionHasBackorder && (
+                  <div
+                    ref={ackRef}
+                    style={{ background: "#FFFBEB", border: ackFlash ? "2px solid #D97706" : "1px solid #F3D9A4", boxShadow: ackFlash ? "0 0 0 4px rgba(217,119,6,.18)" : "none", padding: ackFlash ? "9px 11px" : "10px 12px", marginTop: "4px", transition: "box-shadow .2s ease" }}
+                  >
+                    <label style={{ display: "flex", gap: "10px", alignItems: "flex-start", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", fontSize: "13px", color: "#78350F", lineHeight: 1.45 }}>
+                      <input
+                        type="checkbox"
+                        checked={backorderAck}
+                        onChange={e => setBackorderAck(e.target.checked)}
+                        style={{ marginTop: "3px", width: "16px", height: "16px", accentColor: "#1C3557", flexShrink: 0, cursor: "pointer" }}
+                      />
+                      <span>{backorderAckText(ackEta)}</span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Main CTA button */}
+                {(() => {
+                  // Greyed until the order can go in; a press still explains why.
+                  const ready = totalUnits > 0 && conflictIds.size === 0 && (!selectionHasBackorder || backorderAck);
+                  return (
                 <button
                   onClick={handleAddToCart}
                   disabled={totalUnits === 0 || isSubmitting}
-                  style={{ width: "100%", padding: "14px", background: totalUnits > 0 ? "#1C3557" : "#E2E2DE", color: totalUnits > 0 ? "#fff" : "#aaa", border: "none", cursor: totalUnits > 0 ? "pointer" : "not-allowed", fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500, transition: "all .2s", marginTop: "12px" }}
+                  style={{ width: "100%", padding: "14px", background: ready ? "#1C3557" : "#E2E2DE", color: ready ? "#fff" : "#aaa", border: "none", cursor: totalUnits > 0 ? "pointer" : "not-allowed", fontFamily: "'DM Sans', sans-serif", fontSize: "15px", fontWeight: 500, transition: "all .2s", marginTop: "12px" }}
                 >
                   {isSubmitting ? "Adding to Cart…" : "Add to Cart — All Selections"}
                 </button>
+                  );
+                })()}
                 <p style={{ textAlign: "center", marginTop: "10px", fontSize: "12px", color: "#6B6B6B", fontFamily: "'DM Sans', sans-serif" }}>
                   No minimum order quantity
                 </p>

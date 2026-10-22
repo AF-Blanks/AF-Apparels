@@ -136,6 +136,8 @@ export default function OrderDetailPage() {
   const [commentBody, setCommentBody] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
+  // Why a reorder was refused — e.g. the cart holds the other kind of order.
+  const [reorderError, setReorderError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -182,9 +184,13 @@ export default function OrderDetailPage() {
 
   async function handleReorder() {
     setIsReordering(true);
+    setReorderError(null);
     try {
       await accountService.reorder(order?.id ?? id);
+      window.dispatchEvent(new Event("cart_updated"));
       router.push("/cart");
+    } catch (err) {
+      setReorderError(err instanceof Error ? err.message : "Couldn't add this order to your cart.");
     } finally {
       setIsReordering(false);
     }
@@ -277,6 +283,9 @@ export default function OrderDetailPage() {
           {isReordering ? "Adding…" : "Reorder"}
         </button>
       </div>
+      {reorderError && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{reorderError}</p>
+      )}
 
       {/* Order number + meta */}
       <div className="bg-white rounded-lg border border-gray-200 p-5">

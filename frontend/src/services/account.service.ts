@@ -123,8 +123,9 @@ export const accountService = {
   async deleteTemplate(id: string) {
     return apiClient.delete(`/api/v1/account/templates/${id}`);
   },
-  async loadTemplate(id: string) {
-    return apiClient.post(`/api/v1/account/templates/${id}/load`, {});
+  /** `acknowledgeBackorder`: the customer ticked that backordered lines ship when stock arrives. */
+  async loadTemplate(id: string, acknowledgeBackorder = false) {
+    return apiClient.post(`/api/v1/account/templates/${id}/load`, { acknowledge_backorder: acknowledgeBackorder });
   },
 
   // RMA

@@ -1,11 +1,21 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { formatCurrency } from "@/lib/utils";
 import { productsService } from "@/services/products.service";
 import { cartService } from "@/services/cart.service";
+import { useAuthStore } from "@/stores/auth.store";
+import {
+  type CartKind,
+  MIXED_SELECTION_MESSAGE,
+  backorderAckText,
+  cartKindMessage,
+  isBackorderLine,
+  loadCartKind,
+  shelf,
+} from "@/lib/backorder";
 import type { ProductListItem, ProductDetail, ProductVariant } from "@/types/product.types";
 
 // ─── Size ordering ────────────────────────────────────────────────────────────
@@ -107,6 +117,22 @@ export default function QuickOrderPage() {
   const [cartMsg, setCartMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const searchTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
+  // One kind of order per cart (see lib/backorder.ts): what the cart already
+  // holds decides whether in-stock or backordered lines may be added.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
+  const authIsLoading = useAuthStore((s) => s.isLoading);
+  const [cartKind, setCartKind] = useState<CartKind | null>(null);
+  const [backorderAck, setBackorderAck] = useState(false);
+  const [ackFlash, setAckFlash] = useState(false);
+  const ackRef = useRef<HTMLLabelElement | null>(null);
+  useEffect(() => {
+    if (authIsLoading) return;
+    const refresh = () => { loadCartKind(isAuthenticated).then(setCartKind); };
+    refresh();
+    window.addEventListener("cart_updated", refresh);
+    return () => window.removeEventListener("cart_updated", refresh);
+  }, [authIsLoading, isAuthenticated]);
+
   // ── Helpers ────────────────────────────────────────────────────────────
   function updateRow(id: string, updates: Partial<QuickOrderRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
@@ -193,8 +219,11 @@ export default function QuickOrderPage() {
     setRows((prev) => prev.map((r) => {
       if (r.id !== rowId) return r;
       const _v = r.productDetail?.variants.find((v) => v.color === color && v.size === size);
-      // No ceiling on a backorder line — the shortfall is the point.
-      const maxQty = _v?.allow_backorder ? undefined : _v?.stock_quantity;
+      // No ceiling on a backorder line — the shortfall is the point. Unless the
+      // cart is an in-stock one: then going past the shelf would make a backorder.
+      const maxQty = _v?.allow_backorder
+        ? (cartKind === "in_stock" ? shelf(_v) : undefined)
+        : _v?.stock_quantity;
       const clamped = isNaN(qty) || qty < 0 ? 0 : maxQty !== undefined ? Math.min(qty, maxQty) : qty;
       const colorQtys = { ...(r.quantities[color] ?? {}), [size]: clamped };
       return { ...r, quantities: { ...r.quantities, [color]: colorQtys } };
@@ -215,7 +244,7 @@ export default function QuickOrderPage() {
           if (qty <= 0) continue;
           const v = getVariantForColor(row, color, size);
           if (!v) continue;
-          if (v.allow_backorder && (v.stock_quantity ?? 0) < qty) waiting += 1;
+          if (isBackorderLine(v, qty)) waiting += 1;
           else ready += 1;
         }
       }
@@ -230,9 +259,25 @@ export default function QuickOrderPage() {
       setTimeout(() => setCartMsg(null), 4000);
       return;
     }
+    // The cart holds one kind of order; refuse here, before anything is sent.
+    const { ready, waiting } = enteredSplit();
+    const clash = cartKind === "in_stock" ? waiting > 0
+      : cartKind === "backorder" ? ready > 0
+      : cartKind === "mixed" || (ready > 0 && waiting > 0);
+    if (clash) {
+      setCartMsg({ type: "error", text: cartKind ? cartKindMessage(cartKind) : MIXED_SELECTION_MESSAGE });
+      return;
+    }
+    if (waiting > 0 && !backorderAck) {
+      ackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setAckFlash(true);
+      setTimeout(() => setAckFlash(false), 1800);
+      return;
+    }
     setIsAddingToCart(true);
     setCartMsg(null);
     let added = 0, errors = 0;
+    let firstError: string | null = null;
     for (const row of activeRows) {
       const items = Object.keys(row.quantities).flatMap((color) =>
         getSizesForColor(row, color)
@@ -245,8 +290,8 @@ export default function QuickOrderPage() {
           })
       );
       if (items.length > 0) {
-        try { await cartService.addMatrix(row.productDetail!.id, items); added++; }
-        catch { errors++; }
+        try { await cartService.addMatrix(row.productDetail!.id, items, backorderAck); added++; }
+        catch (err) { errors++; firstError ??= err instanceof Error ? err.message : null; }
       }
     }
     setIsAddingToCart(false);
@@ -254,8 +299,10 @@ export default function QuickOrderPage() {
       window.dispatchEvent(new Event("cart_updated"));
     }
     if (errors > 0) {
-      setCartMsg({ type: "error", text: `${errors} product${errors !== 1 ? "s" : ""} failed to add.` });
+      setCartMsg({ type: "error", text: firstError ?? `${errors} product${errors !== 1 ? "s" : ""} failed to add.` });
+      loadCartKind(isAuthenticated).then(setCartKind);
     } else {
+      setBackorderAck(false);
       setCartMsg({ type: "success", text: `${added} product${added !== 1 ? "s" : ""} added to cart.` });
     }
     setTimeout(() => setCartMsg(null), 5000);
@@ -374,6 +421,14 @@ export default function QuickOrderPage() {
           )}
           {(() => {
             const { ready, waiting } = enteredSplit();
+            const clashesCart = (cartKind === "in_stock" && waiting > 0) || (cartKind === "backorder" && ready > 0) || (cartKind === "mixed" && ready + waiting > 0);
+            if (clashesCart && cartKind) {
+              return (
+                <div style={{ padding: "5px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 600, background: "rgba(180,83,9,.09)", border: "1px solid rgba(180,83,9,.28)", color: "#B45309", maxWidth: "640px" }}>
+                  {cartKindMessage(cartKind)}
+                </div>
+              );
+            }
             return ready > 0 && waiting > 0 ? (
               <div style={{ padding: "5px 12px", borderRadius: "5px", fontSize: "12px", fontWeight: 600, background: "rgba(180,83,9,.09)", border: "1px solid rgba(180,83,9,.28)", color: "#B45309" }}>
                 In-stock and backordered items can&rsquo;t ship together — order them separately
@@ -816,6 +871,20 @@ export default function QuickOrderPage() {
               <span style={{ margin: "0 8px", color: "#E2E0DA" }}>·</span>
               <span style={{ fontWeight: 700, color: "#2A2830", fontSize: "15px" }}>{formatCurrency(grandTotals.price)}</span>
             </div>
+            {enteredSplit().waiting > 0 && (
+              <label
+                ref={ackRef}
+                style={{ display: "flex", alignItems: "flex-start", gap: "8px", maxWidth: "420px", padding: "6px 10px", background: "#FFFBEB", border: ackFlash ? "2px solid #D97706" : "1px solid #F3D9A4", borderRadius: "6px", fontSize: "12px", color: "#78350F", lineHeight: 1.4, cursor: "pointer" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={backorderAck}
+                  onChange={(e) => setBackorderAck(e.target.checked)}
+                  style={{ marginTop: "2px", accentColor: "#1A5CFF", cursor: "pointer" }}
+                />
+                <span>{backorderAckText(null)}</span>
+              </label>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); handleAddToCart(); }}
               disabled={isAddingToCart}
