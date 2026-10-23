@@ -562,21 +562,27 @@ export default function AdminOrderDetailPage() {
   }
 
   async function openEmailComposer() {
-    if (!order?.company_id) { setMsg({ text: "This order has no company on file to email.", ok: false }); return; }
+    if (!order) return;
     setEmailSubject(""); setEmailBody(""); setEmailRecipients([]); setShowEmail(true);
     try {
-      const r = await adminService.getCustomerEmailRecipients(order.company_id) as { emails: string[] };
+      // A company order goes through its company, as before. Retail and guest
+      // orders have no company, so they are addressed through the order itself.
+      const r = (order.company_id
+        ? await adminService.getCustomerEmailRecipients(order.company_id)
+        : await adminService.getOrderEmailRecipients(order.id ?? id)) as { emails: string[] };
       setEmailRecipients(r.emails ?? []);
     } catch { setEmailRecipients([]); }
   }
 
   async function handleSendEmail() {
-    if (!order?.company_id) return;
+    if (!order) return;
     if (!emailSubject.trim() || !emailBody.trim()) { setMsg({ text: "Add a subject and a message first", ok: false }); return; }
     setSendingEmail(true);
     try {
       const html = emailBody.trim().replace(/\n/g, "<br>");
-      const r = await adminService.sendCustomerEmail(order.company_id, emailSubject.trim(), html) as { count: number; sent_to: string[] };
+      const r = (order.company_id
+        ? await adminService.sendCustomerEmail(order.company_id, emailSubject.trim(), html)
+        : await adminService.sendOrderEmail(order.id ?? id, emailSubject.trim(), html)) as { count: number; sent_to: string[] };
       setMsg({ text: `Email sent to ${r.sent_to.join(", ")}`, ok: true });
       setShowEmail(false);
     } catch (err) {

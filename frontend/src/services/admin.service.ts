@@ -263,6 +263,16 @@ export const adminService = {
     return apiClient.post(`/api/v1/admin/companies/${id}/send-email`, { subject, body_html });
   },
 
+  /** The same one-off email, addressed through an order — for retail and guest
+   *  orders, which have no company to go through. */
+  async getOrderEmailRecipients(orderId: string) {
+    return apiClient.get(`/api/v1/admin/orders/${orderId}/email-recipients`);
+  },
+
+  async sendOrderEmail(orderId: string, subject: string, body_html: string) {
+    return apiClient.post(`/api/v1/admin/orders/${orderId}/send-email`, { subject, body_html });
+  },
+
   async updateCompany(id: string, data: object) {
     return apiClient.patch(`/api/v1/admin/companies/${id}`, data);
   },
