@@ -100,6 +100,8 @@ interface AdminOrder {
   tax_amount?: string;
   discount_percent?: string | number | null;
   discount_amount?: string | number | null;
+  additional_charges_percent?: string | number | null;
+  additional_charges_amount?: string | number | null;
   total: string;
   items: OrderItem[];
   created_at: string;
@@ -403,6 +405,11 @@ export default function AdminOrderDetailPage() {
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [discountInput, setDiscountInput] = useState("");
   const [savingDiscount, setSavingDiscount] = useState(false);
+  // admin Additional Services Charges, the discount's mirror (added to the total)
+  const [editingCharges, setEditingCharges] = useState(false);
+  const [chargesMode, setChargesMode] = useState<"percent" | "amount">("percent");
+  const [chargesInput, setChargesInput] = useState("");
+  const [savingCharges, setSavingCharges] = useState(false);
   const [recreatingInvoice, setRecreatingInvoice] = useState(false);
   // per-order email (send to this order's customer)
   const [showEmail, setShowEmail] = useState(false);
@@ -718,6 +725,43 @@ export default function AdminOrderDetailPage() {
       setMsg({ text: err instanceof Error ? err.message : "Failed to apply discount", ok: false });
     } finally {
       setSavingDiscount(false);
+    }
+  }
+
+  async function handleSaveCharges(clear = false) {
+    if (!order) return;
+    const byAmount = !clear && chargesMode === "amount";
+    const value = clear ? 0 : parseFloat(chargesInput);
+    if (!clear) {
+      if (!Number.isFinite(value) || value < 0) {
+        setMsg({ text: byAmount ? "Enter a charges amount" : "Enter charges between 0 and 100%", ok: false });
+        return;
+      }
+      if (!byAmount && value > 100) {
+        setMsg({ text: "Enter charges between 0 and 100%", ok: false });
+        return;
+      }
+    }
+    setSavingCharges(true); setMsg(null);
+    try {
+      await apiClient.patch(
+        `/api/v1/admin/orders/${order.id ?? id}/charges`,
+        byAmount ? { additional_charges_amount: value } : { additional_charges_percent: value },
+      );
+      // Reload so the charges and total shown are the server's own figures.
+      const fresh = await adminService.getOrder(order.id ?? id) as AdminOrder;
+      setOrder(fresh);
+      setEditingCharges(false);
+      setMsg({
+        text: value > 0
+          ? (byAmount ? `$${value.toFixed(2)} charges added` : `${value}% charges added`)
+          : "Charges removed",
+        ok: true,
+      });
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "Failed to add charges", ok: false });
+    } finally {
+      setSavingCharges(false);
     }
   }
 
@@ -2198,6 +2242,75 @@ The existing label is NOT refunded — if it was a real one, request the refund 
                     <button onClick={() => { setDiscountInput(""); setDiscountMode("percent"); setEditingDiscount(true); }}
                       style={{ background: "none", border: "none", color: "#1A5CFF", fontSize: "13px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
                       + Add discount
+                    </button>
+                  </div>
+                )}
+
+                {/* Admin Additional Services Charges — the discount in reverse: a
+                    percent of the subtotal that follows it, or a fixed amount. */}
+                {editingCharges ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }} className="no-print">
+                    <span style={{ fontSize: "14px", color: "#7A7880", flex: 1 }}>Charges</span>
+                    <div style={{ display: "inline-flex", border: "1.5px solid #E2E0DA", borderRadius: "6px", overflow: "hidden" }}>
+                      {(["percent", "amount"] as const).map(m => (
+                        <button
+                          key={m}
+                          onClick={() => setChargesMode(m)}
+                          title={m === "percent" ? "A percentage of the subtotal — follows it as items change" : "A fixed amount added — stays the same as items change"}
+                          style={{
+                            padding: "5px 9px", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 700, lineHeight: 1,
+                            background: chargesMode === m ? "#1B3A5C" : "#fff",
+                            color: chargesMode === m ? "#fff" : "#7A7880",
+                          }}
+                        >
+                          {m === "percent" ? "%" : "$"}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="number" min={0} max={chargesMode === "percent" ? 100 : undefined} step="0.01" autoFocus
+                      value={chargesInput}
+                      onChange={e => setChargesInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") handleSaveCharges(); }}
+                      placeholder={chargesMode === "percent" ? "10" : "50.00"}
+                      style={{ width: "72px", padding: "5px 7px", border: "1.5px solid #E2E0DA", borderRadius: "6px", fontSize: "13px", textAlign: "right", fontFamily: "var(--font-jakarta)" }}
+                    />
+                    <button onClick={() => handleSaveCharges()} disabled={savingCharges}
+                      style={{ padding: "5px 9px", border: "none", borderRadius: "6px", background: savingCharges ? "#9CA3AF" : "#059669", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", lineHeight: 1 }}>
+                      {savingCharges ? "…" : "✓"}
+                    </button>
+                    <button onClick={() => setEditingCharges(false)} disabled={savingCharges}
+                      style={{ padding: "5px 8px", border: "1px solid #E2E0DA", borderRadius: "6px", background: "#fff", fontSize: "12px", color: "#7A7880", cursor: "pointer", lineHeight: 1 }}>
+                      ✕
+                    </button>
+                  </div>
+                ) : Number(order.additional_charges_amount ?? 0) > 0 ? (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "8px", fontSize: "14px", color: "#7A7880" }}>
+                    <span>
+                      Additional Services Charges{Number(order.additional_charges_percent ?? 0) > 0 ? ` (${Number(order.additional_charges_percent)}%)` : ""}
+                      <button onClick={() => {
+                        const pct = Number(order.additional_charges_percent ?? 0);
+                        setChargesMode(pct > 0 ? "percent" : "amount");
+                        setChargesInput(String(pct > 0 ? pct : Number(order.additional_charges_amount ?? 0)));
+                        setEditingCharges(true);
+                      }}
+                        className="no-print"
+                        style={{ marginLeft: "6px", background: "none", border: "none", color: "#1A5CFF", fontSize: "12px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                        edit
+                      </button>
+                      <button onClick={() => handleSaveCharges(true)} disabled={savingCharges}
+                        className="no-print"
+                        style={{ marginLeft: "6px", background: "none", border: "none", color: "#E8242A", fontSize: "12px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                        remove
+                      </button>
+                    </span>
+                    <span>+${Number(order.additional_charges_amount ?? 0).toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: "8px" }} className="no-print">
+                    <button onClick={() => { setChargesInput(""); setChargesMode("percent"); setEditingCharges(true); }}
+                      style={{ background: "none", border: "none", color: "#1A5CFF", fontSize: "13px", fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                      + Add charges
                     </button>
                   </div>
                 )}
